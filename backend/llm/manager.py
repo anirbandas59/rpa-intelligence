@@ -42,6 +42,7 @@ llm/ ever imports a provider directly.
 
 import logging
 import time
+from typing import Callable
 
 from config import get_settings
 from pydantic import BaseModel
@@ -148,7 +149,7 @@ class LLMManager:
 
     def _execute_with_retry(
         self,
-        operation: callable,
+        operation: Callable[[], LLMResponse],
         session_id: str = "",
     ) -> LLMResponse:
         """
