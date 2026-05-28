@@ -1,9 +1,9 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from db.models import Project, User, WeightConfig, PhaseConfig
+from db.models import Project, User, WeightConfig, PhaseConfig, UseCase
 from api.dependencies import get_db, get_current_user
 from core.scoring.weight_matrix import load_weight_matrix
 from services.timeline_service import DEFAULT_BUFFERS
@@ -17,10 +17,23 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     description: str | None
-    created_at: str
+    created_at: datetime
+
+
+class UseCaseListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    description: str | None
+    source_platform: str | None
+    install_status: str | None
+    created_at: datetime
 
 
 class WeightConfigRequest(BaseModel):
@@ -31,13 +44,15 @@ class WeightConfigRequest(BaseModel):
 
 class WeightConfigResponse(BaseModel):
     """Response for weight config."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     project_id: str
     name: str
     is_active: bool
     config: dict
     yes_threshold: int
-    created_at: str
+    created_at: datetime
 
 
 class PhaseConfigRequest(BaseModel):
@@ -48,12 +63,14 @@ class PhaseConfigRequest(BaseModel):
 
 class PhaseConfigResponse(BaseModel):
     """Response for phase config."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     project_id: str
     is_active: bool
     config: dict
     sprint_length_weeks: int
-    created_at: str
+    created_at: datetime
 
 
 @router.post("", response_model=ProjectResponse)
@@ -76,6 +93,26 @@ async def list_projects(
 ):
     result = await db.execute(select(Project))
     return result.scalars().all()
+
+
+@router.get("/{id}/use-cases", response_model=list[UseCaseListItem])
+async def list_project_use_cases(
+    id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all use cases for a project."""
+    # Verify project exists
+    result = await db.execute(select(Project).where(Project.id == id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Fetch use cases
+    use_cases_result = await db.execute(
+        select(UseCase).where(UseCase.project_id == id).order_by(UseCase.created_at.desc())
+    )
+    return use_cases_result.scalars().all()
 
 
 @router.get("/{id}/weights", status_code=status.HTTP_200_OK)

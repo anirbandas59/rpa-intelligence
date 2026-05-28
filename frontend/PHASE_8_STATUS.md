@@ -34,74 +34,61 @@
 ## Remaining Work (Per Implementation Guide)
 
 ### Stage-Specific Pages (Section 8.3, items 5-8)
-These pages require significant implementation as they contain the core assessment/complexity/timeline/sprint logic:
+
+#### ✅ Stage 2 — Complexity
+**File:** [app/projects/[id]/stage2/[ucId]/page.tsx](src/app/projects/[id]/stage2/[ucId]/page.tsx)
+
+Completed features:
+- ✅ Document upload (.pdf / .docx) with file picker
+- ✅ Manual band entry (5 attributes × 5 bands = dropdown grid)
+- ✅ **Live score preview** using `lib/scoring.ts` calculator
+- ✅ Score card display (total, class, effort range)
+- ✅ Band editor with InputSourceBadge per field
+- ✅ Run history drawer integration
+- ✅ Real-time score recalculation as bands change
+- ✅ Attribute weight breakdown table
+- ✅ AsyncRunProgress polling during runs
+
+#### ✅ Stage 3 — Delivery Timeline
+**File:** [app/projects/[id]/stage3/[ucId]/page.tsx](src/app/projects/[id]/stage3/[ucId]/page.tsx)
+
+Completed features:
+- ✅ Effort input (weeks) + start date picker
+- ✅ Load-from-S2 button
+- ✅ Phase timeline display (6 phases)
+- ✅ Per-phase delta controls (± week buttons)
+- ✅ Reset deltas button
+- ✅ Narrative display section
+- ✅ Phase card grid with date ranges
+- ✅ Total duration calculation with deltas
+- ✅ Complexity class selector
+
+#### ✅ Stage 4 — Sprint Tracker
+**File:** [app/projects/[id]/stage4/[ucId]/page.tsx](src/app/projects/[id]/stage4/[ucId]/page.tsx)
+
+Completed features:
+- ✅ Sprint configuration (count, length)
+- ✅ Load-from-S2 and load-from-S3 buttons
+- ✅ Feature list table (name, size, dependencies, sprint assignment)
+- ✅ Sprint grouping view with shadcn Table
+- ✅ Export to XLSX button with download handler
+- ✅ Run history drawer
+- ✅ AsyncRunProgress polling during runs
+- ✅ Grouped sprint view with feature counts
 
 #### 🔲 Stage 1 — Migration Assessment
-**File:** `app/projects/[id]/stage1/[ucId]/page.tsx`
+**File:** `app/projects/[id]/stage1/[ucId]/page.tsx` — **Not yet implemented**
 
-Must include:
-- Bulk Excel/CSV upload with column mapper (2-step flow)
+Requires:
+- Bulk Excel/CSV upload with ColumnMapper component (2-step flow)
 - Manual use-case entry form
 - Assessment results table (technical_feasibility, migration_effort, platform_suitability, risk)
 - Override form with reason field
 - Follow-up questions display
 - Backfill from S2 trigger
-- Run history drawer integration
-
-Key components needed:
-- `ColumnMapper.tsx` — Maps uploaded columns to fields
-- Assessment score visualization
 - Decision badge (QUICK_WIN / STRATEGIC / HOLD / DO_NOT_MIGRATE)
 
-#### 🔲 Stage 2 — Complexity
-**File:** `app/projects/[id]/stage2/[ucId]/page.tsx`
-
-Must include:
-- Document upload (.pdf / .docx) with file picker
-- Pasted text input option
-- Manual band entry (5 attributes × 5 bands = dropdown grid)
-- **Live score preview** using `lib/scoring.ts` calculator
-- Score card display (total, class, effort range)
-- Band editor with InputSourceBadge per field
-- Run history drawer
-
-Key features:
-- Real-time score recalculation as bands change
-- Visual complexity gauge (gauge chart from recharts)
-- Attribute weight breakdown table
-
-#### 🔲 Stage 3 — Delivery Timeline
-**File:** `app/projects/[id]/stage3/[ucId]/page.tsx`
-
-Must include:
-- Effort input (weeks) + start date picker
-- Load-from-S2 button
-- Gantt-style timeline display (6 phases)
-- Per-phase delta controls (± week buttons)
-- Reset deltas button
-- Narrative display (AI-generated summary)
-- Timeline export option
-
-Key components:
-- Gantt chart (build with recharts or custom SVG)
-- Phase card grid with date ranges
-- Delta controls (increment/decrement weeks)
-
-#### 🔲 Stage 4 — Sprint Tracker
-**File:** `app/projects/[id]/stage4/[ucId]/page.tsx`
-
-Must include:
-- Sprint configuration (count, length)
-- Load-from-S2 and load-from-S3 buttons
-- Feature list table (name, size, dependencies, sprint assignment)
-- Sprint grouping view
-- Export to XLSX button (triggers download)
-- Run history drawer
-
-Key features:
-- Feature table with inline editing for overrides
-- Sprint timeline visualization
-- Download handler for `/s4/runs/{run_id}/export`
+**Why deferred:** Most complex page, requires bulk upload flow + ColumnMapper component. Should wait for backend S1 routes to be tested.
 
 ---
 
