@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from db.models import Project, User
+from db.models import Project, User, WeightConfig
 from api.dependencies import get_db, get_current_user
+from core.scoring.weight_matrix import load_weight_matrix
 
 router = APIRouter()
 
@@ -17,6 +19,23 @@ class ProjectResponse(BaseModel):
     id: str
     name: str
     description: str | None
+    created_at: str
+
+
+class WeightConfigRequest(BaseModel):
+    """Request to update weight config for a project."""
+    config: dict  # Weight matrix override
+    yes_threshold: int = 50
+
+
+class WeightConfigResponse(BaseModel):
+    """Response for weight config."""
+    id: str
+    project_id: str
+    name: str
+    is_active: bool
+    config: dict
+    yes_threshold: int
     created_at: str
 
 
@@ -40,3 +59,113 @@ async def list_projects(
 ):
     result = await db.execute(select(Project))
     return result.scalars().all()
+
+
+@router.get("/{id}/weights", status_code=status.HTTP_200_OK)
+async def get_project_weights(
+    id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get active WeightConfig for project.
+    If none exists, returns default weight matrix.
+
+    Returns:
+        WeightConfig or default weights
+    """
+    # Verify project exists
+    result = await db.execute(select(Project).where(Project.id == id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Fetch active weight config
+    config_result = await db.execute(
+        select(WeightConfig).where(
+            WeightConfig.project_id == id,
+            WeightConfig.is_active == True
+        )
+    )
+    weight_config = config_result.scalars().first()
+
+    if weight_config:
+        return {
+            "id": weight_config.id,
+            "project_id": weight_config.project_id,
+            "name": weight_config.name,
+            "is_active": weight_config.is_active,
+            "config": weight_config.config,
+            "yes_threshold": weight_config.yes_threshold,
+            "created_at": weight_config.created_at.isoformat(),
+            "source": "project_override",
+        }
+    else:
+        # Return default matrix
+        default_matrix = load_weight_matrix()
+        return {
+            "id": None,
+            "project_id": id,
+            "name": "default",
+            "is_active": True,
+            "config": default_matrix,
+            "yes_threshold": 50,
+            "created_at": None,
+            "source": "default",
+        }
+
+
+@router.put("/{id}/weights", status_code=status.HTTP_200_OK)
+async def update_project_weights(
+    id: str,
+    request: WeightConfigRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Update (or create) WeightConfig for project.
+    Deactivates any existing active config and creates a new one.
+
+    Returns:
+        Created WeightConfig
+    """
+    # Verify project exists
+    result = await db.execute(select(Project).where(Project.id == id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Deactivate existing active configs
+    existing_result = await db.execute(
+        select(WeightConfig).where(
+            WeightConfig.project_id == id,
+            WeightConfig.is_active == True
+        )
+    )
+    existing_configs = existing_result.scalars().all()
+    for config in existing_configs:
+        config.is_active = False
+
+    # Create new config
+    new_config = WeightConfig(
+        project_id=id,
+        name="custom",
+        is_active=True,
+        config=request.config,
+        yes_threshold=request.yes_threshold,
+        created_by=user.id,
+    )
+
+    db.add(new_config)
+    await db.commit()
+    await db.refresh(new_config)
+
+    return {
+        "id": new_config.id,
+        "project_id": new_config.project_id,
+        "name": new_config.name,
+        "is_active": new_config.is_active,
+        "config": new_config.config,
+        "yes_threshold": new_config.yes_threshold,
+        "created_at": new_config.created_at.isoformat(),
+    }
