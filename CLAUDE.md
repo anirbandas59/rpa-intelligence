@@ -62,6 +62,7 @@ cd backend && uv run alembic upgrade head
 8. **Log at every agent node transition** using structured logging with `session_id`
 9. Tailwind v4: use **CSS variables in `globals.css`** — never `tailwind.config.js`
 10. shadcn Nova: add components with `npx shadcn@latest add <component>` — never hand-write primitives
+11. Always follow **Git Convention** format.
 
 ---
 
@@ -218,7 +219,7 @@ backend/prompts/               ← all LLM prompts live here, nowhere else
 
 Branch: `dev` for all development. Merge to `main` at each phase milestone via PR.
 
-Commit format: `type(scope): description` - no author/co-author
+Commit format: `type(scope): description` - **no author/co-author**
 Types: `feat` | `fix` | `test` | `refactor` | `docs` | `chore`
 
 Examples:
