@@ -15,9 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class AssessmentService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, model: str = "claude-haiku-4-5"):
         self.db = db
-        self.llm = LLMManager()
+        self.model = model
+        # Initialize manager with specified model
+        self.llm = LLMManager(provider_name="anthropic", model_name=model)
         self.lock = Lock()
 
     def _parse_json_response(self, raw: str) -> dict:
@@ -76,7 +78,7 @@ class AssessmentService:
             "power_automate_fit": parsed.get("power_automate_fit", ""),
         }
 
-    def _score_single_use_case(self, use_case_data: dict, model: str = "claude-haiku-4-5") -> dict:
+    def _score_single_use_case(self, use_case_data: dict) -> dict:
         """Score a single use-case. Called in parallel by ThreadPoolExecutor."""
         user_prompt = ACTIVE_S1_SCORING_USER.format(
             name=use_case_data.get("name", ""),
@@ -87,9 +89,8 @@ class AssessmentService:
 
         try:
             raw_response = self.llm.complete(
-                model=model,
+                prompt=user_prompt,
                 system=ACTIVE_S1_SCORING_SYSTEM,
-                user=user_prompt,
                 max_tokens=1000,
                 temperature=0.3,
             )
@@ -104,7 +105,7 @@ class AssessmentService:
             logger.error(f"Error scoring use-case {use_case_data.get('name')}: {e}")
             raise AgentExecutionError(f"Failed to score use-case: {e}")
 
-    async def run_assessment(self, use_case_id: str, model: str = "claude-haiku-4-5") -> StageRun:
+    async def run_assessment(self, use_case_id: str) -> StageRun:
         """Run S1 assessment for a single use-case. Creates StageRun, runs LLM call, updates result."""
         # Fetch use-case
         result = await self.db.execute(select(UseCase).where(UseCase.id == use_case_id))
@@ -138,7 +139,7 @@ class AssessmentService:
             inputs_snapshot=inputs,
             inputs_hash=inputs_hash,
             result={},
-            model_used=model,
+            model_used=self.model,
             status="running",
         )
 
@@ -150,7 +151,7 @@ class AssessmentService:
 
         try:
             # Run scoring
-            assessment_result = self._score_single_use_case(inputs, model)
+            assessment_result = self._score_single_use_case(inputs)
 
             # Update StageRun
             stage_run.result = assessment_result
@@ -172,13 +173,13 @@ class AssessmentService:
             logger.error(f"Failed S1 StageRun {stage_run.id}: {e}")
             raise
 
-    async def run_bulk_assessment(self, project_id: str, use_case_ids: list[str], model: str = "claude-haiku-4-5") -> list[StageRun]:
+    async def run_bulk_assessment(self, project_id: str, use_case_ids: list[str]) -> list[StageRun]:
         """Run assessments in parallel using ThreadPoolExecutor. Port Project 1's pattern."""
         # This will be used for bulk uploads
         # For now, just run sequentially via run_assessment
         results = []
         for uc_id in use_case_ids:
-            stage_run = await self.run_assessment(uc_id, model)
+            stage_run = await self.run_assessment(uc_id)
             results.append(stage_run)
         return results
 
@@ -212,9 +213,8 @@ class AssessmentService:
 
         try:
             raw_response = self.llm.complete(
-                model="claude-haiku-4-5",
+                prompt=user_prompt,
                 system=S1_FOLLOWUP_SYSTEM,
-                user=user_prompt,
                 max_tokens=500,
                 temperature=0.3,
             )

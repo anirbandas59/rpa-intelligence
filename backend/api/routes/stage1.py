@@ -86,8 +86,8 @@ async def create_s1_run(
     # Create assessment service and run
     async def run_assessment_task():
         async with db.begin():
-            service = AssessmentService(db)
-            await service.run_assessment(use_case_id, request.model)
+            service = AssessmentService(db, model=request.model)
+            await service.run_assessment(use_case_id)
 
     background_tasks.add_task(run_assessment_task)
 
@@ -272,19 +272,18 @@ async def backfill_from_s2(
         current_risk=s1_data.get("risk", 0),
     )
 
-    llm = LLMManager()
+    llm = LLMManager(provider_name="anthropic", model_name="claude-sonnet-4-5")
 
     try:
         raw_response = llm.complete(
-            model="claude-sonnet-4-5",
+            prompt=user_prompt,
             system=S1_BACKFILL_SYSTEM,
-            user=user_prompt,
             max_tokens=1500,
             temperature=0.3,
         )
 
         # Parse JSON
-        service = AssessmentService(db)
+        service = AssessmentService(db, model="claude-sonnet-4-5")
         suggestions = service._parse_json_response(raw_response)
 
         logger.info(f"Generated S1 backfill suggestions for use-case {use_case_id}")

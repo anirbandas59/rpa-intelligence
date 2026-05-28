@@ -74,10 +74,10 @@ async def test_assessment_service_creates_stage_run(test_db):
         "power_automate_fit": "Excellent fit - Power Automate has strong document processing capabilities."
     }"""
 
-    service = AssessmentService(session)
+    service = AssessmentService(session, model="claude-haiku-4-5")
 
     with patch.object(service.llm, 'complete', return_value=mock_response):
-        stage_run = await service.run_assessment(use_case.id, model="claude-haiku-4-5")
+        stage_run = await service.run_assessment(use_case.id)
 
     # Verify StageRun was created
     assert stage_run is not None
@@ -133,7 +133,7 @@ async def test_assessment_handles_malformed_json(test_db):
 
 Hope this helps!"""
 
-    service = AssessmentService(session)
+    service = AssessmentService(session, model="claude-haiku-4-5")
 
     with patch.object(service.llm, 'complete', return_value=mock_response):
         stage_run = await service.run_assessment(use_case.id)
