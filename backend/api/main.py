@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import auth, projects, stage1, stage2, use_cases
+from api.routes import auth, projects, stage1, stage2, stage3, use_cases
 
 app = FastAPI(title="RPA Intelligence API", version="0.1.0")
 
@@ -18,6 +18,7 @@ app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"]
 app.include_router(use_cases.router, prefix="/api/v1/use-cases", tags=["use-cases"])
 app.include_router(stage1.router, prefix="/api/v1/use-cases", tags=["stage1"])
 app.include_router(stage2.router, prefix="/api/v1/use-cases", tags=["stage2"])
+app.include_router(stage3.router, prefix="/api/v1/use-cases", tags=["stage3"])
 
 
 @app.get("/health")

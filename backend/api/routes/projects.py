@@ -3,9 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from db.models import Project, User, WeightConfig
+from db.models import Project, User, WeightConfig, PhaseConfig
 from api.dependencies import get_db, get_current_user
 from core.scoring.weight_matrix import load_weight_matrix
+from services.timeline_service import DEFAULT_BUFFERS
 
 router = APIRouter()
 
@@ -36,6 +37,22 @@ class WeightConfigResponse(BaseModel):
     is_active: bool
     config: dict
     yes_threshold: int
+    created_at: str
+
+
+class PhaseConfigRequest(BaseModel):
+    """Request to update phase buffer configuration."""
+    config: dict  # Buffer overrides: {"define": 2, "design": {"S": 1, "M": 2, ...}, ...}
+    sprint_length_weeks: int = 2
+
+
+class PhaseConfigResponse(BaseModel):
+    """Response for phase config."""
+    id: str
+    project_id: str
+    is_active: bool
+    config: dict
+    sprint_length_weeks: int
     created_at: str
 
 
@@ -167,5 +184,109 @@ async def update_project_weights(
         "is_active": new_config.is_active,
         "config": new_config.config,
         "yes_threshold": new_config.yes_threshold,
+        "created_at": new_config.created_at.isoformat(),
+    }
+
+
+@router.get("/{id}/phases", status_code=status.HTTP_200_OK)
+async def get_project_phase_config(
+    id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get active PhaseConfig for project.
+    If none exists, returns default buffer configuration.
+
+    Returns:
+        PhaseConfig or default phase buffers
+    """
+    # Verify project exists
+    result = await db.execute(select(Project).where(Project.id == id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Fetch active phase config
+    config_result = await db.execute(
+        select(PhaseConfig).where(
+            PhaseConfig.project_id == id,
+            PhaseConfig.is_active == True
+        )
+    )
+    phase_config = config_result.scalars().first()
+
+    if phase_config:
+        return {
+            "id": phase_config.id,
+            "project_id": phase_config.project_id,
+            "is_active": phase_config.is_active,
+            "config": phase_config.config,
+            "sprint_length_weeks": phase_config.sprint_length_weeks,
+            "created_at": phase_config.created_at.isoformat(),
+            "source": "project_override",
+        }
+    else:
+        # Return default buffers
+        return {
+            "id": None,
+            "project_id": id,
+            "is_active": True,
+            "config": DEFAULT_BUFFERS,
+            "sprint_length_weeks": 2,
+            "created_at": None,
+            "source": "default",
+        }
+
+
+@router.put("/{id}/phases", status_code=status.HTTP_200_OK)
+async def update_project_phase_config(
+    id: str,
+    request: PhaseConfigRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Update (or create) PhaseConfig for project.
+    Deactivates any existing active config and creates a new one.
+
+    Returns:
+        Created PhaseConfig
+    """
+    # Verify project exists
+    result = await db.execute(select(Project).where(Project.id == id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Deactivate existing active configs
+    existing_result = await db.execute(
+        select(PhaseConfig).where(
+            PhaseConfig.project_id == id,
+            PhaseConfig.is_active == True
+        )
+    )
+    existing_configs = existing_result.scalars().all()
+    for config in existing_configs:
+        config.is_active = False
+
+    # Create new config
+    new_config = PhaseConfig(
+        project_id=id,
+        is_active=True,
+        config=request.config,
+        sprint_length_weeks=request.sprint_length_weeks,
+    )
+
+    db.add(new_config)
+    await db.commit()
+    await db.refresh(new_config)
+
+    return {
+        "id": new_config.id,
+        "project_id": new_config.project_id,
+        "is_active": new_config.is_active,
+        "config": new_config.config,
+        "sprint_length_weeks": new_config.sprint_length_weeks,
         "created_at": new_config.created_at.isoformat(),
     }

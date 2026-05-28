@@ -7,7 +7,7 @@ Unified web platform combining two existing RPA tools into a four-stage workflow
 - **Project 2** (FastAPI + LangGraph): RPA Complexity Agent → Stage 2
 - **Stage 3**: Delivery Timeline — new, pure Python, no LLM
 - **Stage 4**: Feature & Sprint Tracker — new, LangGraph + deterministic bin-packing
-- **Frontend**: Next.js 15 App Router (replaces Project 2's Streamlit)
+- **Frontend**: Next.js 16 App Router (replaces Project 2's Streamlit)
 
 ---
 
@@ -16,7 +16,7 @@ Unified web platform combining two existing RPA tools into a four-stage workflow
 ```
 rpa-intelligence/
   backend/    → FastAPI (Python 3.12, UV)
-  frontend/   → Next.js 15 (TypeScript, shadcn Nova, Tailwind v4)
+  frontend/   → Next.js 16 (TypeScript, shadcn Nova, Tailwind v4)
   CLAUDE.md   → this file
 ```
 
