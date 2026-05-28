@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 .venv/
@@ -5,19 +6,32 @@ __pycache__/
 dist/
 .pytest_cache/
 .mypy_cache/
+
+# Environment
 .env
 .env.local
 .env.*.local
+
+# Database
 *.db
 *.sqlite3
+
+# Uploads and outputs
 backend/uploads/
 backend/assessments/
 backend/docs/output_*.xlsx
 backend/docs/comparison_report.xlsx
+
+# Node
 node_modules/
 frontend/.next/
 frontend/out/
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Claude Code
 .claude/settings.local.json
+.claude/settings.json
 .claude/tool-call.log
