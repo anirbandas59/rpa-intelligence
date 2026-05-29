@@ -2,22 +2,16 @@
 Export service — generate Excel tracker from Stage 4 results.
 3-sheet workbook: Calculator, Steps, Timeline.
 """
+
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-from datetime import date, timedelta
+from openpyxl.styles import Font, PatternFill, Border, Side
 import io
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def generate_tracker_xlsx(
-    use_case_name: str,
-    s2_result: dict,
-    s3_result: dict,
-    s4_result: dict
-) -> io.BytesIO:
+def generate_tracker_xlsx(use_case_name: str, s2_result: dict, s3_result: dict, s4_result: dict) -> io.BytesIO:
     """
     Generate 3-sheet Excel tracker from stage results.
 
@@ -61,10 +55,7 @@ def _create_calculator_sheet(wb: Workbook, use_case_name: str, s2_result: dict):
     header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
     border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin")
+        left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin")
     )
 
     # Title
@@ -92,7 +83,7 @@ def _create_calculator_sheet(wb: Workbook, use_case_name: str, s2_result: dict):
         ("Business Rules", s2_result.get("bands", {}).get("business_rules", "M")),
         ("Layouts", s2_result.get("bands", {}).get("layouts", "S")),
         ("Interfaces", s2_result.get("bands", {}).get("interfaces", "S")),
-        ("Technology", s2_result.get("bands", {}).get("technology", "S"))
+        ("Technology", s2_result.get("bands", {}).get("technology", "S")),
     ]
 
     weights = s2_result.get("attribute_weights", {})
@@ -108,22 +99,22 @@ def _create_calculator_sheet(wb: Workbook, use_case_name: str, s2_result: dict):
         row += 1
 
     # Summary
-    ws[f"A{row+1}"] = "Total Score"
-    ws[f"B{row+1}"] = s2_result.get("total_score", 0)
-    ws[f"A{row+1}"].font = Font(bold=True)
-    ws[f"B{row+1}"].font = Font(bold=True)
+    ws[f"A{row + 1}"] = "Total Score"
+    ws[f"B{row + 1}"] = s2_result.get("total_score", 0)
+    ws[f"A{row + 1}"].font = Font(bold=True)
+    ws[f"B{row + 1}"].font = Font(bold=True)
 
-    ws[f"A{row+2}"] = "Complexity Class"
-    ws[f"B{row+2}"] = s2_result.get("complexity_class", "M")
-    ws[f"A{row+2}"].font = Font(bold=True)
-    ws[f"B{row+2}"].font = Font(bold=True)
+    ws[f"A{row + 2}"] = "Complexity Class"
+    ws[f"B{row + 2}"] = s2_result.get("complexity_class", "M")
+    ws[f"A{row + 2}"].font = Font(bold=True)
+    ws[f"B{row + 2}"].font = Font(bold=True)
 
-    ws[f"A{row+3}"] = "Effort Estimate"
+    ws[f"A{row + 3}"] = "Effort Estimate"
     effort_min = s2_result.get("effort_min_weeks", 0)
     effort_max = s2_result.get("effort_max_weeks", 0)
-    ws[f"B{row+3}"] = f"{effort_min}-{effort_max} weeks" if effort_min != effort_max else f"{effort_min} weeks"
-    ws[f"A{row+3}"].font = Font(bold=True)
-    ws[f"B{row+3}"].font = Font(bold=True)
+    ws[f"B{row + 3}"] = f"{effort_min}-{effort_max} weeks" if effort_min != effort_max else f"{effort_min} weeks"
+    ws[f"A{row + 3}"].font = Font(bold=True)
+    ws[f"B{row + 3}"].font = Font(bold=True)
 
     # Column widths
     ws.column_dimensions["A"].width = 20
@@ -139,10 +130,7 @@ def _create_steps_sheet(wb: Workbook, use_case_name: str, s4_result: dict):
     header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
     border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin")
+        left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin")
     )
 
     # Title
@@ -197,8 +185,8 @@ def _create_steps_sheet(wb: Workbook, use_case_name: str, s4_result: dict):
     row += 1
     for summary in sprint_assignment.get("sprint_summaries", []):
         ws[f"A{row}"] = f"Sprint {summary['sprint_number']}"
-        ws[f"B{row}"] = len(summary['features'])
-        ws[f"C{row}"] = summary['total_points']
+        ws[f"B{row}"] = len(summary["features"])
+        ws[f"C{row}"] = summary["total_points"]
         ws[f"D{row}"] = f"{summary['utilization']}%"
 
         for col in ["A", "B", "C", "D"]:
@@ -222,10 +210,7 @@ def _create_timeline_sheet(wb: Workbook, use_case_name: str, s3_result: dict, s4
     header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
     border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin")
+        left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin")
     )
 
     # Title
@@ -267,10 +252,10 @@ def _create_timeline_sheet(wb: Workbook, use_case_name: str, s3_result: dict, s4
     ws[f"A{row}"].font = Font(bold=True)
     ws[f"B{row}"].font = Font(bold=True)
 
-    ws[f"A{row+1}"] = "Project End"
-    ws[f"B{row+1}"] = s3_result.get("project_end_date", "")
-    ws[f"A{row+1}"].font = Font(bold=True)
-    ws[f"B{row+1}"].font = Font(bold=True)
+    ws[f"A{row + 1}"] = "Project End"
+    ws[f"B{row + 1}"] = s3_result.get("project_end_date", "")
+    ws[f"A{row + 1}"].font = Font(bold=True)
+    ws[f"B{row + 1}"].font = Font(bold=True)
 
     # Sprint breakdown
     row += 3
@@ -289,8 +274,8 @@ def _create_timeline_sheet(wb: Workbook, use_case_name: str, s3_result: dict, s4
     sprint_summaries = s4_result.get("sprint_assignment", {}).get("sprint_summaries", [])
     for summary in sprint_summaries:
         ws[f"A{row}"] = f"Sprint {summary['sprint_number']}"
-        ws[f"B{row}"] = len(summary['features'])
-        ws[f"C{row}"] = summary['total_points']
+        ws[f"B{row}"] = len(summary["features"])
+        ws[f"C{row}"] = summary["total_points"]
 
         for col in ["A", "B", "C"]:
             ws[f"{col}{row}"].border = border

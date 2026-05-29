@@ -2,14 +2,15 @@
 Stage 4 tracker agent — feature decomposition + sprint assignment.
 LangGraph StateGraph: document read → Sonnet decompose → bin-packing → result.
 """
+
 import json
 import logging
-from typing import TypedDict, Annotated
+from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel
 
 from llm.manager import LLMManager
-from tools.sprint_assigner import Feature, assign_sprints, SprintAssignmentResult
+from tools.sprint_assigner import Feature, assign_sprints
 from prompts.tracker_prompts import S4_DECOMPOSE_SYSTEM, S4_DECOMPOSE_USER
 from core.exceptions import AgentExecutionError, LLMProviderError
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class TrackerState(TypedDict):
     """State for tracker agent."""
+
     use_case_id: str
     process_name: str
     process_description: str
@@ -34,6 +36,7 @@ class TrackerState(TypedDict):
 
 class FeatureDecomposition(BaseModel):
     """Pydantic model for LLM response."""
+
     features: list[dict]
     summary: str
 
@@ -69,15 +72,11 @@ def decompose_features_node(state: TrackerState) -> TrackerState:
             effort_weeks=state["effort_weeks"],
             process_description=state["process_description"],
             document_context=state["document_context"],
-            sprint_count=state["sprint_count"]
+            sprint_count=state["sprint_count"],
         )
 
         response = llm.complete(
-            model="claude-sonnet-4-5",
-            system=S4_DECOMPOSE_SYSTEM,
-            user=user_prompt,
-            max_tokens=2000,
-            temperature=0.4
+            model="claude-sonnet-4-5", system=S4_DECOMPOSE_SYSTEM, user=user_prompt, max_tokens=2000, temperature=0.4
         )
 
         state["raw_llm_response"] = response
@@ -127,7 +126,9 @@ def assign_sprints_node(state: TrackerState) -> TrackerState:
     """
     Node 3: Deterministic bin-packing of features into sprints.
     """
-    logger.info(f"[tracker_agent] Assigning {len(state['extracted_features'])} features to {state['sprint_count']} sprints")
+    logger.info(
+        f"[tracker_agent] Assigning {len(state['extracted_features'])} features to {state['sprint_count']} sprints"
+    )
 
     try:
         # Convert extracted features to Feature objects
@@ -137,28 +138,23 @@ def assign_sprints_node(state: TrackerState) -> TrackerState:
                 name=feat_dict["name"],
                 description=feat_dict["description"],
                 size=feat_dict["size"],
-                dependencies=feat_dict.get("dependencies", [])
+                dependencies=feat_dict.get("dependencies", []),
             )
             features.append(feature)
 
         # Assign to sprints
         assignment = assign_sprints(
-            features=features,
-            sprint_count=state["sprint_count"],
-            sprint_capacity=state["sprint_capacity"]
+            features=features, sprint_count=state["sprint_count"], sprint_capacity=state["sprint_capacity"]
         )
 
         state["sprint_assignment"] = {
             "sprint_plans": [
-                {
-                    "feature": sp.feature.model_dump(),
-                    "sprint_number": sp.sprint_number
-                }
+                {"feature": sp.feature.model_dump(), "sprint_number": sp.sprint_number}
                 for sp in assignment.sprint_plans
             ],
             "sprint_summaries": assignment.sprint_summaries,
             "total_points": assignment.total_points,
-            "warnings": assignment.warnings
+            "warnings": assignment.warnings,
         }
 
         logger.info(
@@ -200,7 +196,7 @@ async def run_tracker_agent(
     complexity_class: str,
     effort_weeks: int,
     sprint_count: int,
-    sprint_capacity: int = 8
+    sprint_capacity: int = 8,
 ) -> dict:
     """
     Run the tracker agent to decompose features and assign sprints.
@@ -222,7 +218,7 @@ async def run_tracker_agent(
         "raw_llm_response": "",
         "extracted_features": [],
         "sprint_assignment": {},
-        "error": None
+        "error": None,
     }
 
     graph = create_tracker_graph()
@@ -244,8 +240,8 @@ async def run_tracker_agent(
                 "sprint_count": sprint_count,
                 "sprint_capacity": sprint_capacity,
                 "total_features": len(final_state["extracted_features"]),
-                "total_points": final_state["sprint_assignment"]["total_points"]
-            }
+                "total_points": final_state["sprint_assignment"]["total_points"],
+            },
         }
 
         logger.info(f"[tracker_agent] Completed successfully for use case {use_case_id}")

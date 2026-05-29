@@ -2,6 +2,7 @@
 Settings API routes — Superuser-only configuration management.
 All endpoints require superuser role.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -18,8 +19,10 @@ router = APIRouter()
 
 # ==================== LLM Configuration ====================
 
+
 class LLMConfigResponse(BaseModel):
     """Response model for LLM config."""
+
     id: str
     stage: str
     model: str
@@ -31,6 +34,7 @@ class LLMConfigResponse(BaseModel):
 
 class LLMConfigUpdate(BaseModel):
     """Request to update LLM config for a stage."""
+
     stage: str = Field(..., pattern="^(s1_scoring|s1_followup|s2_extract|s3_narrative|s4_decompose)$")
     model: str = Field(..., pattern="^claude-(haiku|sonnet|opus)-4")
     temperature: float = Field(0.3, ge=0.0, le=1.0)
@@ -43,9 +47,7 @@ async def list_llm_configs(
     user: User = Depends(require_superuser),
 ):
     """List all active LLM configurations."""
-    result = await db.execute(
-        select(LLMConfig).where(LLMConfig.is_active == True).order_by(LLMConfig.stage)
-    )
+    result = await db.execute(select(LLMConfig).where(LLMConfig.is_active).order_by(LLMConfig.stage))
     configs = result.scalars().all()
 
     return {
@@ -72,12 +74,7 @@ async def update_llm_config(
 ):
     """Update LLM config for a stage. Creates if doesn't exist."""
     # Check if config exists for this stage
-    result = await db.execute(
-        select(LLMConfig).where(
-            LLMConfig.stage == update_req.stage,
-            LLMConfig.is_active == True
-        )
-    )
+    result = await db.execute(select(LLMConfig).where(LLMConfig.stage == update_req.stage, LLMConfig.is_active))
     config = result.scalar_one_or_none()
 
     if config:
@@ -108,14 +105,16 @@ async def update_llm_config(
         "model": config.model,
         "temperature": config.temperature,
         "max_tokens": config.max_tokens,
-        "message": "LLM config updated successfully"
+        "message": "LLM config updated successfully",
     }
 
 
 # ==================== Prompt Variants ====================
 
+
 class PromptVariantResponse(BaseModel):
     """Response model for prompt variant."""
+
     id: str
     stage: str
     name: str
@@ -125,6 +124,7 @@ class PromptVariantResponse(BaseModel):
 
 class PromptVariantCreate(BaseModel):
     """Request to create a new prompt variant."""
+
     stage: str = Field(..., pattern="^(s1_scoring|s1_followup|s2_extract|s3_narrative|s4_decompose)$")
     name: str = Field(..., min_length=1, max_length=100)
     content: dict = Field(..., description="JSON dict with 'system' and 'user' keys")
@@ -132,6 +132,7 @@ class PromptVariantCreate(BaseModel):
 
 class PromptVariantUpdate(BaseModel):
     """Request to update a prompt variant."""
+
     content: dict = Field(..., description="JSON dict with 'system' and 'user' keys")
 
 
@@ -141,9 +142,7 @@ async def list_prompt_variants(
     user: User = Depends(require_superuser),
 ):
     """List all prompt variants."""
-    result = await db.execute(
-        select(PromptVariant).order_by(PromptVariant.stage, PromptVariant.created_at.desc())
-    )
+    result = await db.execute(select(PromptVariant).order_by(PromptVariant.stage, PromptVariant.created_at.desc()))
     variants = result.scalars().all()
 
     return {
@@ -169,10 +168,7 @@ async def create_prompt_variant(
     """Create a new prompt variant."""
     # Validate content structure
     if "system" not in create_req.content or "user" not in create_req.content:
-        raise HTTPException(
-            status_code=400,
-            detail="content must contain 'system' and 'user' keys"
-        )
+        raise HTTPException(status_code=400, detail="content must contain 'system' and 'user' keys")
 
     variant = PromptVariant(
         stage=create_req.stage,
@@ -191,7 +187,7 @@ async def create_prompt_variant(
         "stage": variant.stage,
         "name": variant.name,
         "is_active": variant.is_active,
-        "message": "Prompt variant created successfully"
+        "message": "Prompt variant created successfully",
     }
 
 
@@ -203,9 +199,7 @@ async def update_prompt_variant(
     user: User = Depends(require_superuser),
 ):
     """Update prompt variant content."""
-    result = await db.execute(
-        select(PromptVariant).where(PromptVariant.id == variant_id)
-    )
+    result = await db.execute(select(PromptVariant).where(PromptVariant.id == variant_id))
     variant = result.scalar_one_or_none()
 
     if not variant:
@@ -213,19 +207,13 @@ async def update_prompt_variant(
 
     # Validate content structure
     if "system" not in update_req.content or "user" not in update_req.content:
-        raise HTTPException(
-            status_code=400,
-            detail="content must contain 'system' and 'user' keys"
-        )
+        raise HTTPException(status_code=400, detail="content must contain 'system' and 'user' keys")
 
     variant.content = update_req.content
     await db.commit()
     await db.refresh(variant)
 
-    return {
-        "id": variant.id,
-        "message": "Prompt variant updated successfully"
-    }
+    return {"id": variant.id, "message": "Prompt variant updated successfully"}
 
 
 @router.put("/prompts/{variant_id}/activate")
@@ -239,20 +227,14 @@ async def activate_prompt_variant(
     Deactivates all other variants for the same stage.
     """
     # Get the variant to activate
-    result = await db.execute(
-        select(PromptVariant).where(PromptVariant.id == variant_id)
-    )
+    result = await db.execute(select(PromptVariant).where(PromptVariant.id == variant_id))
     variant = result.scalar_one_or_none()
 
     if not variant:
         raise HTTPException(status_code=404, detail="Prompt variant not found")
 
     # Deactivate all other variants for this stage
-    await db.execute(
-        update(PromptVariant)
-        .where(PromptVariant.stage == variant.stage)
-        .values(is_active=False)
-    )
+    await db.execute(update(PromptVariant).where(PromptVariant.stage == variant.stage).values(is_active=False))
 
     # Activate this variant
     variant.is_active = True
@@ -264,14 +246,16 @@ async def activate_prompt_variant(
         "stage": variant.stage,
         "name": variant.name,
         "is_active": variant.is_active,
-        "message": f"Activated '{variant.name}' for stage {variant.stage}"
+        "message": f"Activated '{variant.name}' for stage {variant.stage}",
     }
 
 
 # ==================== User Management ====================
 
+
 class UserResponse(BaseModel):
     """Response model for user."""
+
     id: str
     email: str
     role: str
@@ -281,6 +265,7 @@ class UserResponse(BaseModel):
 
 class UserInvite(BaseModel):
     """Request to invite a new user."""
+
     email: str = Field(..., pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     password: str = Field(..., min_length=8)
     role: Literal["user", "superuser"] = "user"
@@ -288,6 +273,7 @@ class UserInvite(BaseModel):
 
 class UserUpdate(BaseModel):
     """Request to update user."""
+
     role: Literal["user", "superuser"] | None = None
     is_active: bool | None = None
 
@@ -298,9 +284,7 @@ async def list_users(
     user: User = Depends(require_superuser),
 ):
     """List all users."""
-    result = await db.execute(
-        select(User).order_by(User.created_at.desc())
-    )
+    result = await db.execute(select(User).order_by(User.created_at.desc()))
     users = result.scalars().all()
 
     return {
@@ -328,16 +312,11 @@ async def invite_user(
     Credentials are sent out-of-band (email, Slack, etc.).
     """
     # Check if email already exists
-    result = await db.execute(
-        select(User).where(User.email == invite_req.email)
-    )
+    result = await db.execute(select(User).where(User.email == invite_req.email))
     existing = result.scalar_one_or_none()
 
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="User with this email already exists"
-        )
+        raise HTTPException(status_code=400, detail="User with this email already exists")
 
     # Create user
     new_user = User(
@@ -355,7 +334,7 @@ async def invite_user(
         "id": new_user.id,
         "email": new_user.email,
         "role": new_user.role,
-        "message": "User created successfully. Send credentials out-of-band."
+        "message": "User created successfully. Send credentials out-of-band.",
     }
 
 
@@ -367,9 +346,7 @@ async def update_user(
     user: User = Depends(require_superuser),
 ):
     """Update user role or active status."""
-    result = await db.execute(
-        select(User).where(User.id == user_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
     target_user = result.scalar_one_or_none()
 
     if not target_user:
@@ -377,10 +354,7 @@ async def update_user(
 
     # Prevent superuser from deactivating themselves
     if user_id == user.id and update_req.is_active is False:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot deactivate your own account"
-        )
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
 
     if update_req.role is not None:
         target_user.role = update_req.role
@@ -396,5 +370,5 @@ async def update_user(
         "email": target_user.email,
         "role": target_user.role,
         "is_active": target_user.is_active,
-        "message": "User updated successfully"
+        "message": "User updated successfully",
     }

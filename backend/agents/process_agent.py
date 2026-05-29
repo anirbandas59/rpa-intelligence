@@ -3,6 +3,7 @@ Process agent — extracts complexity bands from document text using LLM.
 Uses Haiku via LLMManager.
 Parses JSON response into AttributeBandsWithSource.
 """
+
 import json
 import logging
 from typing import TypedDict
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class ProcessState(TypedDict):
     """State for process extraction."""
+
     document_text: str
     bands: AttributeBandsWithSource | None
     extraction_notes: str | None
@@ -57,7 +59,7 @@ def parse_llm_json(response: str) -> dict:
     if start == -1 or end == -1:
         raise AgentExecutionError(f"No JSON object found in LLM response: {response[:200]}")
 
-    json_text = text[start:end + 1]
+    json_text = text[start : end + 1]
 
     try:
         return json.loads(json_text)

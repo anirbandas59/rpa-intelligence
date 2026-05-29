@@ -3,6 +3,7 @@ Classifier tool — maps total score to complexity class.
 Thin wrapper around core/scoring/classifier.
 Pure Python, no LLM calls.
 """
+
 from pydantic import BaseModel
 from core.models.scoring import ComplexityClass, AttributeBands
 from core.scoring.classifier import classify
@@ -10,6 +11,7 @@ from core.scoring.classifier import classify
 
 class ClassificationResult(BaseModel):
     """Result of complexity classification."""
+
     complexity_class: ComplexityClass
 
 

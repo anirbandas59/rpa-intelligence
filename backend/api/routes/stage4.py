@@ -2,6 +2,7 @@
 Stage 4 API routes — Sprint Tracker (Sonnet decompose + deterministic bin-packing).
 Async execution pattern with BackgroundTasks.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +17,6 @@ from api.dependencies import get_db, get_current_user
 from db.models import User, UseCase, StageRun
 from agents.tracker_agent import run_tracker_agent
 from services.export_service import generate_tracker_xlsx
-from core.exceptions import AgentExecutionError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ async def run_tracker_background(
             complexity_class=complexity_class,
             effort_weeks=effort_weeks,
             sprint_count=sprint_count,
-            sprint_capacity=sprint_capacity
+            sprint_capacity=sprint_capacity,
         )
 
         # Update StageRun to complete
@@ -154,10 +154,7 @@ async def create_s4_run(
 
     # Compute run number
     count_result = await db.execute(
-        select(func.count(StageRun.id)).where(
-            StageRun.use_case_id == use_case_id,
-            StageRun.stage == "s4"
-        )
+        select(func.count(StageRun.id)).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
     )
     run_number = count_result.scalar() + 1
 
@@ -241,11 +238,7 @@ async def get_s4_run(
 ):
     """Get single Stage 4 run with full details."""
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id,
-            StageRun.use_case_id == use_case_id,
-            StageRun.stage == "s4"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
     )
     run = result.scalar_one_or_none()
     if not run:
@@ -278,11 +271,7 @@ async def export_s4_run(
 
     # Get S4 run
     s4_result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id,
-            StageRun.use_case_id == use_case_id,
-            StageRun.stage == "s4"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
     )
     s4_run = s4_result.scalar_one_or_none()
     if not s4_run:
@@ -309,10 +298,7 @@ async def export_s4_run(
 
     try:
         excel_buffer = generate_tracker_xlsx(
-            use_case_name=use_case.name,
-            s2_result=s2_data,
-            s3_result=s3_data,
-            s4_result=s4_data
+            use_case_name=use_case.name, s2_result=s2_data, s3_result=s3_data, s4_result=s4_data
         )
 
         filename = f"{use_case.name.replace(' ', '_')}_tracker.xlsx"
@@ -320,7 +306,7 @@ async def export_s4_run(
         return StreamingResponse(
             excel_buffer,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
     except Exception as e:
@@ -345,9 +331,7 @@ async def load_from_s2(
         raise HTTPException(status_code=400, detail="No Stage 2 run found for this use case")
 
     # Fetch S2 latest run
-    s2_result = await db.execute(
-        select(StageRun).where(StageRun.id == use_case.s2_latest_run_id)
-    )
+    s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
     s2_run = s2_result.scalar_one_or_none()
     if not s2_run:
         raise HTTPException(status_code=404, detail="Stage 2 run not found")
@@ -379,10 +363,7 @@ async def load_from_s2(
 
     logger.info(f"Loaded S2 data into S4 inputs for use case {use_case_id}")
 
-    return {
-        "message": "Stage 2 data loaded into Stage 4 inputs",
-        "s4_inputs": inputs
-    }
+    return {"message": "Stage 2 data loaded into Stage 4 inputs", "s4_inputs": inputs}
 
 
 @router.post("/{use_case_id}/s4/load-from-s3")
@@ -402,9 +383,7 @@ async def load_from_s3(
         raise HTTPException(status_code=400, detail="No Stage 3 run found for this use case")
 
     # Fetch S3 latest run
-    s3_result = await db.execute(
-        select(StageRun).where(StageRun.id == use_case.s3_latest_run_id)
-    )
+    s3_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s3_latest_run_id))
     s3_run = s3_result.scalar_one_or_none()
     if not s3_run:
         raise HTTPException(status_code=404, detail="Stage 3 run not found")
@@ -435,5 +414,5 @@ async def load_from_s3(
     return {
         "message": "Stage 3 data loaded into Stage 4 inputs",
         "s4_inputs": inputs,
-        "derived_sprint_count": sprint_count
+        "derived_sprint_count": sprint_count,
     }

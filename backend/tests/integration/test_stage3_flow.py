@@ -1,14 +1,13 @@
 """
 Integration test for Stage 3 timeline flow.
 """
+
 import pytest
-from datetime import date
 from httpx import AsyncClient, ASGITransport
 from api.main import app
 from db.session import get_session_factory, get_engine
 from db.models import Base, User, Project, UseCase, StageRun
 from auth import hash_password, create_access_token
-from sqlalchemy import select
 
 
 @pytest.fixture
@@ -66,7 +65,7 @@ async def test_use_case(db_session, test_project):
             "effort_weeks": 6,
             "start_date": "2025-07-01",
             "complexity_class": "L",
-        }
+        },
     )
     db_session.add(use_case)
     await db_session.commit()
@@ -200,9 +199,7 @@ async def test_phase_delta_adjustment(test_use_case, auth_headers):
 
         assert run_response.status_code == 200
         run_data = run_response.json()
-        build_phase = next(
-            p for p in run_data["result"]["phases"] if p["name"] == "Build"
-        )
+        build_phase = next(p for p in run_data["result"]["phases"] if p["name"] == "Build")
         # Original 6 weeks + 2 delta = 8 weeks
         assert build_phase["weeks"] == 8
         assert build_phase["is_delta"] is True

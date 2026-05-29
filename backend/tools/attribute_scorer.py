@@ -2,6 +2,7 @@
 Attribute scorer tool — maps AttributeBands to weight integers.
 Pure Python, no LLM calls.
 """
+
 from pydantic import BaseModel
 from core.models.scoring import AttributeBands
 from core.scoring.weight_matrix import load_weight_matrix, get_weight
@@ -9,6 +10,7 @@ from core.scoring.weight_matrix import load_weight_matrix, get_weight
 
 class AttributeScoreResult(BaseModel):
     """Result of attribute scoring with individual weights."""
+
     activities_weight: int
     business_rules_weight: int
     layouts_weight: int
@@ -48,5 +50,5 @@ def score_attributes(bands: AttributeBands) -> AttributeScoreResult:
             "layouts": layouts_weight,
             "interfaces": interfaces_weight,
             "technology": technology_weight,
-        }
+        },
     )

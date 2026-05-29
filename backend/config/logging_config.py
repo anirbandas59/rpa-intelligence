@@ -100,9 +100,7 @@ def setup_logging(log_level: str | None = None) -> None:
     log_dir = Path(log_file).parent
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    file_handler = logging.handlers.RotatingFileHandler(
-        log_file, maxBytes=10_000_000, backupCount=5
-    )
+    file_handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=10_000_000, backupCount=5)
     file_handler.setLevel(numeric_level)
     file_handler.setFormatter(formatter)
     rpa_logger.addHandler(file_handler)

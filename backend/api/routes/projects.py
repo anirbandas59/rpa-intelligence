@@ -38,12 +38,14 @@ class UseCaseListItem(BaseModel):
 
 class WeightConfigRequest(BaseModel):
     """Request to update weight config for a project."""
+
     config: dict  # Weight matrix override
     yes_threshold: int = 50
 
 
 class WeightConfigResponse(BaseModel):
     """Response for weight config."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -57,12 +59,14 @@ class WeightConfigResponse(BaseModel):
 
 class PhaseConfigRequest(BaseModel):
     """Request to update phase buffer configuration."""
+
     config: dict  # Buffer overrides: {"define": 2, "design": {"S": 1, "M": 2, ...}, ...}
     sprint_length_weeks: int = 2
 
 
 class PhaseConfigResponse(BaseModel):
     """Response for phase config."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -135,12 +139,7 @@ async def get_project_weights(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Fetch active weight config
-    config_result = await db.execute(
-        select(WeightConfig).where(
-            WeightConfig.project_id == id,
-            WeightConfig.is_active == True
-        )
-    )
+    config_result = await db.execute(select(WeightConfig).where(WeightConfig.project_id == id, WeightConfig.is_active))
     weight_config = config_result.scalars().first()
 
     if weight_config:
@@ -191,10 +190,7 @@ async def update_project_weights(
 
     # Deactivate existing active configs
     existing_result = await db.execute(
-        select(WeightConfig).where(
-            WeightConfig.project_id == id,
-            WeightConfig.is_active == True
-        )
+        select(WeightConfig).where(WeightConfig.project_id == id, WeightConfig.is_active)
     )
     existing_configs = existing_result.scalars().all()
     for config in existing_configs:
@@ -245,12 +241,7 @@ async def get_project_phase_config(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Fetch active phase config
-    config_result = await db.execute(
-        select(PhaseConfig).where(
-            PhaseConfig.project_id == id,
-            PhaseConfig.is_active == True
-        )
-    )
+    config_result = await db.execute(select(PhaseConfig).where(PhaseConfig.project_id == id, PhaseConfig.is_active))
     phase_config = config_result.scalars().first()
 
     if phase_config:
@@ -297,12 +288,7 @@ async def update_project_phase_config(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Deactivate existing active configs
-    existing_result = await db.execute(
-        select(PhaseConfig).where(
-            PhaseConfig.project_id == id,
-            PhaseConfig.is_active == True
-        )
-    )
+    existing_result = await db.execute(select(PhaseConfig).where(PhaseConfig.project_id == id, PhaseConfig.is_active))
     existing_configs = existing_result.scalars().all()
     for config in existing_configs:
         config.is_active = False

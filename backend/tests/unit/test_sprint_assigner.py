@@ -1,6 +1,7 @@
 """
 Unit tests for sprint assigner tool — deterministic bin-packing.
 """
+
 import pytest
 from tools.sprint_assigner import Feature, assign_sprints, topological_sort
 from core.exceptions import ScoringValidationError
@@ -60,9 +61,9 @@ def test_topological_sort_missing_dependency():
 def test_assign_sprints_simple():
     """Test basic sprint assignment."""
     features = [
-        Feature(name="setup", description="Setup", size="S"),        # 2pts
+        Feature(name="setup", description="Setup", size="S"),  # 2pts
         Feature(name="workflow", description="Workflow", size="M"),  # 3pts
-        Feature(name="testing", description="Testing", size="S"),    # 2pts
+        Feature(name="testing", description="Testing", size="S"),  # 2pts
     ]
 
     result = assign_sprints(features, sprint_count=1, sprint_capacity=8)
@@ -120,7 +121,7 @@ def test_assign_sprints_overflow():
     """Test handling when features overflow sprint capacity."""
     features = [
         Feature(name="f1", description="F1", size="XL"),  # 8pts
-        Feature(name="f2", description="F2", size="L"),   # 5pts
+        Feature(name="f2", description="F2", size="L"),  # 5pts
     ]
 
     result = assign_sprints(features, sprint_count=1, sprint_capacity=8)
@@ -146,9 +147,9 @@ def test_size_points_mapping():
     """Test that size to points mapping is correct."""
     features = [
         Feature(name="xs", description="XS", size="XS"),  # 1
-        Feature(name="s", description="S", size="S"),     # 2
-        Feature(name="m", description="M", size="M"),     # 3
-        Feature(name="l", description="L", size="L"),     # 5
+        Feature(name="s", description="S", size="S"),  # 2
+        Feature(name="m", description="M", size="M"),  # 3
+        Feature(name="l", description="L", size="L"),  # 5
         Feature(name="xl", description="XL", size="XL"),  # 8
     ]
 

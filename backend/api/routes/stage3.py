@@ -2,6 +2,7 @@
 Stage 3 API routes — Delivery Timeline (deterministic, synchronous).
 No LLM calls in main flow. Optional narrative generation in background.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -13,10 +14,9 @@ import logging
 
 from api.dependencies import get_db, get_current_user
 from db.models import User, UseCase, StageRun
-from services.timeline_service import calculate_timeline, TimelineResult
+from services.timeline_service import calculate_timeline
 from prompts.timeline_prompts import S3_NARRATIVE_SYSTEM, S3_NARRATIVE_USER
 from llm.manager import LLMManager
-from core.exceptions import ScoringValidationError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -54,10 +54,7 @@ async def generate_narrative_background(
     """Background task: generate narrative summary with Sonnet."""
     try:
         llm = LLMManager()
-        phase_list = "\n".join([
-            f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)"
-            for p in phases
-        ])
+        phase_list = "\n".join([f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)" for p in phases])
 
         user_prompt = S3_NARRATIVE_USER.format(
             use_case_name=use_case_name,
@@ -171,10 +168,7 @@ async def create_s3_run(
 
     # Compute run number
     count_result = await db.execute(
-        select(func.count(StageRun.id)).where(
-            StageRun.use_case_id == use_case_id,
-            StageRun.stage == "s3"
-        )
+        select(func.count(StageRun.id)).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s3")
     )
     run_number = count_result.scalar() + 1
 
@@ -256,11 +250,7 @@ async def get_s3_run(
 ):
     """Get single Stage 3 run with full details."""
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id,
-            StageRun.use_case_id == use_case_id,
-            StageRun.stage == "s3"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s3")
     )
     run = result.scalar_one_or_none()
     if not run:
@@ -345,9 +335,7 @@ async def load_from_s2(
         raise HTTPException(status_code=400, detail="No Stage 2 run found for this use case")
 
     # Fetch S2 latest run
-    s2_result = await db.execute(
-        select(StageRun).where(StageRun.id == use_case.s2_latest_run_id)
-    )
+    s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
     s2_run = s2_result.scalar_one_or_none()
     if not s2_run:
         raise HTTPException(status_code=404, detail="Stage 2 run not found")
@@ -382,5 +370,5 @@ async def load_from_s2(
         "loaded_values": {
             "effort_weeks": effort_weeks,
             "complexity_class": complexity_class,
-        }
+        },
     }

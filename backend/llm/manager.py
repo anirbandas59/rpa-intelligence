@@ -87,9 +87,7 @@ class LLMManager:
         settings = get_settings()
 
         # Use provided names or fall back to settings defaults
-        self._provider_name = (
-            provider_name.lower() if provider_name else settings.default_llm_provider.lower()
-        )
+        self._provider_name = provider_name.lower() if provider_name else settings.default_llm_provider.lower()
         self._model_name = model_name if model_name else settings.default_llm_model
 
         # Initialize tracking
@@ -99,9 +97,7 @@ class LLMManager:
         # Build the provider
         self._provider = self._build_provider()
 
-        self.logger.debug(
-            f"LLMManager initialized | provider={self._provider_name} | model={self._model_name}"
-        )
+        self.logger.debug(f"LLMManager initialized | provider={self._provider_name} | model={self._model_name}")
 
     def _build_provider(self) -> BaseLLMProvider:
         """
@@ -143,8 +139,7 @@ class LLMManager:
 
         else:
             raise LLMProviderError(
-                f"Unknown LLM provider: {self._provider_name}. Valid options: "
-                "anthropic | openai | watsonx | ollama"
+                f"Unknown LLM provider: {self._provider_name}. Valid options: anthropic | openai | watsonx | ollama"
             )
 
     def _execute_with_retry(

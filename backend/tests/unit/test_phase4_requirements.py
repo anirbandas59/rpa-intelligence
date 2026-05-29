@@ -5,7 +5,7 @@ Requirements from IMPLEMENTATION_GUIDE.md Phase 4:
 POST /s3/runs with effort_weeks=6, start_date=2025-07-01, complexity_class=L
 Verify phases: Define 1wk, Design 2wks, Build 6wks, SIT 1wk, UAT 2wks, Deploy 1wk = 13wks total
 """
-import pytest
+
 from datetime import date, timedelta
 from services.timeline_service import calculate_timeline
 
@@ -15,11 +15,7 @@ def test_phase4_exit_condition():
     Phase 4 exit condition: L complexity with 6 weeks effort.
     Expected: Define(1) + Design(2) + Build(6) + SIT(1) + UAT(2) + Deploy(1) = 13 weeks
     """
-    result = calculate_timeline(
-        build_weeks=6,
-        start_date=date(2025, 7, 1),
-        complexity_class="L"
-    )
+    result = calculate_timeline(build_weeks=6, start_date=date(2025, 7, 1), complexity_class="L")
 
     # Verify total weeks
     assert result.total_weeks == 13, f"Expected 13 weeks, got {result.total_weeks}"
@@ -50,4 +46,5 @@ def test_phase4_exit_condition():
 
 if __name__ == "__main__":
     from datetime import timedelta
+
     test_phase4_exit_condition()

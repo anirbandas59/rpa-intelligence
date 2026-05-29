@@ -3,6 +3,7 @@ Complexity agent — deterministic scoring pipeline.
 Calls four tools in sequence: attribute_scorer → weighted_calculator → classifier_tool → effort_table_tool.
 Zero LLM calls.
 """
+
 import logging
 from core.models.scoring import AttributeBands, ScoringResult
 from tools.attribute_scorer import score_attributes
@@ -51,8 +52,10 @@ def run_complexity_scoring(bands: AttributeBands) -> ScoringResult:
 
     # Step 4: Look up effort
     effort_result = lookup_effort(complexity_class)
-    logger.info(f"Effort: {effort_result.min_weeks}-{effort_result.max_weeks} weeks, "
-                f"{effort_result.sprint_min}-{effort_result.sprint_max} sprints")
+    logger.info(
+        f"Effort: {effort_result.min_weeks}-{effort_result.max_weeks} weeks, "
+        f"{effort_result.sprint_min}-{effort_result.sprint_max} sprints"
+    )
 
     # Assemble final result
     return ScoringResult(

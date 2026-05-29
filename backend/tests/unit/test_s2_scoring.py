@@ -1,7 +1,7 @@
 """
 Stage 2 scoring tests — verify tools and agents work correctly.
 """
-import pytest
+
 from core.models.scoring import AttributeBands
 from tools.attribute_scorer import score_attributes
 from tools.weighted_calculator import calculate_total

@@ -3,6 +3,7 @@ Effort table tool — maps complexity class to effort estimates.
 Thin wrapper around core/scoring/effort_table.
 Pure Python, no LLM calls.
 """
+
 from pydantic import BaseModel
 from core.models.scoring import ComplexityClass
 from core.scoring.effort_table import get_effort
@@ -10,6 +11,7 @@ from core.scoring.effort_table import get_effort
 
 class EffortResult(BaseModel):
     """Result of effort lookup."""
+
     min_weeks: int
     max_weeks: int
     sprint_min: int

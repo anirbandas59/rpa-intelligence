@@ -136,11 +136,7 @@ async def get_s1_run(
 ):
     """Get single S1 StageRun with full details."""
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id,
-            StageRun.use_case_id == use_case_id,
-            StageRun.stage == "s1"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1")
     )
     run = result.scalar_one_or_none()
 
@@ -194,10 +190,10 @@ async def override_s1_decision(
 
     # Recalculate total
     result_data["total_score"] = (
-        result_data.get("technical_feasibility", 0) +
-        result_data.get("migration_effort", 0) +
-        result_data.get("platform_suitability", 0) +
-        result_data.get("risk", 0)
+        result_data.get("technical_feasibility", 0)
+        + result_data.get("migration_effort", 0)
+        + result_data.get("platform_suitability", 0)
+        + result_data.get("risk", 0)
     )
 
     if request.migration_decision is not None:
@@ -291,7 +287,7 @@ async def backfill_from_s2(
         return {
             "status": "suggestions_generated",
             "suggestions": suggestions,
-            "note": "Review and manually apply these suggestions via the override endpoint if appropriate."
+            "note": "Review and manually apply these suggestions via the override endpoint if appropriate.",
         }
 
     except Exception as e:

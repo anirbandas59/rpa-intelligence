@@ -2,11 +2,12 @@
 Phase 6 Integration Test — Simplified version focusing on wiring logic
 Tests the key Phase 6 requirements without async complexity.
 """
+
 import pytest
 import hashlib
 import json
 from sqlalchemy import select
-from db.models import UseCase, StageRun, Project, User
+from db.models import UseCase, StageRun
 
 
 def compute_inputs_hash(inputs: dict) -> str:
@@ -57,11 +58,7 @@ async def test_load_from_creates_independent_copy(test_db_session, test_user, te
     This tests the core requirement: editing target does not modify source.
     """
     # Create use case
-    use_case = UseCase(
-        project_id=test_project["id"],
-        name="Independence Test",
-        description="Testing copy semantics"
-    )
+    use_case = UseCase(project_id=test_project["id"], name="Independence Test", description="Testing copy semantics")
     test_db_session.add(use_case)
     await test_db_session.commit()
     await test_db_session.refresh(use_case)
@@ -86,7 +83,7 @@ async def test_load_from_creates_independent_copy(test_db_session, test_user, te
             "layouts": 1,
             "interfaces": 1,
             "technology": 2,
-        }
+        },
     }
 
     s2_run = StageRun(
@@ -124,9 +121,7 @@ async def test_load_from_creates_independent_copy(test_db_session, test_user, te
     await test_db_session.commit()
 
     # Re-fetch S2 run from DB
-    s2_refetch = await test_db_session.execute(
-        select(StageRun).where(StageRun.id == s2_run.id)
-    )
+    s2_refetch = await test_db_session.execute(select(StageRun).where(StageRun.id == s2_run.id))
     s2_run_after = s2_refetch.scalar_one_or_none()
 
     # Verify S2 result unchanged
@@ -143,9 +138,7 @@ async def test_inputs_snapshot_immutability(test_db_session, test_user, test_pro
     Verify that StageRun.inputs_snapshot remains immutable after creation.
     """
     use_case = UseCase(
-        project_id=test_project["id"],
-        name="Immutability Test",
-        description="Testing snapshot immutability"
+        project_id=test_project["id"], name="Immutability Test", description="Testing snapshot immutability"
     )
     test_db_session.add(use_case)
     await test_db_session.commit()
@@ -184,9 +177,7 @@ async def test_inputs_snapshot_immutability(test_db_session, test_user, test_pro
     await test_db_session.commit()
 
     # Re-fetch run
-    refetch = await test_db_session.execute(
-        select(StageRun).where(StageRun.id == run.id)
-    )
+    refetch = await test_db_session.execute(select(StageRun).where(StageRun.id == run.id))
     run_after = refetch.scalar_one_or_none()
 
     # Verify run snapshot unchanged
@@ -202,9 +193,7 @@ async def test_source_tags_preserved(test_db_session, test_user, test_project):
     Verify that _source tags are correctly preserved during load-from operations.
     """
     use_case = UseCase(
-        project_id=test_project["id"],
-        name="Source Tag Test",
-        description="Testing source tag preservation"
+        project_id=test_project["id"], name="Source Tag Test", description="Testing source tag preservation"
     )
     test_db_session.add(use_case)
     await test_db_session.commit()

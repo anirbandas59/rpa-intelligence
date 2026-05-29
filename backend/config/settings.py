@@ -129,9 +129,7 @@ class Settings(BaseSettings):
     def validate_production_guards(self) -> "Settings":
         """Enforce required settings for production deployments."""
         if self.environment == "production" and not self.api_secret_key:
-            raise ValueError(
-                "API_SECRET_KEY must be set when ENVIRONMENT=production"
-            )
+            raise ValueError("API_SECRET_KEY must be set when ENVIRONMENT=production")
         return self
 
     @model_validator(mode="after")
@@ -140,19 +138,13 @@ class Settings(BaseSettings):
         provider = self.default_llm_provider.lower()
 
         if provider == "anthropic" and not self.anthropic_api_key:
-            raise ValueError(
-                "ANTHROPIC_API_KEY is required when DEFAULT_LLM_PROVIDER=anthropic"
-            )
+            raise ValueError("ANTHROPIC_API_KEY is required when DEFAULT_LLM_PROVIDER=anthropic")
 
         if provider == "openai" and not self.openai_api_key:
-            raise ValueError(
-                "OPENAI_API_KEY is required when DEFAULT_LLM_PROVIDER=openai"
-            )
+            raise ValueError("OPENAI_API_KEY is required when DEFAULT_LLM_PROVIDER=openai")
 
         if provider == "watsonx" and not self.watsonx_api_key:
-            raise ValueError(
-                "WATSONX_API_KEY and WATSONX_URL required when DEFAULT_LLM_PROVIDER=watsonx"
-            )
+            raise ValueError("WATSONX_API_KEY and WATSONX_URL required when DEFAULT_LLM_PROVIDER=watsonx")
 
         return self
 

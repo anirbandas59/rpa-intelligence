@@ -10,7 +10,7 @@ _DAYS_PER_WEEK = 5
 def _to_weeks(days) -> int:
     """Convert days (int or [min,max] list) to whole weeks, rounded up."""
     if isinstance(days, list):
-        return round(days[1] / _DAYS_PER_WEEK)   # use max of range
+        return round(days[1] / _DAYS_PER_WEEK)  # use max of range
     return round(days / _DAYS_PER_WEEK)
 
 

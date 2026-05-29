@@ -3,7 +3,7 @@ Ground truth test — must pass before any phase is considered complete.
 Input:  Activities XL, Business Rules XL, Layouts L, Interfaces S, Technology S
 Expected: total=21, class=L
 """
-import pytest
+
 from core.scoring.weight_matrix import load_weight_matrix, get_weight
 from core.scoring.classifier import classify
 from core.scoring.effort_table import get_effort
@@ -20,11 +20,11 @@ def test_ground_truth():
         technology="S",
     )
     total = (
-        get_weight(matrix, "activities", bands.activities) +
-        get_weight(matrix, "business_rules", bands.business_rules) +
-        get_weight(matrix, "layouts", bands.layouts) +
-        get_weight(matrix, "interfaces", bands.interfaces) +
-        get_weight(matrix, "technology", bands.technology)
+        get_weight(matrix, "activities", bands.activities)
+        + get_weight(matrix, "business_rules", bands.business_rules)
+        + get_weight(matrix, "layouts", bands.layouts)
+        + get_weight(matrix, "interfaces", bands.interfaces)
+        + get_weight(matrix, "technology", bands.technology)
     )
     assert total == 21, f"Expected 21, got {total}"
     cls = classify(total)

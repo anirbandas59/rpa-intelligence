@@ -2,6 +2,7 @@
 Sprint assignment tool — deterministic bin-packing with dependency ordering.
 Zero LLM. Pure Python algorithm.
 """
+
 from pydantic import BaseModel, Field
 from core.exceptions import ScoringValidationError
 import logging
@@ -48,9 +49,7 @@ def topological_sort(features: list[Feature]) -> list[Feature]:
     for feature in features:
         for dep in feature.dependencies:
             if dep not in feature_map:
-                raise ScoringValidationError(
-                    f"Feature '{feature.name}' depends on unknown feature '{dep}'"
-                )
+                raise ScoringValidationError(f"Feature '{feature.name}' depends on unknown feature '{dep}'")
             adj_list[dep].append(feature.name)
             in_degree[feature.name] += 1
 
@@ -73,11 +72,7 @@ def topological_sort(features: list[Feature]) -> list[Feature]:
     return [feature_map[name] for name in sorted_names]
 
 
-def assign_sprints(
-    features: list[Feature],
-    sprint_count: int,
-    sprint_capacity: int = 8
-) -> SprintAssignmentResult:
+def assign_sprints(features: list[Feature], sprint_count: int, sprint_capacity: int = 8) -> SprintAssignmentResult:
     """
     Deterministic bin-packing with dependency ordering.
 
@@ -99,11 +94,7 @@ def assign_sprints(
         ScoringValidationError: If features cannot fit or have circular deps
     """
     if not features:
-        return SprintAssignmentResult(
-            sprint_plans=[],
-            sprint_summaries=[],
-            total_points=0
-        )
+        return SprintAssignmentResult(sprint_plans=[], sprint_summaries=[], total_points=0)
 
     # Sort by dependencies first
     sorted_features = topological_sort(features)
@@ -150,20 +141,22 @@ def assign_sprints(
     sprint_plans = []
     for sprint_idx, sprint_features in enumerate(sprints):
         for feature in sprint_features:
-            sprint_plans.append(
-                SprintPlan(feature=feature, sprint_number=sprint_idx + 1)
-            )
+            sprint_plans.append(SprintPlan(feature=feature, sprint_number=sprint_idx + 1))
 
     # Build summaries
     sprint_summaries = []
     for sprint_idx in range(sprint_count):
-        sprint_summaries.append({
-            "sprint_number": sprint_idx + 1,
-            "features": [f.name for f in sprints[sprint_idx]],
-            "total_points": sprint_points[sprint_idx],
-            "capacity": sprint_capacity,
-            "utilization": round(sprint_points[sprint_idx] / sprint_capacity * 100, 1) if sprint_capacity > 0 else 0
-        })
+        sprint_summaries.append(
+            {
+                "sprint_number": sprint_idx + 1,
+                "features": [f.name for f in sprints[sprint_idx]],
+                "total_points": sprint_points[sprint_idx],
+                "capacity": sprint_capacity,
+                "utilization": round(sprint_points[sprint_idx] / sprint_capacity * 100, 1)
+                if sprint_capacity > 0
+                else 0,
+            }
+        )
 
     total_points = sum(f.points for f in features)
 
@@ -173,8 +166,5 @@ def assign_sprints(
     )
 
     return SprintAssignmentResult(
-        sprint_plans=sprint_plans,
-        sprint_summaries=sprint_summaries,
-        total_points=total_points,
-        warnings=warnings
+        sprint_plans=sprint_plans, sprint_summaries=sprint_summaries, total_points=total_points, warnings=warnings
     )

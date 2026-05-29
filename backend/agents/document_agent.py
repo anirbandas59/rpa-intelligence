@@ -3,6 +3,7 @@ Document agent — extracts raw text from uploaded files.
 Supports .docx and .pdf formats.
 Zero LLM calls.
 """
+
 from pathlib import Path
 from typing import TypedDict
 from docx import Document
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentState(TypedDict):
     """State for document processing."""
+
     file_path: str
     raw_text: str
     error: str | None

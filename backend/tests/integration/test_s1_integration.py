@@ -1,12 +1,13 @@
 """
 Stage 1 integration test — verify assessment service works end-to-end.
 """
+
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import select as sa_select
 from db.session import Base
-from db.models import UseCase, Project, User, StageRun
+from db.models import UseCase, Project, User
 from services.assessment_service import AssessmentService
 
 
@@ -76,7 +77,7 @@ async def test_assessment_service_creates_stage_run(test_db):
 
     service = AssessmentService(session, model="claude-haiku-4-5")
 
-    with patch.object(service.llm, 'complete', return_value=mock_response):
+    with patch.object(service.llm, "complete", return_value=mock_response):
         stage_run = await service.run_assessment(use_case.id)
 
     # Verify StageRun was created
@@ -101,9 +102,7 @@ async def test_assessment_service_creates_stage_run(test_db):
     assert "UiPath Document Understanding" in stage_run.inputs_snapshot["description"]
 
     # Verify use-case updated
-    updated_result = await session.execute(
-        sa_select(UseCase).where(UseCase.id == use_case.id)
-    )
+    updated_result = await session.execute(sa_select(UseCase).where(UseCase.id == use_case.id))
     updated_uc = updated_result.scalar_one_or_none()
     assert updated_uc.s1_latest_run_id == stage_run.id
 
@@ -135,7 +134,7 @@ Hope this helps!"""
 
     service = AssessmentService(session, model="claude-haiku-4-5")
 
-    with patch.object(service.llm, 'complete', return_value=mock_response):
+    with patch.object(service.llm, "complete", return_value=mock_response):
         stage_run = await service.run_assessment(use_case.id)
 
     # Should still parse successfully

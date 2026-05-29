@@ -1,9 +1,7 @@
 import json
 import hashlib
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
-from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.models import UseCase, StageRun
@@ -35,9 +33,9 @@ class AssessmentService:
         end = raw.rfind("}")
 
         if start == -1 or end == -1:
-            raise LLMProviderError(f"No valid JSON object found in response")
+            raise LLMProviderError("No valid JSON object found in response")
 
-        json_str = raw[start:end+1]
+        json_str = raw[start : end + 1]
 
         try:
             return json.loads(json_str)
@@ -53,7 +51,12 @@ class AssessmentService:
             "risk": parsed.get("risk", 0),
         }
 
-        total = scores["technical_feasibility"] + scores["migration_effort"] + scores["platform_suitability"] + scores["risk"]
+        total = (
+            scores["technical_feasibility"]
+            + scores["migration_effort"]
+            + scores["platform_suitability"]
+            + scores["risk"]
+        )
 
         # Derive decision from total if missing
         if "migration_decision" not in parsed:

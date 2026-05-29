@@ -2,11 +2,13 @@
 Weighted calculator tool — sums attribute weights.
 Pure Python, no LLM calls.
 """
+
 from pydantic import BaseModel
 
 
 class TotalScoreResult(BaseModel):
     """Result of total score calculation."""
+
     total_score: int
 
 

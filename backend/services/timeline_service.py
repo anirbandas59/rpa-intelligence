@@ -2,16 +2,17 @@
 Stage 3 timeline service — pure Python, zero LLM.
 Calculates delivery phases from effort_weeks + start_date + complexity_class.
 """
+
 from datetime import date, timedelta
 from dataclasses import dataclass
 from pydantic import BaseModel
 
 DEFAULT_BUFFERS = {
-    "define":   {"weeks": 1, "complexity_adjusted": False},
-    "design":   {"S": 1, "M": 1, "L": 2, "XL": 2, "XS": 1},
-    "sit":      {"weeks": 1, "complexity_adjusted": False},
-    "uat":      {"S": 1, "M": 1, "L": 2, "XL": 2, "XS": 1},
-    "deploy":   {"weeks": 1, "complexity_adjusted": False},
+    "define": {"weeks": 1, "complexity_adjusted": False},
+    "design": {"S": 1, "M": 1, "L": 2, "XL": 2, "XS": 1},
+    "sit": {"weeks": 1, "complexity_adjusted": False},
+    "uat": {"S": 1, "M": 1, "L": 2, "XL": 2, "XS": 1},
+    "deploy": {"weeks": 1, "complexity_adjusted": False},
 }
 
 
@@ -79,13 +80,7 @@ def calculate_timeline(
             weeks = 1
         end = cursor + timedelta(weeks=weeks) - timedelta(days=1)
         phases.append(
-            Phase(
-                name=name.capitalize(),
-                start_date=cursor,
-                end_date=end,
-                weeks=weeks,
-                is_delta=name in deltas
-            )
+            Phase(name=name.capitalize(), start_date=cursor, end_date=end, weeks=weeks, is_delta=name in deltas)
         )
         cursor = end + timedelta(days=1)
 

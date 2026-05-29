@@ -3,9 +3,9 @@ from core.exceptions import ScoringValidationError
 
 # XS is a special case handled before numeric classification
 _BANDS: list[tuple[ComplexityClass, int, int]] = [
-    ("S",  7,  8),
-    ("M",  9,  15),
-    ("L",  16, 22),
+    ("S", 7, 8),
+    ("M", 9, 15),
+    ("L", 16, 22),
     ("XL", 23, 28),
 ]
 
@@ -22,6 +22,5 @@ def classify(total_score: int, is_xs_special_case: bool = False) -> ComplexityCl
         if lo <= total_score <= hi:
             return cls
     raise ScoringValidationError(
-        f"Score {total_score} does not map to any complexity class. "
-        f"Valid range: 7–28 (or XS special case)."
+        f"Score {total_score} does not map to any complexity class. Valid range: 7–28 (or XS special case)."
     )

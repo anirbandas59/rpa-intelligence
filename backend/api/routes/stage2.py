@@ -2,12 +2,11 @@
 Stage 2 (Complexity) API routes.
 Document upload → AI extraction → deterministic scoring.
 """
-import os
+
 import uuid
 from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -15,7 +14,6 @@ from api.dependencies import get_db, get_current_user
 from db.models import UseCase, UploadedFile, StageRun, User
 from agents.orchestrator import (
     run_s2_assessment,
-    create_s2_run,
     finalize_s2_run,
     fail_s2_run,
 )
@@ -33,6 +31,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Request/Response models
 class PatchS2InputsRequest(BaseModel):
     """Request to update S2 inputs (manual bands or text)."""
+
     pasted_text: str | None = None
     activities: str | None = None
     activities_source: str | None = None
@@ -48,11 +47,13 @@ class PatchS2InputsRequest(BaseModel):
 
 class CreateS2RunRequest(BaseModel):
     """Request to create S2 run."""
+
     model: str = "claude-haiku-4-5"
 
 
 class S2RunResponse(BaseModel):
     """Response for S2 run creation."""
+
     run_id: str
     status: str
     message: str
@@ -120,10 +121,7 @@ async def upload_document(
     filename = file.filename or "document"
     suffix = Path(filename).suffix.lower()
     if suffix not in [".docx", ".pdf"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Only .docx and .pdf files are supported"
-        )
+        raise HTTPException(status_code=400, detail="Only .docx and .pdf files are supported")
 
     # Generate unique filename
     file_id = str(uuid.uuid4())
@@ -308,8 +306,7 @@ async def create_s2_run(
 
     if not document_path and not pasted_text and not manual_bands:
         raise HTTPException(
-            status_code=400,
-            detail="No input provided. Upload a document, paste text, or enter bands manually."
+            status_code=400, detail="No input provided. Upload a document, paste text, or enter bands manually."
         )
 
     # Create StageRun record
@@ -352,9 +349,7 @@ async def list_s2_runs(
         List of StageRun records
     """
     result = await db.execute(
-        select(StageRun)
-        .where(StageRun.use_case_id == id, StageRun.stage == "s2")
-        .order_by(StageRun.created_at.desc())
+        select(StageRun).where(StageRun.use_case_id == id, StageRun.stage == "s2").order_by(StageRun.created_at.desc())
     )
     runs = result.scalars().all()
 
@@ -388,11 +383,7 @@ async def get_s2_run(
         StageRun record
     """
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id,
-            StageRun.use_case_id == id,
-            StageRun.stage == "s2"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == id, StageRun.stage == "s2")
     )
     run = result.scalar_one_or_none()
     if not run:

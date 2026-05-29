@@ -5,6 +5,7 @@ Handles three paths:
 2. Pasted text → extraction → scoring
 3. Manual bands → scoring only
 """
+
 import logging
 import hashlib
 import json
@@ -16,7 +17,7 @@ from core.models.scoring import AttributeBands, AttributeBandsWithSource, Scorin
 from agents.document_agent import process_document
 from agents.process_agent import extract_bands_from_text
 from agents.complexity_agent import run_complexity_scoring
-from core.exceptions import DocumentProcessingError, LLMProviderError, AgentExecutionError
+from core.exceptions import AgentExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +109,7 @@ async def run_s2_assessment(
         "model_used": model if (pasted_text or document_path) else None,
     }
 
-    logger.info(f"S2 assessment complete: {scoring_result.complexity_class} class, "
-                f"{scoring_result.total_score} score")
+    logger.info(f"S2 assessment complete: {scoring_result.complexity_class} class, {scoring_result.total_score} score")
 
     return result_data
 
@@ -133,10 +133,7 @@ async def create_s2_run(
     """
     # Count existing S2 runs for this use case
     count_result = await session.execute(
-        select(StageRun).where(
-            StageRun.use_case_id == use_case_id,
-            StageRun.stage == "s2"
-        )
+        select(StageRun).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s2")
     )
     run_number = len(count_result.scalars().all()) + 1
 
