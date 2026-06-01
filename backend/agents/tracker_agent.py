@@ -1,18 +1,23 @@
 """
 Stage 4 tracker agent — feature decomposition + sprint assignment.
-LangGraph StateGraph: document read → Sonnet decompose → bin-packing → result.
+LangGraph StateGraph:
+  read_documents → decompose_features → validate_features → assign_sprints → END
+                         ↑                      |
+                         └── retry (max 2) ←────┘
 """
 
 import json
 import logging
 from typing import TypedDict
-from langgraph.graph import StateGraph, END
+
+from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
 
-from llm.manager import get_default_manager
-from tools.sprint_assigner import Feature, assign_sprints
-from prompts.tracker_prompts import S4_DECOMPOSE_SYSTEM, S4_DECOMPOSE_USER
 from core.exceptions import AgentExecutionError, LLMProviderError
+from core.quality import QualityEvaluator
+from llm.manager import get_default_manager
+from prompts.tracker_prompts import S4_DECOMPOSE_SYSTEM, S4_DECOMPOSE_USER
+from tools.sprint_assigner import Feature, assign_sprints
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +37,8 @@ class TrackerState(TypedDict):
     extracted_features: list[dict]
     sprint_assignment: dict
     error: str | None
+    retry_count: int
+    retry_hint: str | None
 
 
 class FeatureDecomposition(BaseModel):
@@ -60,8 +67,13 @@ def read_documents_node(state: TrackerState) -> TrackerState:
 async def decompose_features_node(state: TrackerState) -> TrackerState:
     """
     Node 2: Call Sonnet to decompose process into features.
+    When retry_hint is set, appends correction hint to the user prompt.
     """
-    logger.info(f"[tracker_agent] Decomposing features for {state['process_name']}")
+    retry_count = state.get("retry_count", 0)
+    logger.info(
+        f"[tracker_agent] decompose_features_node attempt={retry_count + 1} "
+        f"process={state['process_name']}"
+    )
 
     try:
         llm = get_default_manager()
@@ -74,6 +86,13 @@ async def decompose_features_node(state: TrackerState) -> TrackerState:
             document_context=state["document_context"],
             sprint_count=state["sprint_count"],
         )
+
+        if state.get("retry_hint"):
+            user_prompt += (
+                f"\n\nPrevious attempt failed validation: {state['retry_hint']}. "
+                f"Please correct and retry."
+            )
+            logger.info(f"[tracker_agent] Retrying with hint: {state['retry_hint']}")
 
         response = await llm.complete_async(
             system=S4_DECOMPOSE_SYSTEM, prompt=user_prompt, max_tokens=2000, temperature=0.4
@@ -122,12 +141,63 @@ async def decompose_features_node(state: TrackerState) -> TrackerState:
     return state
 
 
+def validate_features_node(state: TrackerState) -> TrackerState:
+    """
+    Node 3: Validate extracted features using QualityEvaluator.
+    On pass: routes → assign_sprints.
+    On fail with retries remaining: sets retry_hint, increments retry_count.
+    On fail with no retries left: raises AgentExecutionError.
+    """
+    retry_count = state.get("retry_count", 0)
+    logger.info(
+        f"[tracker_agent] validate_features_node retry_count={retry_count} "
+        f"features={len(state.get('extracted_features', []))}"
+    )
+
+    report = QualityEvaluator().evaluate_s4({"features": state.get("extracted_features", [])})
+
+    if report.passed:
+        logger.info("[tracker_agent] Feature validation passed")
+        return state
+
+    # Validation failed
+    if retry_count >= 2:
+        issues_str = "; ".join(report.issues)
+        logger.error(
+            f"[tracker_agent] Validation failed after {retry_count} retries: {issues_str}"
+        )
+        raise AgentExecutionError(
+            f"Feature decomposition failed after {retry_count} retries. Issues: {issues_str}"
+        )
+
+    logger.warning(
+        f"[tracker_agent] Validation failed (retry {retry_count + 1}/2): {report.retry_hint}"
+    )
+    return {
+        **state,
+        "retry_hint": report.retry_hint,
+        "retry_count": retry_count + 1,
+    }
+
+
+def route_validate_features(state: TrackerState) -> str:
+    """Route after validate_features_node: assign_sprints if valid, retry decompose if not."""
+    # If retry_hint was just set (meaning validation failed), route back to decompose
+    # We detect this by checking if retry_count was incremented vs extracted_features validity
+    report = QualityEvaluator().evaluate_s4({"features": state.get("extracted_features", [])})
+    if report.passed:
+        return "assign_sprints"
+    # retry_count already incremented in validate_features_node before reaching here
+    return "retry"
+
+
 def assign_sprints_node(state: TrackerState) -> TrackerState:
     """
-    Node 3: Deterministic bin-packing of features into sprints.
+    Node 4: Deterministic bin-packing of features into sprints.
     """
     logger.info(
-        f"[tracker_agent] Assigning {len(state['extracted_features'])} features to {state['sprint_count']} sprints"
+        f"[tracker_agent] Assigning {len(state['extracted_features'])} features "
+        f"to {state['sprint_count']} sprints"
     )
 
     try:
@@ -144,7 +214,9 @@ def assign_sprints_node(state: TrackerState) -> TrackerState:
 
         # Assign to sprints
         assignment = assign_sprints(
-            features=features, sprint_count=state["sprint_count"], sprint_capacity=state["sprint_capacity"]
+            features=features,
+            sprint_count=state["sprint_count"],
+            sprint_capacity=state["sprint_capacity"],
         )
 
         state["sprint_assignment"] = {
@@ -171,22 +243,35 @@ def assign_sprints_node(state: TrackerState) -> TrackerState:
     return state
 
 
-def create_tracker_graph() -> StateGraph:
-    """Create the tracker agent StateGraph."""
+def build_tracker_graph():
+    """Build and compile the tracker agent StateGraph."""
     workflow = StateGraph(TrackerState)
 
     # Add nodes
     workflow.add_node("read_documents", read_documents_node)
     workflow.add_node("decompose_features", decompose_features_node)
+    workflow.add_node("validate_features", validate_features_node)
     workflow.add_node("assign_sprints", assign_sprints_node)
 
     # Define edges
     workflow.set_entry_point("read_documents")
     workflow.add_edge("read_documents", "decompose_features")
-    workflow.add_edge("decompose_features", "assign_sprints")
+    workflow.add_edge("decompose_features", "validate_features")
+    workflow.add_conditional_edges(
+        "validate_features",
+        route_validate_features,
+        {
+            "assign_sprints": "assign_sprints",
+            "retry": "decompose_features",
+        },
+    )
     workflow.add_edge("assign_sprints", END)
 
     return workflow.compile()
+
+
+# Keep backward-compat alias
+create_tracker_graph = build_tracker_graph
 
 
 async def run_tracker_agent(
@@ -219,13 +304,14 @@ async def run_tracker_agent(
         "extracted_features": [],
         "sprint_assignment": {},
         "error": None,
+        "retry_count": 0,
+        "retry_hint": None,
     }
 
-    graph = create_tracker_graph()
+    graph = build_tracker_graph()
 
     try:
-        # Run the graph (synchronously for now since LLM manager is sync)
-        final_state = graph.invoke(initial_state)
+        final_state = await graph.ainvoke(initial_state)
 
         if final_state.get("error"):
             raise AgentExecutionError(final_state["error"])
@@ -241,6 +327,7 @@ async def run_tracker_agent(
                 "sprint_capacity": sprint_capacity,
                 "total_features": len(final_state["extracted_features"]),
                 "total_points": final_state["sprint_assignment"]["total_points"],
+                "retry_count": final_state.get("retry_count", 0),
             },
         }
 
