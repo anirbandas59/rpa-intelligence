@@ -39,7 +39,7 @@ class UseCaseListItem(BaseModel):
 class WeightConfigRequest(BaseModel):
     """Request to update weight config for a project."""
 
-    config: dict  # Weight matrix override
+    config: dict[str, dict[str, int]]  # Weight matrix override
     yes_threshold: int = 50
 
 
@@ -60,7 +60,7 @@ class WeightConfigResponse(BaseModel):
 class PhaseConfigRequest(BaseModel):
     """Request to update phase buffer configuration."""
 
-    config: dict  # Buffer overrides: {"define": 2, "design": {"S": 1, "M": 2, ...}, ...}
+    config: dict[str, int]  # Buffer overrides: {"define": 2, "design": {"S": 1, "M": 2, ...}, ...}
     sprint_length_weeks: int = 2
 
 

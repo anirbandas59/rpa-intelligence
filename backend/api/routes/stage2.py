@@ -60,12 +60,12 @@ class S2RunResponse(BaseModel):
 
 
 # Background task for S2 run
-async def execute_s2_run(
+async def _execute_s2_background_task(
     run_id: str,
     use_case_id: str,
     document_path: str | None,
     pasted_text: str | None,
-    manual_bands: dict | None,
+    manual_bands: dict[str, str] | None,
     model: str,
 ):
     """
@@ -320,7 +320,7 @@ async def create_s2_run(
 
     # Fire background task
     background_tasks.add_task(
-        execute_s2_run,
+        _execute_s2_background_task,
         run_id=stage_run.id,
         use_case_id=id,
         document_path=document_path,

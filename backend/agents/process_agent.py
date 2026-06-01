@@ -91,9 +91,8 @@ def extract_bands_from_text(document_text: str, model: str = "claude-haiku-4-5")
 
     try:
         response = llm.complete(
-            model=model,
             system=system_prompt,
-            user=user_prompt,
+            prompt=user_prompt,
             max_tokens=800,
             temperature=0.2,
         )

@@ -9,7 +9,7 @@ from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel
 
-from llm.manager import LLMManager
+from llm.manager import get_default_manager
 from tools.sprint_assigner import Feature, assign_sprints
 from prompts.tracker_prompts import S4_DECOMPOSE_SYSTEM, S4_DECOMPOSE_USER
 from core.exceptions import AgentExecutionError, LLMProviderError
@@ -64,7 +64,7 @@ def decompose_features_node(state: TrackerState) -> TrackerState:
     logger.info(f"[tracker_agent] Decomposing features for {state['process_name']}")
 
     try:
-        llm = LLMManager()
+        llm = get_default_manager()
 
         user_prompt = S4_DECOMPOSE_USER.format(
             process_name=state["process_name"],
@@ -76,7 +76,7 @@ def decompose_features_node(state: TrackerState) -> TrackerState:
         )
 
         response = llm.complete(
-            model="claude-sonnet-4-5", system=S4_DECOMPOSE_SYSTEM, user=user_prompt, max_tokens=2000, temperature=0.4
+            system=S4_DECOMPOSE_SYSTEM, prompt=user_prompt, max_tokens=2000, temperature=0.4
         )
 
         state["raw_llm_response"] = response

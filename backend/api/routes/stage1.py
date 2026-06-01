@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from api.dependencies import get_db, get_current_user
 from db.models import UseCase, StageRun, User
 from services.assessment_service import AssessmentService
+from core.exceptions import ScoringValidationError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -252,16 +253,29 @@ async def backfill_from_s2(
     s2_data = s2_run.result
     s1_data = s1_run.result
 
+    # Validate required S2 fields
+    complexity_class = s2_data.get("complexity_class")
+    if not complexity_class:
+        raise ScoringValidationError("S2 run missing required field: complexity_class")
+
+    total_score = s2_data.get("total_score")
+    if total_score is None:
+        raise ScoringValidationError("S2 run missing required field: total_score")
+
+    attribute_weights = s2_data.get("attribute_weights")
+    if not attribute_weights:
+        raise ScoringValidationError("S2 run missing required field: attribute_weights")
+
     user_prompt = S1_BACKFILL_USER.format(
-        complexity_class=s2_data.get("complexity_class", ""),
-        total_score=s2_data.get("total_score", 0),
+        complexity_class=complexity_class,
+        total_score=total_score,
         effort_min=s2_data.get("effort_min_weeks", 0),
         effort_max=s2_data.get("effort_max_weeks", 0),
-        activities=s2_data.get("attribute_weights", {}).get("activities", ""),
-        business_rules=s2_data.get("attribute_weights", {}).get("business_rules", ""),
-        layouts=s2_data.get("attribute_weights", {}).get("layouts", ""),
-        interfaces=s2_data.get("attribute_weights", {}).get("interfaces", ""),
-        technology=s2_data.get("attribute_weights", {}).get("technology", ""),
+        activities=attribute_weights.get("activities", ""),
+        business_rules=attribute_weights.get("business_rules", ""),
+        layouts=attribute_weights.get("layouts", ""),
+        interfaces=attribute_weights.get("interfaces", ""),
+        technology=attribute_weights.get("technology", ""),
         current_tf=s1_data.get("technical_feasibility", 0),
         current_me=s1_data.get("migration_effort", 0),
         current_ps=s1_data.get("platform_suitability", 0),

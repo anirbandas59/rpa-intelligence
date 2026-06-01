@@ -1,7 +1,6 @@
 import json
 import hashlib
 import logging
-from threading import Lock
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.models import UseCase, StageRun
@@ -18,7 +17,6 @@ class AssessmentService:
         self.model = model
         # Initialize manager with specified model
         self.llm = LLMManager(provider_name="anthropic", model_name=model)
-        self.lock = Lock()
 
     def _parse_json_response(self, raw: str) -> dict:
         """Port Project 1's JSON parsing pipeline: strip fences, trim pre/postamble."""
