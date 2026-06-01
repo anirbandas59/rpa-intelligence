@@ -145,3 +145,18 @@ class AgentMemory(Base):
     content: Mapped[dict] = mapped_column(JSON)         # what was learned/observed
     keywords: Mapped[str] = mapped_column(String, default="")  # space-separated for similarity search
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    use_case_id: Mapped[str] = mapped_column(String, ForeignKey("use_cases.id", ondelete="CASCADE"))
+    goal: Mapped[str] = mapped_column(String)
+    mode: Mapped[str] = mapped_column(String, default="autonomous")  # autonomous | supervised
+    plan: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String, default="running")  # running | complete | needs_input | failed
+    current_step: Mapped[int] = mapped_column(Integer, default=0)
+    completed_stages: Mapped[dict] = mapped_column(JSON, default=dict)
+    pending_clarification: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
