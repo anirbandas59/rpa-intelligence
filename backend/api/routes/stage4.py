@@ -347,14 +347,17 @@ async def load_from_s2(
         inputs["process_description"] = s2_inputs["process_description"]
         inputs["process_description_source"] = "from_s2"
 
+    # S2 result stores scoring data nested under "scoring" key
+    scoring = s2_output.get("scoring", s2_output)
+
     # Copy complexity class
-    if "complexity_class" in s2_output:
-        inputs["complexity_class"] = s2_output["complexity_class"]
+    if "complexity_class" in scoring:
+        inputs["complexity_class"] = scoring["complexity_class"]
         inputs["complexity_class_source"] = "from_s2"
 
     # Copy effort
-    if "effort_max_weeks" in s2_output:
-        inputs["effort_weeks"] = s2_output["effort_max_weeks"]
+    if "effort_max_weeks" in scoring:
+        inputs["effort_weeks"] = scoring["effort_max_weeks"]
         inputs["effort_weeks_source"] = "from_s2"
 
     use_case.s4_inputs = inputs

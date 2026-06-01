@@ -75,19 +75,27 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
         f"/api/v1/use-cases/{use_case_id}/s2/runs", json={"model": "claude-haiku-4-5"}, headers=headers
     )
     assert s2_run_response.status_code in [200, 202]
-    s2_run = s2_run_response.json()
-    s2_run_id = s2_run["run_id"]
+    s2_run_id = s2_run_response.json()["run_id"]
 
-    # Verify S2 result (ground truth: 21 → L)
-    s2_result = s2_run["result"]
-    assert s2_result["total_score"] == 21
-    assert s2_result["complexity_class"] == "L"
-    assert s2_result["effort_min_weeks"] == 12
-    assert s2_result["effort_max_weeks"] == 12
+    # Poll until S2 background task completes (202 response has no result yet)
+    import asyncio
+    s2_run_detail = None
+    for _ in range(30):
+        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        if detail.status_code == 200 and detail.json().get("status") == "complete":
+            s2_run_detail = detail
+            break
+        await asyncio.sleep(0.1)
+    assert s2_run_detail is not None, "S2 run did not complete in time"
 
-    # Get S2 run for later comparison
-    s2_run_detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
-    assert s2_run_detail.status_code == 200
+    # Verify S2 result (ground truth: 21 → L)  result is nested under "scoring"
+    s2_result = s2_run_detail.json()["result"]
+    scoring = s2_result["scoring"]
+    assert scoring["total_score"] == 21
+    assert scoring["complexity_class"] == "L"
+    assert scoring["effort_min_weeks"] == 12
+    assert scoring["effort_max_weeks"] == 12
+
     s2_original_snapshot = s2_run_detail.json()["inputs_snapshot"]
     s2_original_hash = s2_run_detail.json()["inputs_hash"]
 
@@ -212,6 +220,15 @@ async def test_staleness_detection(async_client, test_user_token, test_project):
     if s2_run.status_code != 202:
         print(f"S2 run error: {s2_run.json()}")
     assert s2_run.status_code == 202
+    s2_run_id = s2_run.json()["run_id"]
+
+    # Poll until S2 background task completes
+    import asyncio
+    for _ in range(30):
+        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        if detail.status_code == 200 and detail.json().get("status") == "complete":
+            break
+        await asyncio.sleep(0.1)
 
     # Check readiness — should be complete
     readiness_1 = await async_client.get(f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers)
@@ -235,6 +252,14 @@ async def test_staleness_detection(async_client, test_user_token, test_project):
         f"/api/v1/use-cases/{use_case_id}/s2/runs", json={"model": "claude-haiku-4-5"}, headers=headers
     )
     assert s2_rerun.status_code in [200, 202]
+    s2_rerun_id = s2_rerun.json()["run_id"]
+
+    # Poll until re-run completes
+    for _ in range(30):
+        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_rerun_id}", headers=headers)
+        if detail.status_code == 200 and detail.json().get("status") == "complete":
+            break
+        await asyncio.sleep(0.1)
 
     # Check readiness — should be complete again
     readiness_3 = await async_client.get(f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers)
@@ -279,9 +304,17 @@ async def test_load_from_independent_copy(async_client, test_user_token, test_pr
     assert s2_run.status_code in [200, 202]
     s2_run_id = s2_run.json()["run_id"]
 
-    # Get S2 result
-    s2_detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
-    s2_complexity = s2_detail.json()["result"]["complexity_class"]
+    # Poll until S2 background task completes
+    import asyncio
+    s2_detail = None
+    for _ in range(30):
+        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        if detail.status_code == 200 and detail.json().get("status") == "complete":
+            s2_detail = detail
+            break
+        await asyncio.sleep(0.1)
+    assert s2_detail is not None, "S2 run did not complete in time"
+    s2_complexity = s2_detail.json()["result"]["scoring"]["complexity_class"]
 
     # Load into S3
     load_s3 = await async_client.post(
@@ -302,7 +335,7 @@ async def test_load_from_independent_copy(async_client, test_user_token, test_pr
 
     # Re-fetch S2 run
     s2_after = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
-    s2_complexity_after = s2_after.json()["result"]["complexity_class"]
+    s2_complexity_after = s2_after.json()["result"]["scoring"]["complexity_class"]
 
     # Verify S2 result unchanged
     assert s2_complexity_after == s2_complexity
@@ -342,6 +375,14 @@ async def test_run_history_all_stages(async_client, test_user_token, test_projec
     assert s2_run.status_code in [200, 202]
     s2_run_id = s2_run.json()["run_id"]
 
+    # Poll until S2 background task completes before checking history
+    import asyncio
+    for _ in range(30):
+        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        if detail.status_code == 200 and detail.json().get("status") == "complete":
+            break
+        await asyncio.sleep(0.1)
+
     # Get run history via GET /{run_id}
     s2_history = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
     assert s2_history.status_code == 200
@@ -351,7 +392,9 @@ async def test_run_history_all_stages(async_client, test_user_token, test_projec
     assert "inputs_snapshot" in s2_data
     assert "result" in s2_data
     assert "inputs_hash" in s2_data
-    assert s2_data["inputs_snapshot"] == s2_inputs
-    assert "complexity_class" in s2_data["result"]
+    # inputs_snapshot stores s2_inputs directly (for correct staleness hash matching)
+    assert s2_data["inputs_snapshot"]["activities"] == s2_inputs["activities"]
+    # result is nested: {bands, scoring, extraction_notes, model_used}
+    assert "complexity_class" in s2_data["result"]["scoring"]
 
     print("✅ Run History Test Passed: Full inputs_snapshot + result available")

@@ -1,12 +1,17 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from db.session import get_session_factory
 from db.models import User
 from auth import decode_token
 from sqlalchemy import select
 
 security = HTTPBearer()
+
+
+async def get_session_maker() -> async_sessionmaker[AsyncSession]:
+    """Injectable factory so background tasks can be overridden in tests."""
+    return get_session_factory()
 
 
 async def get_db() -> AsyncSession:

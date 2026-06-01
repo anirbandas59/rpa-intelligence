@@ -6,6 +6,7 @@ import pytest
 import asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import StaticPool
 
 from api.main import app
 from db.session import Base
@@ -23,8 +24,16 @@ def event_loop():
 
 @pytest.fixture
 async def test_db_engine():
-    """Create in-memory test database engine."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    """Create in-memory test database engine.
+    StaticPool ensures all sessions (including background tasks) share the same connection,
+    which is required for in-memory SQLite to work across sessions.
+    """
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        echo=False,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -114,9 +123,13 @@ async def async_client(test_db_engine):
         async with session_factory() as session:
             yield session
 
-    from api.dependencies import get_db
+    from api.dependencies import get_db, get_session_maker
+
+    async def override_get_session_maker():
+        return async_sessionmaker(test_db_engine, expire_on_commit=False, class_=AsyncSession)
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_session_maker] = override_get_session_maker
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

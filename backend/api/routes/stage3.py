@@ -6,6 +6,7 @@ No LLM calls in main flow. Optional narrative generation in background.
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm.attributes import flag_modified
 from pydantic import BaseModel, Field
 from datetime import date, datetime
 import hashlib
@@ -65,9 +66,8 @@ async def generate_narrative_background(
         )
 
         narrative = await llm.complete_async(
-            model="claude-sonnet-4-5",
+            prompt=user_prompt,
             system=S3_NARRATIVE_SYSTEM,
-            user=user_prompt,
             max_tokens=500,
             temperature=0.5,
         )
@@ -113,6 +113,7 @@ async def update_s3_inputs(
         inputs["buffers"] = update.buffers
 
     use_case.s3_inputs = inputs
+    flag_modified(use_case, "s3_inputs")
     use_case.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(use_case)
@@ -186,6 +187,7 @@ async def create_s3_run(
     )
 
     db.add(stage_run)
+    await db.flush()  # populates stage_run.id (default=new_uuid fires at INSERT)
     use_case.s3_latest_run_id = stage_run.id
     use_case.updated_at = datetime.utcnow()
     await db.commit()
@@ -261,6 +263,7 @@ async def get_s3_run(
         "run_number": run.run_number,
         "status": run.status,
         "inputs_snapshot": run.inputs_snapshot,
+        "inputs_hash": run.inputs_hash,
         "result": run.result,
         "created_at": run.created_at.isoformat(),
     }
@@ -289,6 +292,7 @@ async def adjust_phase(
     inputs["phase_deltas"] = phase_deltas
 
     use_case.s3_inputs = inputs
+    flag_modified(use_case, "s3_inputs")
     use_case.updated_at = datetime.utcnow()
     await db.commit()
 
@@ -341,9 +345,11 @@ async def load_from_s2(
         raise HTTPException(status_code=404, detail="Stage 2 run not found")
 
     s2_output = s2_run.result
-    effort_min = s2_output.get("effort_min_weeks")
-    effort_max = s2_output.get("effort_max_weeks")
-    complexity_class = s2_output.get("complexity_class")
+    # S2 result may store scoring data at top level or nested under "scoring"
+    scoring = s2_output.get("scoring", s2_output)
+    effort_min = scoring.get("effort_min_weeks")
+    effort_max = scoring.get("effort_max_weeks")
+    complexity_class = scoring.get("complexity_class")
 
     if effort_min is None or complexity_class is None:
         raise HTTPException(status_code=400, detail="Stage 2 result incomplete")
@@ -359,6 +365,7 @@ async def load_from_s2(
     inputs["complexity_class_source"] = "from_s2"
 
     use_case.s3_inputs = inputs
+    flag_modified(use_case, "s3_inputs")
     use_case.updated_at = datetime.utcnow()
     await db.commit()
 

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from api.dependencies import get_db, get_current_user
+from api.dependencies import get_db, get_current_user, get_session_maker
 from db.models import UseCase, UploadedFile, StageRun, User
 from agents.orchestrator import (
     run_s2_assessment,
@@ -68,15 +68,14 @@ async def _execute_s2_background_task(
     pasted_text: str | None,
     manual_bands: dict[str, str] | None,
     model: str,
+    db_factory,
 ):
     """
     Background task to execute S2 assessment.
     Updates StageRun on completion or failure.
+    db_factory is injected via Depends(get_session_maker) so tests can override it.
     """
-    from db.session import get_session_factory
-
-    factory = get_session_factory()
-    async with factory() as session:
+    async with db_factory() as session:
         try:
             result_data = await run_s2_assessment(
                 use_case_id=use_case_id,
@@ -253,6 +252,7 @@ async def create_s2_run(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    db_factory=Depends(get_session_maker),
 ):
     """
     Create S2 run. Returns immediately with run_id and status='running'.
@@ -310,13 +310,8 @@ async def create_s2_run(
             status_code=400, detail="No input provided. Upload a document, paste text, or enter bands manually."
         )
 
-    # Create StageRun record
-    inputs_snapshot = {
-        "document_path": document_path,
-        "pasted_text": pasted_text,
-        "manual_bands": manual_bands,
-        "model": request.model,
-    }
+    # Create StageRun record — use s2_inputs as snapshot so staleness hash matches readiness check
+    inputs_snapshot = dict(use_case.s2_inputs or {})
     stage_run = await _orchestrator_create_s2_run(id, inputs_snapshot, db)
 
     # Fire background task
@@ -328,6 +323,7 @@ async def create_s2_run(
         pasted_text=pasted_text,
         manual_bands=manual_bands,
         model=request.model,
+        db_factory=db_factory,
     )
 
     return S2RunResponse(
@@ -397,6 +393,7 @@ async def get_s2_run(
         "created_at": run.created_at.isoformat(),
         "model_used": run.model_used,
         "inputs_snapshot": run.inputs_snapshot,
+        "inputs_hash": run.inputs_hash,
         "result": run.result,
         "error_message": run.error_message,
     }

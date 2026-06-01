@@ -247,6 +247,7 @@ async def test_load_from_s2(test_use_case, auth_headers, db_session):
         status="complete",
     )
     db_session.add(s2_run)
+    await db_session.flush()  # populates s2_run.id (Python default fires at INSERT)
     test_use_case.s2_latest_run_id = s2_run.id
     await db_session.commit()
 
