@@ -20,8 +20,10 @@ class AnthropicProvider(BaseLLMProvider):
             api_key: Anthropic API key.
             model: Model name (e.g. "claude-sonnet-4-5").
         """
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self._api_key = api_key
         self.model = model
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self._async_client = anthropic.AsyncAnthropic(api_key=api_key)
 
     def get_provider_name(self) -> str:
         """Return provider name."""
@@ -103,6 +105,38 @@ class AnthropicProvider(BaseLLMProvider):
         system_prompt = self.build_json_system_prompt(system, response_schema)
         response = self.complete(prompt, system_prompt, max_tokens)
         return self.parse_json_response(response.content, response_schema)
+
+    async def complete_async(
+        self,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+    ) -> LLMResponse:
+        """True async completion using AsyncAnthropic client."""
+        try:
+            response = await self._async_client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system if system else None,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return LLMResponse(
+                content=response.content[0].text,
+                model=self.model,
+                provider=self.get_provider_name(),
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                raw_response=(response.model_dump() if hasattr(response, "model_dump") else {}),
+            )
+        except anthropic.AuthenticationError as e:
+            raise LLMProviderError(
+                "Anthropic authentication failed — check ANTHROPIC_API_KEY",
+                context={"provider": "anthropic"},
+            ) from e
+        except anthropic.APIError as e:
+            raise LLMProviderError(str(e), context={"provider": "anthropic"}) from e
 
     def health_check(self) -> bool:
         """Check if Anthropic API is reachable.

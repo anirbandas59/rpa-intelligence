@@ -8,7 +8,7 @@ import json
 import logging
 from typing import TypedDict
 from pydantic import ValidationError
-from llm.manager import LLMManager
+from llm.manager import get_default_manager
 from prompts.complexity_prompts import ACTIVE_S2_EXTRACTION_SYSTEM, ACTIVE_S2_EXTRACTION_USER
 from core.models.scoring import AttributeBandsWithSource
 from core.exceptions import LLMProviderError, AgentExecutionError
@@ -67,7 +67,9 @@ def parse_llm_json(response: str) -> dict:
         raise AgentExecutionError(f"Failed to parse LLM JSON: {e}. Text: {json_text[:200]}")
 
 
-def extract_bands_from_text(document_text: str, model: str = "claude-haiku-4-5") -> AttributeBandsWithSource:
+async def extract_bands_from_text(
+    document_text: str, model: str = "claude-haiku-4-5"
+) -> AttributeBandsWithSource:
     """
     Extract complexity bands from document text using LLM.
     Entry point for process agent.
@@ -85,12 +87,12 @@ def extract_bands_from_text(document_text: str, model: str = "claude-haiku-4-5")
     """
     logger.info(f"Extracting bands from {len(document_text)} chars using {model}")
 
-    llm = LLMManager()
+    llm = get_default_manager()
     system_prompt = ACTIVE_S2_EXTRACTION_SYSTEM
     user_prompt = ACTIVE_S2_EXTRACTION_USER.format(document_text=document_text)
 
     try:
-        response = llm.complete(
+        response = await llm.complete_async(
             system=system_prompt,
             prompt=user_prompt,
             max_tokens=800,

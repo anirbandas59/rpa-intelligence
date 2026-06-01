@@ -73,7 +73,7 @@ async def run_s2_assessment(
     elif pasted_text:
         # Path 2: Pasted text → extraction
         logger.info("Extracting bands from pasted text")
-        bands_with_source = extract_bands_from_text(pasted_text, model=model)
+        bands_with_source = await extract_bands_from_text(pasted_text, model=model)
         extraction_notes = "Extracted from pasted text"
 
     elif document_path:
@@ -82,7 +82,7 @@ async def run_s2_assessment(
         document_text = process_document(document_path)
 
         logger.info("Extracting bands from document text")
-        bands_with_source = extract_bands_from_text(document_text, model=model)
+        bands_with_source = await extract_bands_from_text(document_text, model=model)
         extraction_notes = f"Extracted from {document_path}"
 
     else:

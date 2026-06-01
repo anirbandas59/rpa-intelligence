@@ -3,6 +3,7 @@ from pathlib import Path
 from core.exceptions import ScoringValidationError
 
 _TABLE_PATH = Path(__file__).parent.parent.parent / "data" / "reference" / "effort_table.json"
+_TABLE_CACHE: dict | None = None
 
 _DAYS_PER_WEEK = 5
 
@@ -14,13 +15,21 @@ def _to_weeks(days) -> int:
     return round(days / _DAYS_PER_WEEK)
 
 
+def load_effort_table() -> dict:
+    """Load raw effort table from JSON. Returns the parsed effort data."""
+    global _TABLE_CACHE
+    if _TABLE_CACHE is None:
+        with open(_TABLE_PATH) as f:
+            _TABLE_CACHE = json.load(f)
+    return _TABLE_CACHE
+
+
 def get_effort(complexity_class: str) -> dict:
     """
     Returns {min_weeks, max_weeks, sprint_min, sprint_max} for a complexity class.
     Converts the source file's day-based values to weeks.
     """
-    with open(_TABLE_PATH) as f:
-        data = json.load(f)
+    data = load_effort_table()
 
     if complexity_class not in data["efforts"]:
         raise ScoringValidationError(f"Unknown complexity class: {complexity_class}")

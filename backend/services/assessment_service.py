@@ -1,5 +1,6 @@
-import json
+import asyncio
 import hashlib
+import json
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -79,8 +80,8 @@ class AssessmentService:
             "power_automate_fit": parsed.get("power_automate_fit", ""),
         }
 
-    def _score_single_use_case(self, use_case_data: dict) -> dict:
-        """Score a single use-case. Called in parallel by ThreadPoolExecutor."""
+    async def _score_single_use_case(self, use_case_data: dict) -> dict:
+        """Score a single use-case asynchronously."""
         user_prompt = ACTIVE_S1_SCORING_USER.format(
             name=use_case_data.get("name", ""),
             description=use_case_data.get("description", ""),
@@ -89,7 +90,7 @@ class AssessmentService:
         )
 
         try:
-            raw_response = self.llm.complete(
+            raw_response = await self.llm.complete_async(
                 prompt=user_prompt,
                 system=ACTIVE_S1_SCORING_SYSTEM,
                 max_tokens=1000,
@@ -152,7 +153,7 @@ class AssessmentService:
 
         try:
             # Run scoring
-            assessment_result = self._score_single_use_case(inputs)
+            assessment_result = await self._score_single_use_case(inputs)
 
             # Update StageRun
             stage_run.result = assessment_result
@@ -175,14 +176,9 @@ class AssessmentService:
             raise
 
     async def run_bulk_assessment(self, project_id: str, use_case_ids: list[str]) -> list[StageRun]:
-        """Run assessments in parallel using ThreadPoolExecutor. Port Project 1's pattern."""
-        # This will be used for bulk uploads
-        # For now, just run sequentially via run_assessment
-        results = []
-        for uc_id in use_case_ids:
-            stage_run = await self.run_assessment(uc_id)
-            results.append(stage_run)
-        return results
+        """Run assessments in parallel using asyncio.gather."""
+        tasks = [self.run_assessment(uc_id) for uc_id in use_case_ids]
+        return await asyncio.gather(*tasks, return_exceptions=False)
 
     async def generate_followup_questions(self, use_case_id: str) -> list[str]:
         """Generate follow-up questions for low-confidence assessments."""
@@ -213,7 +209,7 @@ class AssessmentService:
         )
 
         try:
-            raw_response = self.llm.complete(
+            raw_response = await self.llm.complete_async(
                 prompt=user_prompt,
                 system=S1_FOLLOWUP_SYSTEM,
                 max_tokens=500,

@@ -40,19 +40,30 @@ All agents and tools route LLM calls through this manager — nothing outside
 llm/ ever imports a provider directly.
 """
 
+import asyncio
 import logging
 import time
-from typing import Callable
+from collections.abc import Callable
 
-from config import get_settings
 from pydantic import BaseModel
 
+from config import get_settings
 from core.exceptions import LLMProviderError
 from llm.providers import BaseLLMProvider, LLMResponse
 from llm.providers.anthropic_provider import AnthropicProvider
 from llm.providers.ollama_provider import OllamaProvider
 from llm.providers.openai_provider import OpenAIProvider
 from llm.providers.watsonx_provider import WatsonxProvider
+
+_LLM_SEMAPHORE: asyncio.Semaphore | None = None
+
+
+def get_llm_semaphore() -> asyncio.Semaphore:
+    """Get or create the LLM concurrency semaphore (lazy initialization)."""
+    global _LLM_SEMAPHORE
+    if _LLM_SEMAPHORE is None:
+        _LLM_SEMAPHORE = asyncio.Semaphore(10)
+    return _LLM_SEMAPHORE
 
 
 class LLMManager:
@@ -87,7 +98,9 @@ class LLMManager:
         settings = get_settings()
 
         # Use provided names or fall back to settings defaults
-        self._provider_name = provider_name.lower() if provider_name else settings.default_llm_provider.lower()
+        self._provider_name = (
+            provider_name.lower() if provider_name else settings.default_llm_provider.lower()
+        )
         self._model_name = model_name if model_name else settings.default_llm_model
 
         # Initialize tracking
@@ -97,7 +110,9 @@ class LLMManager:
         # Build the provider
         self._provider = self._build_provider()
 
-        self.logger.debug(f"LLMManager initialized | provider={self._provider_name} | model={self._model_name}")
+        self.logger.debug(
+            f"LLMManager initialized | provider={self._provider_name} | model={self._model_name}"
+        )
 
     def _build_provider(self) -> BaseLLMProvider:
         """
@@ -139,7 +154,8 @@ class LLMManager:
 
         else:
             raise LLMProviderError(
-                f"Unknown LLM provider: {self._provider_name}. Valid options: anthropic | openai | watsonx | ollama"
+                f"Unknown LLM provider: {self._provider_name}. "
+                "Valid options: anthropic | openai | watsonx | ollama"
             )
 
     def _execute_with_retry(
@@ -215,6 +231,72 @@ class LLMManager:
             raise last_error
         else:
             raise LLMProviderError(f"Failed to execute LLM operation after {max_retries} retries")
+
+    async def _execute_with_retry_async(
+        self,
+        operation,
+        session_id: str = "",
+    ) -> LLMResponse:
+        """Async version of _execute_with_retry using await asyncio.sleep()."""
+        settings = get_settings()
+        max_retries = settings.llm_max_retries
+        base_delay = settings.llm_retry_base_delay
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                result: LLMResponse = await operation()
+                self._call_count += 1
+                self._total_tokens += result.total_tokens
+                self.logger.debug(
+                    f"LLM async call #{self._call_count} | {result.provider} | {result.model} | "
+                    f"{result.input_tokens}→{result.output_tokens} tokens | session={session_id}"
+                )
+                return result
+            except LLMProviderError as e:
+                error_msg = str(e).lower()
+                is_rate_limit = "rate" in error_msg or "429" in error_msg
+                if is_rate_limit and attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt)
+                    self.logger.warning(
+                        f"Rate limited by {self._provider_name}, retrying in {delay}s "
+                        f"(attempt {attempt + 1}/{max_retries})"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                elif is_rate_limit:
+                    last_error = e
+                    break
+                else:
+                    self.logger.error(f"LLM async call failed: {e}")
+                    raise
+
+        if last_error:
+            raise last_error
+        raise LLMProviderError(f"Failed to execute LLM operation after {max_retries} retries")
+
+    async def complete_async(
+        self,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+        session_id: str = "",
+    ) -> str:
+        """Async completion with semaphore and async retry.
+
+        Uses native async provider where available (Anthropic).
+        Falls back to thread-pool execution for sync-only providers.
+
+        Returns:
+            str: Response text content.
+        """
+        async with get_llm_semaphore():
+            response = await self._execute_with_retry_async(
+                lambda: self._provider.complete_async(prompt, system, max_tokens, temperature),
+                session_id,
+            )
+        return response.content
 
     def complete(
         self,

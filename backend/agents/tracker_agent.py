@@ -57,7 +57,7 @@ def read_documents_node(state: TrackerState) -> TrackerState:
     return state
 
 
-def decompose_features_node(state: TrackerState) -> TrackerState:
+async def decompose_features_node(state: TrackerState) -> TrackerState:
     """
     Node 2: Call Sonnet to decompose process into features.
     """
@@ -75,7 +75,7 @@ def decompose_features_node(state: TrackerState) -> TrackerState:
             sprint_count=state["sprint_count"],
         )
 
-        response = llm.complete(
+        response = await llm.complete_async(
             system=S4_DECOMPOSE_SYSTEM, prompt=user_prompt, max_tokens=2000, temperature=0.4
         )
 

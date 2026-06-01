@@ -7,6 +7,7 @@ IMPORTANT: This is the ONLY place in the project where LLM SDKs can be imported.
 Agents and tools MUST ONLY import from llm.manager, never directly from SDK modules.
 """
 
+import asyncio
 import json
 from abc import ABC, abstractmethod
 from typing import Any, Type
@@ -115,6 +116,21 @@ class BaseLLMProvider(ABC):
             LLMProviderError: If the response is invalid JSON or fails schema validation.
         """
         pass
+
+    async def complete_async(
+        self,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 1000,
+        temperature: float = 0.3,
+    ) -> LLMResponse:
+        """Async completion. Default: runs sync complete() in thread pool.
+        Providers that support native async (e.g. Anthropic) should override this.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.complete, prompt, system, max_tokens, temperature
+        )
 
     @abstractmethod
     def health_check(self) -> bool:
