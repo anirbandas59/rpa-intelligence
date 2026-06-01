@@ -133,3 +133,15 @@ class UploadedFile(Base):
     size_bytes: Mapped[int | None] = mapped_column(Integer)
     uploaded_by: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AgentMemory(Base):
+    __tablename__ = "agent_memories"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    use_case_id: Mapped[str] = mapped_column(String, ForeignKey("use_cases.id", ondelete="CASCADE"))
+    project_id: Mapped[str] = mapped_column(String, ForeignKey("projects.id", ondelete="CASCADE"))
+    memory_type: Mapped[str] = mapped_column(String)   # assessment_result | extraction_outcome | correction
+    stage: Mapped[str] = mapped_column(String)          # s1 | s2 | s3 | s4
+    content: Mapped[dict] = mapped_column(JSON)         # what was learned/observed
+    keywords: Mapped[str] = mapped_column(String, default="")  # space-separated for similarity search
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

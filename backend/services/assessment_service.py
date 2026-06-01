@@ -80,19 +80,50 @@ class AssessmentService:
             "power_automate_fit": parsed.get("power_automate_fit", ""),
         }
 
+    async def _build_memory_context(self, name: str) -> str:
+        """Retrieve similar past assessments and format as few-shot context for the system prompt."""
+        try:
+            from memory.episodic_memory import EpisodicMemory
+            keywords = [w for w in name.lower().split() if len(w) > 3][:4]
+            if not keywords:
+                return ""
+            mem = EpisodicMemory(self.db)
+            memories = await mem.retrieve_similar(keywords, stage="s1", limit=3)
+            if not memories:
+                return ""
+            lines = ["Past similar assessments for reference:"]
+            for m in memories:
+                c = m.content
+                lines.append(
+                    f"- {m.keywords.split()[0] if m.keywords else 'similar'}: "
+                    f"{c.get('migration_decision', '?')}, "
+                    f"score={c.get('total_score', '?')}, "
+                    f"confidence={c.get('confidence', '?')}"
+                )
+            context = "\n".join(lines)
+            logger.debug(f"[memory] Injecting {len(memories)} few-shot examples for '{name}'")
+            return "\n\n" + context
+        except Exception as e:
+            logger.debug(f"[memory] Context retrieval skipped: {e}")
+            return ""
+
     async def _score_single_use_case(self, use_case_data: dict) -> dict:
-        """Score a single use-case asynchronously."""
+        """Score a single use-case asynchronously with memory-augmented prompts."""
+        name = use_case_data.get("name", "")
         user_prompt = ACTIVE_S1_SCORING_USER.format(
-            name=use_case_data.get("name", ""),
+            name=name,
             description=use_case_data.get("description", ""),
             source_platform=use_case_data.get("source_platform", ""),
             install_status=use_case_data.get("install_status", ""),
         )
 
+        memory_context = await self._build_memory_context(name)
+        system_prompt = ACTIVE_S1_SCORING_SYSTEM + memory_context
+
         try:
             raw_response = await self.llm.complete_async(
                 prompt=user_prompt,
-                system=ACTIVE_S1_SCORING_SYSTEM,
+                system=system_prompt,
                 max_tokens=1000,
                 temperature=0.3,
             )
@@ -166,6 +197,28 @@ class AssessmentService:
             await self.db.commit()
 
             logger.info(f"Completed S1 StageRun {stage_run.id}")
+
+            # Write episodic memory
+            try:
+                from memory.episodic_memory import EpisodicMemory
+                mem = EpisodicMemory(self.db)
+                name_words = (use_case.name or "").lower().split()[:5]
+                await mem.store(
+                    use_case_id=use_case_id,
+                    project_id=use_case.project_id,
+                    stage="s1",
+                    memory_type="assessment_result",
+                    content={
+                        "migration_decision": assessment_result.get("migration_decision"),
+                        "total_score": assessment_result.get("total_score"),
+                        "confidence": assessment_result.get("confidence"),
+                    },
+                    keywords=name_words,
+                )
+            except Exception as mem_err:
+                # Memory write failure must not break the main flow
+                logger.warning(f"Memory write failed (non-critical): {mem_err}")
+
             return stage_run
 
         except Exception as e:
