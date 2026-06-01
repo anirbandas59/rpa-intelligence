@@ -9,11 +9,39 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer"
 import { ArrowLeft, Play, Download, Plus, Minus, RefreshCw, Loader2 } from "lucide-react"
 import { apiGet, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
 import type { UseCase, StageRun, Phase, S3Result, ReadinessResponse, ComplexityClass } from "@/lib/types"
+
+// Phase color mapping for Gantt bars
+const PHASE_COLORS: Record<string, string> = {
+  "Define": "bg-blue-500/60",
+  "Design": "bg-indigo-500/60",
+  "Build": "bg-primary/70",
+  "Build + Unit Testing": "bg-primary/70",
+  "SIT": "bg-amber-500/60",
+  "UAT": "bg-green-500/60",
+  "Deployment": "bg-teal-500/60",
+}
+
+function getPhaseColor(phaseName: string): string {
+  // Try exact match first
+  if (PHASE_COLORS[phaseName]) return PHASE_COLORS[phaseName]
+  // Partial match
+  for (const [key, color] of Object.entries(PHASE_COLORS)) {
+    if (phaseName.toLowerCase().includes(key.toLowerCase())) return color
+  }
+  return "bg-muted-foreground/40"
+}
 
 export default function Stage3Page() {
   const params = useParams()
@@ -50,13 +78,11 @@ export default function Stage3Page() {
         setReadiness(readinessData)
         setRuns(runsData)
 
-        // Load inputs
         if (ucData.s3_inputs?.effort_weeks) setEffortWeeks(ucData.s3_inputs.effort_weeks as number)
         if (ucData.s3_inputs?.start_date) setStartDate(ucData.s3_inputs.start_date as string)
         if (ucData.s3_inputs?.complexity_class) setComplexityClass(ucData.s3_inputs.complexity_class as ComplexityClass)
         if (ucData.s3_inputs?.phase_deltas) setPhaseDeltas(ucData.s3_inputs.phase_deltas as Record<string, number>)
 
-        // Load latest result
         if (ucData.s3_latest_run_id && runsData.length > 0) {
           const latestRun = runsData.find((r) => r.id === ucData.s3_latest_run_id)
           if (latestRun?.status === "complete") {
@@ -121,14 +147,14 @@ export default function Stage3Page() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   if (!useCase) {
     return (
-      <div className="min-h-screen bg-muted/50 p-8">
+      <div className="min-h-screen bg-background p-8">
         <Alert variant="destructive">
           <AlertDescription>Use case not found</AlertDescription>
         </Alert>
@@ -139,26 +165,32 @@ export default function Stage3Page() {
   const isStale = readiness?.s3 === "stale"
   const canRun = effortWeeks > 0 && startDate !== ""
 
+  // Total weeks for Gantt proportions
+  const totalWeeks = latestResult?.phases.reduce(
+    (sum, p) => sum + p.weeks + (phaseDeltas[p.name] || 0),
+    0
+  ) || 1
+
   return (
-    <div className="min-h-screen bg-muted/50">
-      <div className="border-b bg-background">
-        <div className="container flex h-16 items-center justify-between">
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href={`/projects/${projectId}`}>
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="mr-2 h-4 w-4" />
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
                 Back
               </Button>
             </Link>
-            <div className="h-6 w-px bg-border" />
+            <div className="h-4 w-px bg-border/50" />
             <div>
-              <h1 className="text-sm font-semibold">{useCase.name}</h1>
-              <p className="text-xs text-muted-foreground">Stage 3: Delivery Timeline</p>
+              <p className="text-sm font-semibold">{useCase.name}</p>
+              <p className="text-xs text-muted-foreground">Stage 3 — Delivery Timeline</p>
             </div>
           </div>
           <RunHistoryDrawer runs={runs} stage="s3" stageName="Stage 3 - Timeline" />
         </div>
-      </div>
+      </header>
 
       <div className="container max-w-5xl py-8 space-y-6">
         {error && (
@@ -169,12 +201,11 @@ export default function Stage3Page() {
 
         {isStale && <StalenessIndicator isStale={true} stageName="Stage 3" />}
 
-        <Card>
+        {/* Configuration card */}
+        <Card className="glass-card border-border/50">
           <CardHeader>
             <CardTitle>Timeline Configuration</CardTitle>
-            <CardDescription>
-              Set effort estimate, start date, and complexity class
-            </CardDescription>
+            <CardDescription>Set effort estimate, start date, and complexity class</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
@@ -198,24 +229,25 @@ export default function Stage3Page() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="complexity">Complexity Class</Label>
-                <select
-                  id="complexity"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                <Label>Complexity Class</Label>
+                <Select
                   value={complexityClass}
-                  onChange={(e) => setComplexityClass(e.target.value as ComplexityClass)}
+                  onValueChange={(val) => setComplexityClass(val as ComplexityClass)}
                 >
-                  <option value="XS">XS</option>
-                  <option value="S">S</option>
-                  <option value="M">M</option>
-                  <option value="L">L</option>
-                  <option value="XL">XL</option>
-                </select>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(["XS", "S", "M", "L", "XL"] as ComplexityClass[]).map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={handleRunStage} disabled={!canRun}>
+              <Button onClick={handleRunStage} disabled={!canRun} className={canRun ? "glow-primary" : ""}>
                 <Play className="mr-2 h-4 w-4" />
                 Calculate Timeline
               </Button>
@@ -227,87 +259,94 @@ export default function Stage3Page() {
           </CardContent>
         </Card>
 
+        {/* Gantt visualization */}
         {latestResult && (
           <>
-            <Card>
+            <Card className="glass-card border-border/50">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Delivery Phases</CardTitle>
+                  <div>
+                    <CardTitle>Delivery Phases</CardTitle>
+                    <CardDescription>
+                      Total duration: <strong>{totalWeeks} weeks</strong>
+                    </CardDescription>
+                  </div>
                   {Object.keys(phaseDeltas).length > 0 && (
                     <Button variant="outline" size="sm" onClick={handleResetDeltas}>
-                      <RefreshCw className="mr-2 h-3 w-3" />
+                      <RefreshCw className="mr-2 h-3.5 w-3.5" />
                       Reset Deltas
                     </Button>
                   )}
                 </div>
-                <CardDescription>Adjust individual phase durations with +/- controls</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {latestResult.phases.map((phase: Phase, idx: number) => {
                     const delta = phaseDeltas[phase.name] || 0
                     const adjustedWeeks = phase.weeks + delta
+                    const barWidth = Math.max(2, (adjustedWeeks / totalWeeks) * 100)
+                    const phaseColor = getPhaseColor(phase.name)
 
                     return (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between rounded-lg border p-4"
-                      >
-                        <div className="flex-1">
-                          <div className="font-semibold">{phase.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {new Date(phase.start_date).toLocaleDateString()} -{" "}
-                            {new Date(phase.end_date).toLocaleDateString()}
+                      <div key={idx} className="space-y-1.5">
+                        {/* Row header */}
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-sm font-semibold w-48 shrink-0">{phase.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(phase.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            {" – "}
+                            {new Date(phase.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Badge
+                              variant={delta !== 0 ? "default" : "outline"}
+                              className="text-xs min-w-16 justify-center"
+                            >
+                              {adjustedWeeks}w{delta !== 0 && ` (${delta > 0 ? "+" : ""}${delta})`}
+                            </Badge>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handlePhaseDelta(phase.name, -1)}
+                                disabled={adjustedWeeks <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handlePhaseDelta(phase.name, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant={delta !== 0 ? "default" : "outline"}>
-                            {adjustedWeeks} week{adjustedWeeks !== 1 ? "s" : ""}
-                            {delta !== 0 && ` (${delta > 0 ? "+" : ""}${delta})`}
-                          </Badge>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handlePhaseDelta(phase.name, -1)}
-                              disabled={adjustedWeeks <= 1}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handlePhaseDelta(phase.name, 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+
+                        {/* Gantt bar */}
+                        <div className="h-6 w-full bg-muted/20 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${phaseColor}`}
+                            style={{ width: `${barWidth}%` }}
+                          />
                         </div>
                       </div>
                     )
                   })}
                 </div>
-
-                <div className="mt-4 rounded bg-muted p-3 text-sm">
-                  <strong>Total Duration:</strong>{" "}
-                  {latestResult.phases.reduce(
-                    (sum: number, p: Phase) => sum + p.weeks + (phaseDeltas[p.name] || 0),
-                    0
-                  )}{" "}
-                  weeks
-                </div>
               </CardContent>
             </Card>
 
             {latestResult.narrative && (
-              <Card>
+              <Card className="glass-card border-border/50">
                 <CardHeader>
                   <CardTitle>Delivery Narrative</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm leading-relaxed">{latestResult.narrative}</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{latestResult.narrative}</p>
                 </CardContent>
               </Card>
             )}

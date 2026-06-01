@@ -7,17 +7,25 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Select } from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { InputSourceBadge } from "@/components/shared/InputSourceBadge"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress"
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer"
-import { ArrowLeft, Upload, FileText, Play, Loader2 } from "lucide-react"
+import { ArrowLeft, Upload, Play, Loader2 } from "lucide-react"
 import { apiGet, apiPost, apiPatch, apiPostFormData, isAuthenticated } from "@/lib/api"
 import { scoreComplexity, getComplexityColor, hasAllBands, WEIGHTS } from "@/lib/scoring"
 import type { UseCase, StageRun, Band, AttributeBands, ReadinessResponse, S2Result, InputSource } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 export default function Stage2Page() {
   const params = useParams()
@@ -66,12 +74,10 @@ export default function Stage2Page() {
         setReadiness(readinessData)
         setRuns(runsData)
 
-        // Load bands from inputs
         if (ucData.s2_inputs?.bands) {
-          setBands(ucData.s2_inputs.bands)
+          setBands(ucData.s2_inputs.bands as Partial<AttributeBands>)
         }
 
-        // Load latest result if complete
         if (ucData.s2_latest_run_id && runsData.length > 0) {
           const latestRun = runsData.find((r) => r.id === ucData.s2_latest_run_id)
           if (latestRun?.status === "complete") {
@@ -98,7 +104,6 @@ export default function Stage2Page() {
     try {
       const formData = new FormData()
       formData.append("file", file)
-
       await apiPostFormData(`/api/v1/use-cases/${ucId}/s2/documents`, formData)
       alert("File uploaded successfully. Run Stage 2 to extract complexity attributes.")
     } catch (err) {
@@ -144,14 +149,14 @@ export default function Stage2Page() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   if (!useCase) {
     return (
-      <div className="min-h-screen bg-muted/50 p-8">
+      <div className="min-h-screen bg-background p-8">
         <Alert variant="destructive">
           <AlertDescription>Use case not found</AlertDescription>
         </Alert>
@@ -163,25 +168,25 @@ export default function Stage2Page() {
   const isRunning = readiness?.s2 === "running" || runningStage
 
   return (
-    <div className="min-h-screen bg-muted/50">
-      <div className="border-b bg-background">
-        <div className="container flex h-16 items-center justify-between">
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href={`/projects/${projectId}`}>
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="mr-2 h-4 w-4" />
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
                 Back
               </Button>
             </Link>
-            <div className="h-6 w-px bg-border" />
+            <div className="h-4 w-px bg-border/50" />
             <div>
-              <h1 className="text-sm font-semibold">{useCase.name}</h1>
-              <p className="text-xs text-muted-foreground">Stage 2: Complexity Analysis</p>
+              <p className="text-sm font-semibold">{useCase.name}</p>
+              <p className="text-xs text-muted-foreground">Stage 2 — Complexity Analysis</p>
             </div>
           </div>
           <RunHistoryDrawer runs={runs} stage="s2" stageName="Stage 2 - Complexity" />
         </div>
-      </div>
+      </header>
 
       <div className="container max-w-5xl py-8 space-y-6">
         {error && (
@@ -201,40 +206,40 @@ export default function Stage2Page() {
           />
         )}
 
-        <Card>
+        {/* Upload card */}
+        <Card className="glass-card border-border/50">
           <CardHeader>
             <CardTitle>Input Method</CardTitle>
             <CardDescription>
               Upload a process document for AI extraction, or manually enter complexity bands
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-              <Label
-                htmlFor="file-upload"
-                className="flex h-32 flex-1 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 transition-colors hover:border-muted-foreground/50"
-              >
-                <div className="space-y-2 text-center">
-                  <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <div className="text-sm font-medium">
-                    {uploadingFile ? "Uploading..." : "Upload Process Document"}
-                  </div>
-                  <div className="text-xs text-muted-foreground">.pdf or .docx</div>
+          <CardContent>
+            <Label
+              htmlFor="file-upload"
+              className="flex h-28 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-primary/20 hover:border-primary/40 transition-colors bg-primary/5"
+            >
+              <div className="space-y-1.5 text-center">
+                <Upload className="mx-auto h-7 w-7 text-primary/60" />
+                <div className="text-sm font-medium text-muted-foreground">
+                  {uploadingFile ? "Uploading..." : "Upload Process Document"}
                 </div>
-                <Input
-                  id="file-upload"
-                  type="file"
-                  accept=".pdf,.docx"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                  disabled={uploadingFile || isRunning}
-                />
-              </Label>
-            </div>
+                <div className="text-xs text-muted-foreground/60">.pdf or .docx</div>
+              </div>
+              <Input
+                id="file-upload"
+                type="file"
+                accept=".pdf,.docx"
+                className="hidden"
+                onChange={handleFileUpload}
+                disabled={uploadingFile || isRunning}
+              />
+            </Label>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Attributes card */}
+        <Card className="glass-card border-border/50">
           <CardHeader>
             <CardTitle>Complexity Attributes</CardTitle>
             <CardDescription>
@@ -243,61 +248,87 @@ export default function Stage2Page() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {attributes.map((attr) => (
-                <div key={attr} className="flex items-center gap-4">
-                  <Label className="w-40 capitalize">{attr.replace("_", " ")}</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={bands[attr] || ""}
-                    onChange={(e) => handleBandChange(attr, e.target.value as Band)}
-                    disabled={isRunning}
-                  >
-                    <option value="">Select...</option>
-                    {bandOptions.map((band) => (
-                      <option key={band} value={band}>
-                        {band} (Weight: {WEIGHTS[attr][band]})
-                      </option>
-                    ))}
-                  </select>
-                  {bands[attr] && (
-                    <InputSourceBadge source={(useCase.s2_inputs?.[`${attr}_source`] as InputSource) || "manual"} />
-                  )}
-                </div>
-              ))}
+              {loading
+                ? attributes.map((attr) => (
+                    <div key={attr} className="flex items-center gap-4">
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-10 flex-1 rounded-lg" />
+                    </div>
+                  ))
+                : attributes.map((attr) => (
+                    <div key={attr} className="flex items-center gap-4">
+                      <Label className="w-40 capitalize text-sm shrink-0">
+                        {attr.replace("_", " ")}
+                      </Label>
+                      <Select
+                        value={bands[attr] || ""}
+                        onValueChange={(val) => handleBandChange(attr, val as Band)}
+                        disabled={isRunning}
+                      >
+                        <SelectTrigger className="flex-1 h-10">
+                          <SelectValue placeholder="Select band..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bandOptions.map((band) => (
+                            <SelectItem key={band} value={band}>
+                              {band} — weight {WEIGHTS[attr][band]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {bands[attr] && (
+                        <InputSourceBadge
+                          source={(useCase.s2_inputs?.[`${attr}_source`] as InputSource) || "manual"}
+                        />
+                      )}
+                    </div>
+                  ))}
             </div>
 
+            {/* Live score preview */}
             {liveScore && (
-              <div className="mt-6 rounded-lg bg-muted p-4 space-y-2">
-                <h4 className="font-semibold text-sm">Live Preview</h4>
+              <div className="mt-6 rounded-xl gradient-hero border border-border/50 p-5 space-y-3">
+                <h4 className="text-sm font-semibold">Live Preview</h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Total Score:</span>{" "}
-                    <span className="font-bold">{liveScore.total_score}</span>
+                    <div className="text-xs text-muted-foreground mb-1">Total Score</div>
+                    <div className="text-2xl font-bold">{liveScore.total_score}/28</div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Complexity:</span>{" "}
-                    <Badge className={getComplexityColor(liveScore.complexity_class)}>
+                    <div className="text-xs text-muted-foreground mb-1">Complexity</div>
+                    <Badge
+                      className={cn(
+                        "text-base px-3 py-1",
+                        getComplexityColor(liveScore.complexity_class),
+                        (liveScore.complexity_class === "L" || liveScore.complexity_class === "XL") &&
+                          "glow-primary"
+                      )}
+                    >
                       {liveScore.complexity_class}
                     </Badge>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Effort:</span>{" "}
-                    <span className="font-bold">
+                    <div className="text-xs text-muted-foreground mb-1">Effort</div>
+                    <div className="font-bold">
                       {liveScore.effort_min_weeks === liveScore.effort_max_weeks
                         ? `${liveScore.effort_min_weeks} weeks`
-                        : `${liveScore.effort_min_weeks}-${liveScore.effort_max_weeks} weeks`}
-                    </span>
+                        : `${liveScore.effort_min_weeks}–${liveScore.effort_max_weeks} weeks`}
+                    </div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Sprints:</span>{" "}
-                    <span className="font-bold">{liveScore.sprints}</span>
+                    <div className="text-xs text-muted-foreground mb-1">Sprints</div>
+                    <div className="font-bold">{liveScore.sprints}</div>
                   </div>
                 </div>
               </div>
             )}
 
             <div className="mt-6">
-              <Button onClick={handleRunStage} disabled={isRunning || !hasAllBands(bands as AttributeBands)}>
+              <Button
+                onClick={handleRunStage}
+                disabled={isRunning || !hasAllBands(bands as AttributeBands)}
+                className={hasAllBands(bands as AttributeBands) ? "glow-primary" : ""}
+              >
                 <Play className="mr-2 h-4 w-4" />
                 {isRunning ? "Running..." : "Run Complexity Analysis"}
               </Button>
@@ -305,44 +336,46 @@ export default function Stage2Page() {
           </CardContent>
         </Card>
 
+        {/* Latest results */}
         {latestResult && (
-          <Card>
+          <Card className="glass-card border-border/50">
             <CardHeader>
               <CardTitle>Latest Results</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <div className="text-sm text-muted-foreground">Total Score</div>
+                <div className="rounded-lg bg-muted/30 p-4">
+                  <div className="text-xs text-muted-foreground mb-1">Total Score</div>
                   <div className="text-2xl font-bold">{latestResult.total_score}/28</div>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Complexity Class</div>
-                  <div>
-                    <Badge className={`text-lg ${getComplexityColor(latestResult.complexity_class)}`}>
-                      {latestResult.complexity_class}
-                    </Badge>
-                  </div>
+                <div className="rounded-lg bg-muted/30 p-4">
+                  <div className="text-xs text-muted-foreground mb-1">Complexity Class</div>
+                  <Badge className={`text-lg px-3 py-1 ${getComplexityColor(latestResult.complexity_class)}`}>
+                    {latestResult.complexity_class}
+                  </Badge>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Effort Estimate</div>
+                <div className="rounded-lg bg-muted/30 p-4">
+                  <div className="text-xs text-muted-foreground mb-1">Effort Estimate</div>
                   <div className="text-2xl font-bold">
                     {latestResult.effort_min_weeks === latestResult.effort_max_weeks
-                      ? `${latestResult.effort_min_weeks} weeks`
-                      : `${latestResult.effort_min_weeks}-${latestResult.effort_max_weeks} weeks`}
+                      ? `${latestResult.effort_min_weeks}w`
+                      : `${latestResult.effort_min_weeks}–${latestResult.effort_max_weeks}w`}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4">
-                <h4 className="text-sm font-semibold mb-2">Attribute Weights</h4>
+              <div className="mt-5">
+                <h4 className="text-sm font-semibold mb-3">Attribute Weights</h4>
                 <div className="grid grid-cols-5 gap-2 text-sm">
                   {Object.entries(latestResult.attribute_weights).map(([attr, weight]) => (
-                    <div key={attr} className="rounded bg-muted p-2 text-center">
-                      <div className="text-xs text-muted-foreground capitalize">
+                    <div
+                      key={attr}
+                      className="rounded-lg glass-card border border-border/50 p-3 text-center"
+                    >
+                      <div className="text-[10px] text-muted-foreground capitalize mb-1">
                         {attr.replace("_", " ")}
                       </div>
-                      <div className="font-bold">{weight}</div>
+                      <div className="font-bold text-primary">{weight as number}</div>
                     </div>
                   ))}
                 </div>

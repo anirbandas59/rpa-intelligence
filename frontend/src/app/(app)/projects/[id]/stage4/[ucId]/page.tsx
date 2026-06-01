@@ -9,13 +9,21 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress"
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer"
 import { ArrowLeft, Play, Download, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { apiGet, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
-import type { UseCase, StageRun, S4Result, Feature, SprintPlan, ReadinessResponse } from "@/lib/types"
+import type { UseCase, StageRun, S4Result, SprintPlan, ReadinessResponse, Band } from "@/lib/types"
+
+const SIZE_BADGE_COLORS: Record<Band, string> = {
+  XS: "bg-green-500/20 text-green-400 border-green-500/30",
+  S: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  M: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+  L: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+  XL: "bg-red-500/20 text-red-400 border-red-500/30",
+}
 
 export default function Stage4Page() {
   const params = useParams()
@@ -51,11 +59,9 @@ export default function Stage4Page() {
         setReadiness(readinessData)
         setRuns(runsData)
 
-        // Load inputs
         if (ucData.s4_inputs?.sprint_count) setSprintCount(ucData.s4_inputs.sprint_count as number)
         if (ucData.s4_inputs?.sprint_length_weeks) setSprintLength(ucData.s4_inputs.sprint_length_weeks as number)
 
-        // Load latest result
         if (ucData.s4_latest_run_id && runsData.length > 0) {
           const latestRun = runsData.find((r) => r.id === ucData.s4_latest_run_id)
           if (latestRun?.status === "complete") {
@@ -75,7 +81,7 @@ export default function Stage4Page() {
   const handleLoadFromS2 = async () => {
     try {
       await apiPost(`/api/v1/use-cases/${ucId}/s4/load-from-s2`, {})
-      alert("Loaded process documents from Stage 2")
+      toast.success("Loaded process documents from Stage 2")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load from S2")
     }
@@ -113,6 +119,7 @@ export default function Stage4Page() {
 
   const handleExport = async () => {
     if (!latestResult) return
+    toast.success("Downloading...")
 
     try {
       const runId = useCase?.s4_latest_run_id
@@ -146,14 +153,14 @@ export default function Stage4Page() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   if (!useCase) {
     return (
-      <div className="min-h-screen bg-muted/50 p-8">
+      <div className="min-h-screen bg-background p-8">
         <Alert variant="destructive">
           <AlertDescription>Use case not found</AlertDescription>
         </Alert>
@@ -166,32 +173,39 @@ export default function Stage4Page() {
   const canRun = sprintCount > 0
 
   // Group features by sprint
-  const sprintGroups = latestResult?.sprint_plan.reduce((acc, sp: SprintPlan) => {
-    if (!acc[sp.sprint_number]) acc[sp.sprint_number] = []
-    acc[sp.sprint_number].push(sp)
-    return acc
-  }, {} as Record<number, SprintPlan[]>) || {}
+  const sprintGroups = latestResult?.sprint_plan.reduce<Record<number, SprintPlan[]>>(
+    (acc, sp) => {
+      if (!acc[sp.sprint_number]) acc[sp.sprint_number] = []
+      acc[sp.sprint_number].push(sp)
+      return acc
+    },
+    {}
+  ) || {}
+
+  const sprintNumbers = Object.keys(sprintGroups)
+    .map(Number)
+    .sort((a, b) => a - b)
 
   return (
-    <div className="min-h-screen bg-muted/50">
-      <div className="border-b bg-background">
-        <div className="container flex h-16 items-center justify-between">
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href={`/projects/${projectId}`}>
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="mr-2 h-4 w-4" />
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
                 Back
               </Button>
             </Link>
-            <div className="h-6 w-px bg-border" />
+            <div className="h-4 w-px bg-border/50" />
             <div>
-              <h1 className="text-sm font-semibold">{useCase.name}</h1>
-              <p className="text-xs text-muted-foreground">Stage 4: Sprint Tracker</p>
+              <p className="text-sm font-semibold">{useCase.name}</p>
+              <p className="text-xs text-muted-foreground">Stage 4 — Sprint Tracker</p>
             </div>
           </div>
           <RunHistoryDrawer runs={runs} stage="s4" stageName="Stage 4 - Sprint Tracker" />
         </div>
-      </div>
+      </header>
 
       <div className="container max-w-6xl py-8 space-y-6">
         {error && (
@@ -211,12 +225,11 @@ export default function Stage4Page() {
           />
         )}
 
-        <Card>
+        {/* Configuration card */}
+        <Card className="glass-card border-border/50">
           <CardHeader>
             <CardTitle>Sprint Configuration</CardTitle>
-            <CardDescription>
-              Set sprint parameters and load data from previous stages
-            </CardDescription>
+            <CardDescription>Set sprint parameters and load data from previous stages</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -244,8 +257,12 @@ export default function Stage4Page() {
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <Button onClick={handleRunStage} disabled={!canRun || isRunning}>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleRunStage}
+                disabled={!canRun || isRunning}
+                className={canRun && !isRunning ? "glow-primary" : ""}
+              >
                 <Play className="mr-2 h-4 w-4" />
                 {isRunning ? "Running..." : "Decompose & Assign Sprints"}
               </Button>
@@ -259,69 +276,82 @@ export default function Stage4Page() {
           </CardContent>
         </Card>
 
-        {latestResult && (
-          <>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Feature Sprint Plan</CardTitle>
-                  <Button onClick={handleExport}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Export to Excel
-                  </Button>
+        {/* Sprint board */}
+        {latestResult && sprintNumbers.length > 0 && (
+          <Card className="glass-card border-border/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Feature Sprint Board</CardTitle>
+                  <CardDescription>
+                    {latestResult.features.length} features across {sprintNumbers.length} sprints
+                  </CardDescription>
                 </div>
-                <CardDescription>
-                  {latestResult.features.length} features decomposed into {sprintCount} sprints
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {Object.entries(sprintGroups)
-                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                    .map(([sprintNum, features]) => (
-                      <div key={sprintNum} className="space-y-2">
-                        <h3 className="font-semibold flex items-center gap-2">
-                          <Badge>Sprint {sprintNum}</Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {features.length} feature{features.length !== 1 ? "s" : ""}
+                <Button onClick={handleExport} variant="outline" size="sm">
+                  <Download className="mr-2 h-4 w-4" />
+                  Export to Excel
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Board grid */}
+              <div
+                className="grid gap-3"
+                style={{
+                  gridTemplateColumns: `repeat(${sprintNumbers.length}, minmax(0, 1fr))`,
+                }}
+              >
+                {/* Column headers */}
+                {sprintNumbers.map((sprintNum) => (
+                  <div key={`header-${sprintNum}`} className="text-center">
+                    <div className="inline-flex items-center justify-center rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary">
+                      Sprint {sprintNum}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      {sprintGroups[sprintNum]?.length || 0} feature{sprintGroups[sprintNum]?.length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Feature columns */}
+                {sprintNumbers.map((sprintNum) => (
+                  <div key={`col-${sprintNum}`} className="space-y-2">
+                    {(sprintGroups[sprintNum] || []).map((sp: SprintPlan, idx: number) => (
+                      <div
+                        key={idx}
+                        className="glass-card rounded-lg p-3 border border-border/50 hover:border-primary/30 transition-colors"
+                      >
+                        <div className="text-sm font-semibold mb-1.5 leading-snug">
+                          {sp.feature.name}
+                        </div>
+                        {sp.feature.description && (
+                          <div className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                            {sp.feature.description}
+                          </div>
+                        )}
+                        <div className="flex items-center flex-wrap gap-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${SIZE_BADGE_COLORS[sp.feature.size]}`}
+                          >
+                            {sp.feature.size}
                           </span>
-                        </h3>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Feature</TableHead>
-                              <TableHead>Description</TableHead>
-                              <TableHead className="w-24">Size</TableHead>
-                              <TableHead>Dependencies</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {features.map((sp: SprintPlan, idx: number) => (
-                              <TableRow key={idx}>
-                                <TableCell className="font-medium">{sp.feature.name}</TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {sp.feature.description}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline">{sp.feature.size}</Badge>
-                                </TableCell>
-                                <TableCell className="text-sm">
-                                  {sp.feature.dependencies.length > 0 ? (
-                                    sp.feature.dependencies.join(", ")
-                                  ) : (
-                                    <span className="text-muted-foreground">None</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
+                          {sp.feature.dependencies.length > 0 &&
+                            sp.feature.dependencies.map((dep, dIdx) => (
+                              <span
+                                key={dIdx}
+                                className="inline-flex items-center rounded-md bg-muted/50 border border-border/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                              >
+                                {dep}
+                              </span>
                             ))}
-                          </TableBody>
-                        </Table>
+                        </div>
                       </div>
                     ))}
-                </div>
-              </CardContent>
-            </Card>
-          </>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

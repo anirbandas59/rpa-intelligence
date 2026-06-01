@@ -3,7 +3,6 @@
  * Displays an amber pill with optional banner
  */
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertTriangle } from "lucide-react"
 
 interface StalenessIndicatorProps {
@@ -33,11 +32,13 @@ export function StalenessIndicator({
   }
 
   return (
-    <Alert className={`border-amber-500/50 bg-amber-50 dark:bg-amber-900/20 ${className}`}>
-      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-      <AlertDescription className="text-amber-800 dark:text-amber-200">
+    <div
+      className={`border border-amber-500/30 bg-amber-500/10 text-amber-400 rounded-lg p-3 flex items-center gap-2 ${className}`}
+    >
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <span className="text-sm">
         Inputs for {stageName} have changed. Re-run the {stageName} to see updated results.
-      </AlertDescription>
-    </Alert>
+      </span>
+    </div>
   )
 }

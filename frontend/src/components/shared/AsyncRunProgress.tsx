@@ -7,8 +7,10 @@
 
 import { useEffect, useState } from "react"
 import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { toast } from "sonner"
 import { apiGet } from "@/lib/api"
 import type { ReadinessResponse, StageId } from "@/lib/types"
 
@@ -46,21 +48,26 @@ export function AsyncRunProgress({
           setProgress(100)
           clearInterval(interval)
           clearInterval(progressInterval)
+          toast.success("Run complete")
           onComplete?.()
         } else if (stageStatus === "stale" || stageStatus === "ready") {
           // Something went wrong - stage should be running
+          const msg = "Run status changed unexpectedly"
           setStatus("failed")
-          setError("Run status changed unexpectedly")
+          setError(msg)
           clearInterval(interval)
           clearInterval(progressInterval)
-          onError?.("Run status changed unexpectedly")
+          toast.error(`Run failed: ${msg}`)
+          onError?.(msg)
         }
       } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to check status"
         setStatus("failed")
-        setError(err instanceof Error ? err.message : "Failed to check status")
+        setError(msg)
         clearInterval(interval)
         clearInterval(progressInterval)
-        onError?.(err instanceof Error ? err.message : "Failed to check status")
+        toast.error(`Run failed: ${msg}`)
+        onError?.(msg)
       }
     }
 
@@ -110,12 +117,16 @@ export function AsyncRunProgress({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Loader2 className="h-4 w-4 animate-spin text-purple-600 dark:text-purple-400" />
-        <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span className="text-sm font-medium text-primary">
           Processing... This may take a minute
         </span>
       </div>
-      <Progress value={progress} className="h-2" />
+      {progress === 0 ? (
+        <Skeleton className="h-2 w-full rounded-full" />
+      ) : (
+        <Progress value={progress} className="h-2" />
+      )}
     </div>
   )
 }

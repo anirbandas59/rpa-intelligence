@@ -113,7 +113,7 @@ export function RunHistoryDrawer({ runs, stage, stageName, trigger }: RunHistory
 
                   <div>
                     <h4 className="text-sm font-medium mb-2">Inputs Snapshot</h4>
-                    <pre className="rounded bg-muted p-3 text-xs overflow-x-auto">
+                    <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-auto max-h-64 text-muted-foreground">
                       {JSON.stringify(run.inputs_snapshot, null, 2)}
                     </pre>
                   </div>
@@ -121,7 +121,7 @@ export function RunHistoryDrawer({ runs, stage, stageName, trigger }: RunHistory
                   {run.status === "complete" && (
                     <div>
                       <h4 className="text-sm font-medium mb-2">Result</h4>
-                      <pre className="rounded bg-muted p-3 text-xs overflow-x-auto">
+                      <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-auto max-h-64 text-muted-foreground">
                         {JSON.stringify(run.result, null, 2)}
                       </pre>
                     </div>
