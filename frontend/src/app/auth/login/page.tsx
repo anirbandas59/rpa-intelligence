@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { apiPost, setAuthToken } from "@/lib/api"
+import { apiPost, setAuthToken, setUserEmail } from "@/lib/api"
 import type { AuthResponse } from "@/lib/types"
 
 export default function LoginPage() {
@@ -30,6 +30,7 @@ export default function LoginPage() {
       })
 
       setAuthToken(response.access_token)
+      setUserEmail(email)
       router.push("/projects")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")

@@ -142,3 +142,20 @@ export function isAuthenticated(): boolean {
   if (typeof window === "undefined") return false
   return localStorage.getItem("token") !== null
 }
+
+/**
+ * Store user email in localStorage (called after successful login)
+ */
+export function setUserEmail(email: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("user_email", email)
+  }
+}
+
+/**
+ * Retrieve stored user email
+ */
+export function getUserEmail(): string {
+  if (typeof window === "undefined") return ""
+  return localStorage.getItem("user_email") ?? ""
+}
