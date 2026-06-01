@@ -12,6 +12,7 @@ from api.routes import auth, projects, settings, stage1, stage2, stage3, stage4,
 from core.scoring.effort_table import load_effort_table
 from core.scoring.weight_matrix import load_weight_matrix
 from db.session import get_engine
+from tools.registrations import register_all_tools
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
     get_engine()           # initialize connection pool
     load_weight_matrix()   # warm cache
     load_effort_table()    # warm cache
+    register_all_tools()   # register agentic tools
     yield
     # Shutdown
     await get_engine().dispose()
