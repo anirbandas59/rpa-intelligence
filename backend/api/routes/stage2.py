@@ -14,6 +14,7 @@ from api.dependencies import get_db, get_current_user
 from db.models import UseCase, UploadedFile, StageRun, User
 from agents.orchestrator import (
     run_s2_assessment,
+    create_s2_run as _orchestrator_create_s2_run,
     finalize_s2_run,
     fail_s2_run,
 )
@@ -316,7 +317,7 @@ async def create_s2_run(
         "manual_bands": manual_bands,
         "model": request.model,
     }
-    stage_run = await create_s2_run(id, inputs_snapshot, db)
+    stage_run = await _orchestrator_create_s2_run(id, inputs_snapshot, db)
 
     # Fire background task
     background_tasks.add_task(

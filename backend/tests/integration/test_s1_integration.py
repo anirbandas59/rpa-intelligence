@@ -3,7 +3,7 @@ Stage 1 integration test — verify assessment service works end-to-end.
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import select as sa_select
 from db.session import Base
@@ -77,7 +77,7 @@ async def test_assessment_service_creates_stage_run(test_db):
 
     service = AssessmentService(session, model="claude-haiku-4-5")
 
-    with patch.object(service.llm, "complete", return_value=mock_response):
+    with patch.object(service.llm, "complete_async", new_callable=AsyncMock, return_value=mock_response):
         stage_run = await service.run_assessment(use_case.id)
 
     # Verify StageRun was created
@@ -134,7 +134,7 @@ Hope this helps!"""
 
     service = AssessmentService(session, model="claude-haiku-4-5")
 
-    with patch.object(service.llm, "complete", return_value=mock_response):
+    with patch.object(service.llm, "complete_async", new_callable=AsyncMock, return_value=mock_response):
         stage_run = await service.run_assessment(use_case.id)
 
     # Should still parse successfully
