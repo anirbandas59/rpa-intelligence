@@ -14,8 +14,7 @@ No DB setup required — all execute functions are mocked.
 import pytest
 from pydantic import BaseModel
 
-from tools.registry import ToolRegistry, ToolDefinition, RegisteredTool, ToolNotFoundError
-
+from tools.registry import RegisteredTool, ToolDefinition, ToolNotFoundError, ToolRegistry
 
 # ---------------------------------------------------------------------------
 # Minimal Pydantic schemas for test tools

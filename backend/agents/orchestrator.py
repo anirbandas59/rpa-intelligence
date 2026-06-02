@@ -6,18 +6,20 @@ Handles three paths:
 3. Manual bands → scoring only
 """
 
-import logging
 import hashlib
 import json
+import logging
 from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import select
-from db.models import UseCase, StageRun
-from core.models.scoring import AttributeBands, AttributeBandsWithSource, ScoringResult
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from agents.complexity_agent import run_complexity_scoring
 from agents.document_agent import process_document
 from agents.process_agent import extract_bands_from_text
-from agents.complexity_agent import run_complexity_scoring
 from core.exceptions import AgentExecutionError
+from core.models.scoring import AttributeBands, AttributeBandsWithSource, ScoringResult
+from db.models import StageRun, UseCase
 
 logger = logging.getLogger(__name__)
 

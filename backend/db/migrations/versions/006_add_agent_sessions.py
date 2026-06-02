@@ -4,8 +4,8 @@ Revision ID: 006_agent_sessions
 Revises: 005_agent_memory
 Create Date: 2026-06-01
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.sqlite import JSON
 
 revision = "006_agent_sessions"

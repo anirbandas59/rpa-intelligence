@@ -4,8 +4,9 @@ Pure Python, no LLM calls.
 """
 
 from pydantic import BaseModel
+
 from core.models.scoring import AttributeBands
-from core.scoring.weight_matrix import load_weight_matrix, get_weight
+from core.scoring.weight_matrix import get_weight, load_weight_matrix
 
 
 class AttributeScoreResult(BaseModel):

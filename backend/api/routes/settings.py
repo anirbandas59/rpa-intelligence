@@ -3,16 +3,17 @@ Settings API routes — Superuser-only configuration management.
 All endpoints require superuser role.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Literal
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.dependencies import get_db, require_superuser
-from db.models import User, LLMConfig, PromptVariant
 from auth import hash_password
+from db.models import LLMConfig, PromptVariant, User
 
 router = APIRouter()
 

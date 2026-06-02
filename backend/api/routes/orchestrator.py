@@ -5,10 +5,10 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db, get_current_user
+from api.dependencies import get_current_user, get_db
 from api.sse_utils import event_stream, publish_event
 from db.models import AgentSession, UseCase, User, new_uuid
 
@@ -60,7 +60,7 @@ async def _run_orchestrator(
     db_factory,
 ) -> None:
     """Background task: runs the orchestrator LangGraph."""
-    from agents.project_orchestrator import build_orchestrator_graph, OrchestratorState
+    from agents.project_orchestrator import OrchestratorState, build_orchestrator_graph
 
     async with db_factory() as db:
         result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))

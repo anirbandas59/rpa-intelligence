@@ -4,8 +4,8 @@ Revision ID: 005_agent_memory
 Revises: 004_quality_columns
 Create Date: 2026-06-01
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.sqlite import JSON
 
 revision = "005_agent_memory"

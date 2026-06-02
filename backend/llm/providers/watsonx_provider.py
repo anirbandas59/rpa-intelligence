@@ -5,7 +5,6 @@ library is available in the mamba environment but not in the project venv.
 This stub raises NotImplementedError to indicate the provider is not configured.
 """
 
-from typing import Type
 
 from pydantic import BaseModel
 
@@ -51,7 +50,7 @@ class WatsonxProvider(BaseLLMProvider):
     def complete_structured(
         self,
         prompt: str,
-        response_schema: Type[BaseModel],
+        response_schema: type[BaseModel],
         system: str = "",
         max_tokens: int = 1000,
     ) -> BaseModel:

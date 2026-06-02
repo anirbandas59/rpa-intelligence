@@ -5,7 +5,8 @@ Pure Python, no LLM calls.
 """
 
 from pydantic import BaseModel
-from core.models.scoring import ComplexityClass, AttributeBands
+
+from core.models.scoring import AttributeBands, ComplexityClass
 from core.scoring.classifier import classify
 
 

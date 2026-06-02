@@ -10,20 +10,20 @@ for planning and evaluation. It supports both autonomous and supervised modes.
 import asyncio
 import json
 import logging
-from typing import TypedDict, Any
 from datetime import datetime
+from typing import Any, TypedDict
 
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 from core.exceptions import AgentExecutionError, LLMProviderError
 from llm.manager import get_default_manager
-from tools.registry import ToolRegistry
 from prompts.orchestrator_prompts import (
-    ORCHESTRATOR_PLAN_SYSTEM,
-    ORCHESTRATOR_PLAN_USER,
     ORCHESTRATOR_EVALUATE_SYSTEM,
     ORCHESTRATOR_EVALUATE_USER,
+    ORCHESTRATOR_PLAN_SYSTEM,
+    ORCHESTRATOR_PLAN_USER,
 )
+from tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 

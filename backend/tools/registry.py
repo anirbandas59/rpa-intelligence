@@ -12,7 +12,9 @@ Rules (non-negotiable):
 """
 
 import logging
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
+
 from pydantic import BaseModel
 
 from core.exceptions import RPABaseError

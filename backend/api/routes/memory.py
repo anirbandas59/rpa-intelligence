@@ -1,11 +1,12 @@
 """Memory API — view and manage agent episodic memories."""
 import logging
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db, get_current_user
+from api.dependencies import get_current_user, get_db
 from db.models import User
 from memory.episodic_memory import EpisodicMemory
 

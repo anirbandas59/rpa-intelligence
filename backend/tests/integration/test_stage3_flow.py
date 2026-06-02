@@ -3,11 +3,12 @@ Integration test for Stage 3 timeline flow.
 """
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
 from api.main import app
-from db.session import get_session_factory, get_engine
-from db.models import Base, User, Project, UseCase, StageRun
-from auth import hash_password, create_access_token
+from auth import create_access_token, hash_password
+from db.models import Base, Project, StageRun, UseCase, User
+from db.session import get_engine, get_session_factory
 
 
 @pytest.fixture

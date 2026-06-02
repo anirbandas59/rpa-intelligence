@@ -3,23 +3,27 @@ Stage 2 (Complexity) API routes.
 Document upload → AI extraction → deterministic scoring.
 """
 
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from api.dependencies import get_db, get_current_user, get_session_maker
-from db.models import UseCase, UploadedFile, StageRun, User
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from agents.orchestrator import (
-    run_s2_assessment,
     create_s2_run as _orchestrator_create_s2_run,
-    finalize_s2_run,
-    fail_s2_run,
 )
-from core.exceptions import DocumentProcessingError, LLMProviderError, AgentExecutionError
-import logging
+from agents.orchestrator import (
+    fail_s2_run,
+    finalize_s2_run,
+    run_s2_assessment,
+)
+from api.dependencies import get_current_user, get_db, get_session_maker
+from core.exceptions import AgentExecutionError, DocumentProcessingError, LLMProviderError
+from db.models import StageRun, UploadedFile, UseCase, User
 
 logger = logging.getLogger(__name__)
 

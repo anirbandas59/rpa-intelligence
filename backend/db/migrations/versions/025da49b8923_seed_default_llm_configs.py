@@ -6,20 +6,19 @@ Create Date: 2026-05-28 15:54:23.503544
 
 """
 
-from typing import Sequence, Union
-from datetime import datetime
 import uuid
+from collections.abc import Sequence
+from datetime import datetime
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.sql import table, column
-
+from alembic import op
+from sqlalchemy.sql import column, table
 
 # revision identifiers, used by Alembic.
 revision: str = "025da49b8923"
-down_revision: Union[str, Sequence[str], None] = "db9c7be9e735"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "db9c7be9e735"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

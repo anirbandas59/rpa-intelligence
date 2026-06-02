@@ -27,6 +27,12 @@ dependencies = [
     "bcrypt==4.2.1",
     "python-dotenv>=1.0.0",
     "httpx>=0.27.0",
+    "langchain>=1.3.3",
+    "langchain-openai>=1.2.2",
+    "langchain-anthropic>=1.4.4",
+    "pdfplumber>=0.11.9",
+    "unstructured>=0.22.31",
+    "reportlab>=4.5.1",
 ]
 
 [project.optional-dependencies]

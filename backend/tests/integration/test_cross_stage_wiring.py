@@ -9,9 +9,10 @@ Verifies:
 5. Independent dict semantics (no reference sharing)
 """
 
-import pytest
 import hashlib
 import json
+
+import pytest
 
 
 def compute_inputs_hash(inputs: dict) -> str:

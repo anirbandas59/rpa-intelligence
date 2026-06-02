@@ -2,16 +2,17 @@
 Shared pytest fixtures for all tests.
 """
 
-import pytest
 import asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from api.main import app
-from db.session import Base
-from db.models import User, Project
 from auth import create_access_token
+from db.models import Project, User
+from db.session import Base
 
 
 @pytest.fixture(scope="session")

@@ -3,9 +3,11 @@ Sprint assignment tool — deterministic bin-packing with dependency ordering.
 Zero LLM. Pure Python algorithm.
 """
 
-from pydantic import BaseModel, Field
-from core.exceptions import ScoringValidationError
 import logging
+
+from pydantic import BaseModel, Field
+
+from core.exceptions import ScoringValidationError
 
 logger = logging.getLogger(__name__)
 

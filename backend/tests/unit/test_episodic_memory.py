@@ -1,10 +1,10 @@
 """Unit tests for EpisodicMemory class."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime
 
-from memory.episodic_memory import EpisodicMemory
+import pytest
+
 from db.models import AgentMemory
+from memory.episodic_memory import EpisodicMemory
 
 
 @pytest.fixture

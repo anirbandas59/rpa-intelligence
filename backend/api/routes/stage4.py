@@ -3,19 +3,20 @@ Stage 4 API routes — Sprint Tracker (Sonnet decompose + deterministic bin-pack
 Async execution pattern with BackgroundTasks.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from pydantic import BaseModel, Field
-from datetime import datetime
 import hashlib
 import json
 import logging
+from datetime import datetime
 
-from api.dependencies import get_db, get_current_user
-from db.models import User, UseCase, StageRun
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from agents.tracker_agent import run_tracker_agent
+from api.dependencies import get_current_user, get_db
+from db.models import StageRun, UseCase, User
 from services.export_service import generate_tracker_xlsx
 
 router = APIRouter()

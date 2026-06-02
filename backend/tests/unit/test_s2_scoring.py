@@ -2,12 +2,12 @@
 Stage 2 scoring tests — verify tools and agents work correctly.
 """
 
+from agents.complexity_agent import run_complexity_scoring
 from core.models.scoring import AttributeBands
 from tools.attribute_scorer import score_attributes
-from tools.weighted_calculator import calculate_total
 from tools.classifier_tool import classify_complexity
 from tools.effort_table_tool import lookup_effort
-from agents.complexity_agent import run_complexity_scoring
+from tools.weighted_calculator import calculate_total
 
 
 def test_attribute_scorer():

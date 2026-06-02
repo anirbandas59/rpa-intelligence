@@ -4,12 +4,14 @@ Supports .docx and .pdf formats.
 Zero LLM calls.
 """
 
+import logging
 from pathlib import Path
 from typing import TypedDict
-from docx import Document
+
 import fitz  # PyMuPDF
+from docx import Document
+
 from core.exceptions import DocumentProcessingError
-import logging
 
 logger = logging.getLogger(__name__)
 

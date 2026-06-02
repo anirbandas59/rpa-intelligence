@@ -3,10 +3,11 @@ Export service — generate Excel tracker from Stage 4 results.
 3-sheet workbook: Calculator, Steps, Timeline.
 """
 
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Border, Side
 import io
 import logging
+
+from openpyxl import Workbook
+from openpyxl.styles import Border, Font, PatternFill, Side
 
 logger = logging.getLogger(__name__)
 

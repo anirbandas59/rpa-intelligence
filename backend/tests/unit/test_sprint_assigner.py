@@ -3,8 +3,9 @@ Unit tests for sprint assigner tool — deterministic bin-packing.
 """
 
 import pytest
-from tools.sprint_assigner import Feature, assign_sprints, topological_sort
+
 from core.exceptions import ScoringValidationError
+from tools.sprint_assigner import Feature, assign_sprints, topological_sort
 
 
 def test_topological_sort_no_dependencies():

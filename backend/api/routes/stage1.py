@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel
-from api.dependencies import get_db, get_current_user
-from db.models import UseCase, StageRun, User
-from services.assessment_service import AssessmentService
-from core.exceptions import ScoringValidationError
 import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.dependencies import get_current_user, get_db
+from core.exceptions import ScoringValidationError
+from db.models import StageRun, UseCase, User
+from services.assessment_service import AssessmentService
 
 logger = logging.getLogger(__name__)
 
@@ -247,8 +249,8 @@ async def backfill_from_s2(
         raise HTTPException(status_code=404, detail="S1 run not found")
 
     # Build backfill prompt
-    from prompts.assessment_prompts import S1_BACKFILL_SYSTEM, S1_BACKFILL_USER
     from llm.manager import LLMManager
+    from prompts.assessment_prompts import S1_BACKFILL_SYSTEM, S1_BACKFILL_USER
 
     s2_data = s2_run.result
     s1_data = s1_run.result

@@ -2,12 +2,14 @@
 Stage 1 integration test — verify assessment service works end-to-end.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import select as sa_select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from db.models import Project, UseCase, User
 from db.session import Base
-from db.models import UseCase, Project, User
 from services.assessment_service import AssessmentService
 
 

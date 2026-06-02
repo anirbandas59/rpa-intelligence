@@ -1,5 +1,5 @@
-from core.models.scoring import ComplexityClass
 from core.exceptions import ScoringValidationError
+from core.models.scoring import ComplexityClass
 
 # XS is a special case handled before numeric classification
 _BANDS: list[tuple[ComplexityClass, int, int]] = [

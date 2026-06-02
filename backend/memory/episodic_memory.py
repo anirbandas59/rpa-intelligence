@@ -4,8 +4,9 @@ Uses keyword-based SQL similarity (no vector DB required).
 """
 import logging
 from datetime import datetime
+
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
 
 from db.models import AgentMemory, new_uuid
 

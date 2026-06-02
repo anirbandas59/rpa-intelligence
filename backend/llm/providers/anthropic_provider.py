@@ -1,6 +1,5 @@
 """Anthropic provider implementation using the anthropic SDK."""
 
-from typing import Type
 
 import anthropic
 from pydantic import BaseModel
@@ -84,7 +83,7 @@ class AnthropicProvider(BaseLLMProvider):
     def complete_structured(
         self,
         prompt: str,
-        response_schema: Type[BaseModel],
+        response_schema: type[BaseModel],
         system: str = "",
         max_tokens: int = 1000,
     ) -> BaseModel:

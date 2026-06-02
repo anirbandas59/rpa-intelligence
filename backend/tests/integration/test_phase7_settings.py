@@ -9,8 +9,9 @@ Verifies:
 5. User management works
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -62,8 +63,9 @@ async def test_superuser_can_access_settings(async_client, test_superuser_token)
 @pytest.mark.asyncio
 async def test_default_llm_configs_seeded(async_client, test_superuser_token, test_db_session):
     """Verify default LLM configs can be created via API (test DB doesn't have seeds)."""
-    from db.models import LLMConfig
     from datetime import datetime
+
+    from db.models import LLMConfig
 
     headers = {"Authorization": f"Bearer {test_superuser_token}"}
 

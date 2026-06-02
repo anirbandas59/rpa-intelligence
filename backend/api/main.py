@@ -8,8 +8,18 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
-from api.routes import auth, memory, orchestrator, projects, settings
-from api.routes import stage1, stage2, stage3, stage4, use_cases
+from api.routes import (
+    auth,
+    memory,
+    orchestrator,
+    projects,
+    settings,
+    stage1,
+    stage2,
+    stage3,
+    stage4,
+    use_cases,
+)
 from core.scoring.effort_table import load_effort_table
 from core.scoring.weight_matrix import load_weight_matrix
 from db.session import get_engine
@@ -17,18 +27,21 @@ from tools.registrations import register_all_tools
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    get_engine()           # initialize connection pool
-    load_weight_matrix()   # warm cache
-    load_effort_table()    # warm cache
-    register_all_tools()   # register agentic tools
+    get_engine()  # initialize connection pool
+    load_weight_matrix()  # warm cache
+    load_effort_table()  # warm cache
+    register_all_tools()  # register agentic tools
     yield
     # Shutdown
     await get_engine().dispose()
 
+
 app = FastAPI(title="RPA Intelligence API", version="0.1.0", lifespan=lifespan)
+
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
@@ -37,6 +50,7 @@ async def request_id_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Request-ID"] = rid
     return response
+
 
 app.add_middleware(
     CORSMiddleware,

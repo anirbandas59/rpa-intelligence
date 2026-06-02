@@ -3,21 +3,22 @@ Stage 3 API routes — Delivery Timeline (deterministic, synchronous).
 No LLM calls in main flow. Optional narrative generation in background.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm.attributes import flag_modified
-from pydantic import BaseModel, Field
-from datetime import date, datetime
 import hashlib
 import json
 import logging
+from datetime import date, datetime
 
-from api.dependencies import get_db, get_current_user
-from db.models import User, UseCase, StageRun
-from services.timeline_service import calculate_timeline
-from prompts.timeline_prompts import S3_NARRATIVE_SYSTEM, S3_NARRATIVE_USER
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
+
+from api.dependencies import get_current_user, get_db
+from db.models import StageRun, UseCase, User
 from llm.manager import LLMManager
+from prompts.timeline_prompts import S3_NARRATIVE_SYSTEM, S3_NARRATIVE_USER
+from services.timeline_service import calculate_timeline
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

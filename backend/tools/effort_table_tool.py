@@ -5,6 +5,7 @@ Pure Python, no LLM calls.
 """
 
 from pydantic import BaseModel
+
 from core.models.scoring import ComplexityClass
 from core.scoring.effort_table import get_effort
 

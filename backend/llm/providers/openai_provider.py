@@ -1,6 +1,5 @@
 """OpenAI provider implementation using the openai SDK."""
 
-from typing import Type
 
 import openai
 from pydantic import BaseModel
@@ -86,7 +85,7 @@ class OpenAIProvider(BaseLLMProvider):
     def complete_structured(
         self,
         prompt: str,
-        response_schema: Type[BaseModel],
+        response_schema: type[BaseModel],
         system: str = "",
         max_tokens: int = 1000,
     ) -> BaseModel:

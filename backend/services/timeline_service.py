@@ -3,8 +3,9 @@ Stage 3 timeline service — pure Python, zero LLM.
 Calculates delivery phases from effort_weeks + start_date + complexity_class.
 """
 
-from datetime import date, timedelta
 from dataclasses import dataclass
+from datetime import date, timedelta
+
 from pydantic import BaseModel
 
 DEFAULT_BUFFERS = {

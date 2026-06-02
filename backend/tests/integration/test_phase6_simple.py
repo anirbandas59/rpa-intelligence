@@ -3,11 +3,13 @@ Phase 6 Integration Test — Simplified version focusing on wiring logic
 Tests the key Phase 6 requirements without async complexity.
 """
 
-import pytest
 import hashlib
 import json
+
+import pytest
 from sqlalchemy import select
-from db.models import UseCase, StageRun
+
+from db.models import StageRun, UseCase
 
 
 def compute_inputs_hash(inputs: dict) -> str:

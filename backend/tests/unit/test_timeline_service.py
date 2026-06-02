@@ -3,6 +3,7 @@ Unit tests for Stage 3 timeline service — pure Python timeline calculation.
 """
 
 from datetime import date, timedelta
+
 from services.timeline_service import calculate_timeline
 
 

@@ -4,6 +4,7 @@ Input and output models used by the ToolRegistry and orchestrator.
 """
 
 from pydantic import BaseModel
+
 from core.models.scoring import Band, ComplexityClass
 
 

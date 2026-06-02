@@ -4,10 +4,10 @@ Input:  Activities XL, Business Rules XL, Layouts L, Interfaces S, Technology S
 Expected: total=21, class=L
 """
 
-from core.scoring.weight_matrix import load_weight_matrix, get_weight
+from core.models.scoring import AttributeBands
 from core.scoring.classifier import classify
 from core.scoring.effort_table import get_effort
-from core.models.scoring import AttributeBands
+from core.scoring.weight_matrix import get_weight, load_weight_matrix
 
 
 def test_ground_truth():

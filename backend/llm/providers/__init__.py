@@ -97,7 +97,7 @@ class BaseLLMProvider(ABC):
     def complete_structured(
         self,
         prompt: str,
-        response_schema: Type[BaseModel],
+        response_schema: type[BaseModel],
         system: str = "",
         max_tokens: int = 1000,
     ) -> BaseModel:
@@ -145,7 +145,7 @@ class BaseLLMProvider(ABC):
     def build_json_system_prompt(
         self,
         base_system: str,
-        schema: Type[BaseModel],
+        schema: type[BaseModel],
     ) -> str:
         """Build a system prompt instructing the model to output valid JSON.
 
@@ -170,7 +170,7 @@ The JSON must contain these fields: {field_names}
     def parse_json_response(
         self,
         response_text: str,
-        schema: Type[BaseModel],
+        schema: type[BaseModel],
     ) -> BaseModel:
         """Parse and validate a JSON response against a schema.
 

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
-from core.exceptions import ScoringValidationError
 
+from core.exceptions import ScoringValidationError
 
 _MATRIX_PATH = Path(__file__).parent.parent.parent / "data" / "reference" / "weight_matrix.json"
 _MATRIX_CACHE: dict | None = None

@@ -15,8 +15,9 @@ async def get_checkpointer():
     if _checkpointer is None:
         # Try async SQLite first (preferred for production)
         try:
-            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
             from pathlib import Path
+
+            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
             checkpoint_db = str(Path(__file__).parent.parent / "checkpoints.db")
             _checkpointer = AsyncSqliteSaver.from_conn_string(checkpoint_db)
             logger.info(f"LangGraph checkpointer initialized with AsyncSqliteSaver at {checkpoint_db}")

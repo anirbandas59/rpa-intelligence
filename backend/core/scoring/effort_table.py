@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from core.exceptions import ScoringValidationError
 
 _TABLE_PATH = Path(__file__).parent.parent.parent / "data" / "reference" / "effort_table.json"

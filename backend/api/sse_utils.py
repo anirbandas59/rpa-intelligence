@@ -37,7 +37,7 @@ async def event_stream(session_id: str) -> AsyncGenerator[str, None]:
                     yield f"data: {json.dumps(event)}\n\n"
                     break
                 yield f"data: {json.dumps(event)}\n\n"
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 yield 'data: {"type": "ping"}\n\n'  # keep-alive
     finally:
         _session_queues.pop(session_id, None)
