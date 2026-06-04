@@ -178,12 +178,15 @@ Content-Type: application/json
   "model": "claude-haiku-4-5"
 }
 
+### Capture S1 run ID from response
+@s1_run_id = {{createS1Run.response.body.run_id}}
+
 ### Get All S1 Runs
 GET {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs
 Authorization: Bearer {{access_token}}
 
 ### Get Specific S1 Run
-GET {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs/{run_id}
+GET {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs/{{s1_run_id}}
 Authorization: Bearer {{access_token}}
 
 ### Override S1 Assessment
@@ -255,13 +258,15 @@ Content-Type: application/json
   "model": "claude-haiku-4-5"
 }
 
+### Capture S2 run ID from response
+@s2_run_id = {{createS2Run.response.body.run_id}}
+
 ### Get All S2 Runs
 GET {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/runs
 Authorization: Bearer {{access_token}}
 
 ### Get Specific S2 Run
-# @name getS2Run
-GET {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/runs/{run_id}
+GET {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/runs/{{s2_run_id}}
 Authorization: Bearer {{access_token}}
 
 #############################################
@@ -296,12 +301,15 @@ Content-Type: application/json
 
 {}
 
+### Capture S3 run ID from response
+@s3_run_id = {{createS3Run.response.body.run_id}}
+
 ### Get All S3 Runs
 GET {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/runs
 Authorization: Bearer {{access_token}}
 
 ### Get Specific S3 Run
-GET {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/runs/{run_id}
+GET {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/runs/{{s3_run_id}}
 Authorization: Bearer {{access_token}}
 
 ### Update Phase Delta
@@ -367,17 +375,20 @@ Content-Type: application/json
   "model": "claude-sonnet-4-5"
 }
 
+### Capture S4 run ID from response
+@s4_run_id = {{createS4Run.response.body.run_id}}
+
 ### Get All S4 Runs
 GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs
 Authorization: Bearer {{access_token}}
 
 ### Get Specific S4 Run
-GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs/{run_id}
+GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs/{{s4_run_id}}
 Authorization: Bearer {{access_token}}
 
 ### Export S4 Sprint Tracker (Excel)
 # Downloads .xlsx file with 3-sheet tracker
-GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs/{run_id}/export
+GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs/{{s4_run_id}}/export
 Authorization: Bearer {{access_token}}
 
 #############################################
@@ -426,6 +437,7 @@ GET {{baseUrl}}/api/{{apiVersion}}/memory/{{use_case_id}}/memories
 Authorization: Bearer {{access_token}}
 
 ### Delete Specific Memory
+# Replace {memory_id} with actual memory ID from GET /memories response
 DELETE {{baseUrl}}/api/{{apiVersion}}/memory/{{use_case_id}}/memories/{memory_id}
 Authorization: Bearer {{access_token}}
 
@@ -465,6 +477,7 @@ Content-Type: application/json
 }
 
 ### Update Prompt Variant
+# Replace {variant_id} with actual variant ID from GET /prompts response
 PUT {{baseUrl}}/api/{{apiVersion}}/settings/prompts/{variant_id}
 Authorization: Bearer {{access_token}}
 Content-Type: application/json
@@ -474,6 +487,7 @@ Content-Type: application/json
 }
 
 ### Activate Prompt Variant
+# Replace {variant_id} with actual variant ID
 PUT {{baseUrl}}/api/{{apiVersion}}/settings/prompts/{variant_id}/activate
 Authorization: Bearer {{access_token}}
 Content-Type: application/json
@@ -495,6 +509,7 @@ Content-Type: application/json
 }
 
 ### Update User
+# Replace {user_id} with actual user ID from GET /users response
 PATCH {{baseUrl}}/api/{{apiVersion}}/settings/users/{user_id}
 Authorization: Bearer {{access_token}}
 Content-Type: application/json
