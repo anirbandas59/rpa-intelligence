@@ -1,6 +1,13 @@
 """
-Weighted calculator tool — sums attribute weights.
-Pure Python, no LLM calls.
+Tool to calculate weighted complexity scores from attribute scores.
+
+This module takes a list of AttributeScore objects and produces:
+1. Total weighted score (sum of all attribute weights)
+2. Complexity tier classification using the Phase 1 classifier
+3. Confidence score based on distance from tier boundaries
+4. List of attributes that exceed XL ceilings
+
+Pure Python — no LLM calls.
 """
 
 from pydantic import BaseModel
