@@ -1,0 +1,505 @@
+# RPA Intelligence Platform - API Test Suite
+# Use with VSCode REST Client extension
+# Variables are captured from responses and reused in subsequent requests
+
+### Configuration Variables
+@baseUrl = http://localhost:8000
+@apiVersion = v1
+@email = test@example.com
+@password = testpass123
+
+#############################################
+# AUTHENTICATION
+#############################################
+
+### Register New User
+POST {{baseUrl}}/api/{{apiVersion}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "full_name": "Test User"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/api/{{apiVersion}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Capture access token from login response
+@access_token = {{login.response.body.access_token}}
+
+#############################################
+# PROJECT MANAGEMENT
+#############################################
+
+### Create Project
+# @name createProject
+POST {{baseUrl}}/api/{{apiVersion}}/projects
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "name": "RPA Migration Project",
+  "description": "Testing all stage workflows"
+}
+
+### Capture project ID from response
+@project_id = {{createProject.response.body.id}}
+
+### List All Projects
+GET {{baseUrl}}/api/{{apiVersion}}/projects
+Authorization: Bearer {{access_token}}
+
+### Get Project Use Cases
+GET {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/use-cases
+Authorization: Bearer {{access_token}}
+
+### Get Project Weight Configuration
+GET {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/weights
+Authorization: Bearer {{access_token}}
+
+### Update Project Weight Configuration
+PUT {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/weights
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "config": {
+    "activities": {"XS": 2, "S": 2, "M": 4, "L": 6, "XL": 8},
+    "business_rules": {"XS": 2, "S": 2, "M": 4, "L": 6, "XL": 8},
+    "layouts": {"XS": 1, "S": 1, "M": 2, "L": 3, "XL": 4},
+    "interfaces": {"XS": 1, "S": 1, "M": 2, "L": 3, "XL": 4},
+    "technology": {"XS": 1, "S": 1, "M": 2, "L": 3, "XL": 4}
+  },
+  "yes_threshold": 50
+}
+
+### Get Project Phase Configuration
+GET {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/phases
+Authorization: Bearer {{access_token}}
+
+### Update Project Phase Configuration
+PUT {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/phases
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "config": {
+    "define": {"weeks": 1, "complexity_adjusted": false},
+    "design": {"XS": 1, "S": 1, "M": 1, "L": 2, "XL": 2},
+    "sit": {"weeks": 1, "complexity_adjusted": false},
+    "uat": {"XS": 1, "S": 1, "M": 1, "L": 2, "XL": 2},
+    "deploy": {"weeks": 1, "complexity_adjusted": false}
+  },
+  "sprint_length_weeks": 2
+}
+
+### Bulk Upload Use Cases (Excel/CSV)
+# Upload file for preview and column mapping
+POST {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/use-cases/bulk-upload
+Authorization: Bearer {{access_token}}
+
+< ./sample_use_cases.xlsx
+
+### Bulk Confirm Use Cases
+# Confirm column mapping and import
+POST {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/use-cases/bulk-confirm
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "mapping": {
+    "name": "Use Case Name",
+    "description": "Description",
+    "source_platform": "Platform"
+  },
+  "rows": [0, 1, 2, 3, 4]
+}
+
+#############################################
+# USE CASE MANAGEMENT
+#############################################
+
+### Create Use Case
+# @name createUseCase
+POST {{baseUrl}}/api/{{apiVersion}}/use-cases
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "project_id": "{{project_id}}",
+  "name": "Invoice Processing Automation",
+  "description": "Automated invoice extraction and validation workflow"
+}
+
+### Capture use case ID from response
+@use_case_id = {{createUseCase.response.body.id}}
+
+### Get Use Case
+GET {{baseUrl}}/api/{{apiVersion}}/use-cases/{{use_case_id}}
+Authorization: Bearer {{access_token}}
+
+### Get Use Case Readiness
+# Returns stage readiness: ready|stale|running|complete|not_ready
+GET {{baseUrl}}/api/{{apiVersion}}/use-cases/{{use_case_id}}/readiness
+Authorization: Bearer {{access_token}}
+
+#############################################
+# STAGE 1: MIGRATION ASSESSMENT
+#############################################
+
+### Update S1 Inputs
+PATCH {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/inputs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "name": "Invoice Processing - Updated",
+  "description": "Automated invoice data extraction with OCR validation",
+  "source_platform": "UiPath",
+  "install_status": "Attended"
+}
+
+### Trigger S1 Assessment Run
+# Async: Returns run_id: "pending", actual run happens in background
+# @name createS1Run
+POST {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "model": "claude-haiku-4-5"
+}
+
+### Get All S1 Runs
+GET {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs
+Authorization: Bearer {{access_token}}
+
+### Get Specific S1 Run
+GET {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs/{run_id}
+Authorization: Bearer {{access_token}}
+
+### Override S1 Assessment
+# Manual override of AI assessment scores
+POST {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/override
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "technical_feasibility": 35,
+  "migration_effort": 20,
+  "platform_suitability": 15,
+  "risk": 10,
+  "migration_decision": "STRATEGIC",
+  "reason": "Manual override based on stakeholder input and business priority"
+}
+
+### Backfill S1 from S2 Data
+# Sonnet infers S1 assessment from S2 complexity data
+POST {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/backfill-from-s2
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+#############################################
+# STAGE 2: COMPLEXITY SCORING
+#############################################
+
+### Paste Process Text to S2
+# Upload process description as text (alternative to document upload)
+POST {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/text
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "pasted_text": "1. Login to invoice portal\n2. Download pending invoices\n3. Extract data using OCR\n4. Validate amounts against PO\n5. Submit for approval\n6. Archive processed invoices"
+}
+
+### Upload Document to S2
+# Upload PDF/Word document for AI extraction
+POST {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/documents
+Authorization: Bearer {{access_token}}
+
+< ./sample_process_doc.pdf
+
+### Update S2 Inputs (Manual Bands)
+# Manually set complexity bands instead of AI extraction
+PATCH {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/inputs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "activities": "M",
+  "business_rules": "S",
+  "layouts": "XS",
+  "interfaces": "S",
+  "technology": "XS"
+}
+
+### Trigger S2 Complexity Run
+# Async: AI extracts bands from text/document, then deterministic scoring
+# @name createS2Run
+POST {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/runs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "model": "claude-haiku-4-5"
+}
+
+### Get All S2 Runs
+GET {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/runs
+Authorization: Bearer {{access_token}}
+
+### Get Specific S2 Run
+# @name getS2Run
+GET {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/runs/{run_id}
+Authorization: Bearer {{access_token}}
+
+#############################################
+# STAGE 3: TIMELINE CALCULATION
+#############################################
+
+### Load S2 Data into S3
+# Copy effort_weeks and complexity_class from latest S2 run
+POST {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/load-from-s2
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Update S3 Inputs
+# Set start date and override effort if needed
+PATCH {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/inputs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "start_date": "2026-07-01",
+  "effort_weeks": 4
+}
+
+### Trigger S3 Timeline Calculation
+# Synchronous: Returns result immediately (pure Python calculation)
+# @name createS3Run
+POST {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/runs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Get All S3 Runs
+GET {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/runs
+Authorization: Bearer {{access_token}}
+
+### Get Specific S3 Run
+GET {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/runs/{run_id}
+Authorization: Bearer {{access_token}}
+
+### Update Phase Delta
+# Human manual adjustment to specific phase (not a new run)
+PATCH {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/phase-delta
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "phase_name": "Build",
+  "delta_weeks": 2,
+  "reason": "Additional security requirements discovered"
+}
+
+### Reset Phase Deltas
+# Restore calculated plan, remove all manual adjustments
+POST {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/reset-deltas
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+#############################################
+# STAGE 4: SPRINT TRACKER
+#############################################
+
+### Load S2 Data into S4
+# Copy complexity, effort, and process text from S2
+POST {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/load-from-s2
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Load S3 Data into S4
+# Copy sprint_count and timeline window from S3
+POST {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/load-from-s3
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Update S4 Inputs
+# Set sprint count and features list
+PATCH {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/inputs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "sprint_count": 4,
+  "features_list": "OCR Integration, Data Validation, Approval Workflow"
+}
+
+### Trigger S4 Feature Decomposition
+# Async: Sonnet breaks down features, deterministic sprint assignment
+# NOTE: Requires sprint_count in s4_inputs (use load-from-s3 first)
+# @name createS4Run
+POST {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "model": "claude-sonnet-4-5"
+}
+
+### Get All S4 Runs
+GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs
+Authorization: Bearer {{access_token}}
+
+### Get Specific S4 Run
+GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs/{run_id}
+Authorization: Bearer {{access_token}}
+
+### Export S4 Sprint Tracker (Excel)
+# Downloads .xlsx file with 3-sheet tracker
+GET {{baseUrl}}/api/{{apiVersion}}/stage4/{{use_case_id}}/s4/runs/{run_id}/export
+Authorization: Bearer {{access_token}}
+
+#############################################
+# ORCHESTRATOR (LangGraph Agent)
+#############################################
+
+### Start Orchestrated Workflow
+# Multi-agent orchestration across all stages
+# @name startOrchestration
+POST {{baseUrl}}/api/{{apiVersion}}/orchestrator/use-cases/{{use_case_id}}/orchestrate
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "user_message": "Please assess this use case and generate a complete timeline"
+}
+
+### Capture session ID from orchestration response
+@session_id = {{startOrchestration.response.body.session_id}}
+
+### Get Orchestration Session Status
+GET {{baseUrl}}/api/{{apiVersion}}/orchestrator/use-cases/{{use_case_id}}/orchestrate/{{session_id}}
+Authorization: Bearer {{access_token}}
+
+### Respond to Agent Question
+# Continue conversation with orchestrator agent
+POST {{baseUrl}}/api/{{apiVersion}}/orchestrator/use-cases/{{use_case_id}}/orchestrate/{{session_id}}/respond
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "user_message": "Use the default configuration"
+}
+
+### Stream Agent Events (SSE)
+GET {{baseUrl}}/api/{{apiVersion}}/orchestrator/use-cases/{{use_case_id}}/agent-stream
+Authorization: Bearer {{access_token}}
+
+#############################################
+# MEMORY MANAGEMENT
+#############################################
+
+### Get Agent Memories
+# Retrieve all memories for a use case
+GET {{baseUrl}}/api/{{apiVersion}}/memory/{{use_case_id}}/memories
+Authorization: Bearer {{access_token}}
+
+### Delete Specific Memory
+DELETE {{baseUrl}}/api/{{apiVersion}}/memory/{{use_case_id}}/memories/{memory_id}
+Authorization: Bearer {{access_token}}
+
+#############################################
+# SYSTEM SETTINGS (Superuser Only)
+#############################################
+
+### Get LLM Configuration
+GET {{baseUrl}}/api/{{apiVersion}}/settings/llm
+Authorization: Bearer {{access_token}}
+
+### Update LLM Configuration
+PUT {{baseUrl}}/api/{{apiVersion}}/settings/llm
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "stage": "s1_scoring",
+  "model": "claude-haiku-4-5",
+  "temperature": 0.3,
+  "max_tokens": 1000
+}
+
+### Get Prompt Variants
+GET {{baseUrl}}/api/{{apiVersion}}/settings/prompts
+Authorization: Bearer {{access_token}}
+
+### Create Prompt Variant
+POST {{baseUrl}}/api/{{apiVersion}}/settings/prompts
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "stage": "s1_scoring",
+  "name": "conservative_assessment",
+  "content": "You are a cautious RPA migration assessor..."
+}
+
+### Update Prompt Variant
+PUT {{baseUrl}}/api/{{apiVersion}}/settings/prompts/{variant_id}
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "content": "Updated prompt content..."
+}
+
+### Activate Prompt Variant
+PUT {{baseUrl}}/api/{{apiVersion}}/settings/prompts/{variant_id}/activate
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{}
+
+### Get All Users
+GET {{baseUrl}}/api/{{apiVersion}}/settings/users
+Authorization: Bearer {{access_token}}
+
+### Invite New User
+POST {{baseUrl}}/api/{{apiVersion}}/settings/users/invite
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "email": "newuser@example.com",
+  "role": "user"
+}
+
+### Update User
+PATCH {{baseUrl}}/api/{{apiVersion}}/settings/users/{user_id}
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "role": "superuser",
+  "is_active": true
+}
