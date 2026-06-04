@@ -8,18 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
-from api.routes import (
-    auth,
-    memory,
-    orchestrator,
-    projects,
-    settings,
-    stage1,
-    stage2,
-    stage3,
-    stage4,
-    use_cases,
-)
+from api.v1 import v1_router
 from core.scoring.effort_table import load_effort_table
 from core.scoring.weight_matrix import load_weight_matrix
 from db.session import get_engine
@@ -60,19 +49,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"])
-app.include_router(use_cases.router, prefix="/api/v1/use-cases", tags=["use-cases"])
-app.include_router(stage1.router, prefix="/api/v1/use-cases", tags=["stage1"])
-app.include_router(stage2.router, prefix="/api/v1/use-cases", tags=["stage2"])
-app.include_router(stage3.router, prefix="/api/v1/use-cases", tags=["stage3"])
-app.include_router(stage4.router, prefix="/api/v1/use-cases", tags=["stage4"])
-app.include_router(memory.router, prefix="/api/v1/use-cases", tags=["memory"])
-app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
-app.include_router(orchestrator.router, prefix="/api/v1", tags=["orchestrator"])
+app.include_router(v1_router, prefix="/api/v1")
+
+
+# Health check endpoint
+@app.get("/")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "ok"}
 
 
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)):
+    """Health & Database check"""
     await db.execute(text("SELECT 1"))
     return {"status": "ok", "db": "ok"}
