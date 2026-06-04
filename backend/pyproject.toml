@@ -33,6 +33,7 @@ dependencies = [
     "pdfplumber>=0.11.9",
     "unstructured>=0.22.31",
     "reportlab>=4.5.1",
+    "redis[asyncio]>=7.3.0",
 ]
 
 [project.optional-dependencies]
