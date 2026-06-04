@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_current_user, get_db
+from api.dependencies import get_current_user, get_db, get_session_maker
 from core.exceptions import ScoringValidationError
 from db.models import StageRun, UseCase, User
 from services.assessment_service import AssessmentService
@@ -39,6 +39,24 @@ class S1RunResponse(BaseModel):
     run_id: str
     status: str
     run_number: int
+
+
+async def _execute_s1_background_task(
+    use_case_id: str,
+    model: str,
+    db_factory,
+):
+    """
+    Background task to execute S1 assessment.
+    Creates its own database session to avoid transaction conflicts.
+    """
+    async with db_factory() as session:
+        try:
+            service = AssessmentService(session, model=model)
+            await service.run_assessment(use_case_id)
+        except Exception as e:
+            logger.exception(f"Error in S1 assessment for use case {use_case_id}")
+            raise
 
 
 @router.patch("/{use_case_id}/s1/inputs")
@@ -78,6 +96,7 @@ async def create_s1_run(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    db_factory=Depends(get_session_maker),
 ):
     """Create S1 StageRun and execute assessment in background."""
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
@@ -86,16 +105,15 @@ async def create_s1_run(
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
 
-    # Create assessment service and run
-    async def run_assessment_task():
-        async with db.begin():
-            service = AssessmentService(db, model=request.model)
-            await service.run_assessment(use_case_id)
-
-    background_tasks.add_task(run_assessment_task)
+    # Fire background task with factory, not session
+    background_tasks.add_task(
+        _execute_s1_background_task,
+        use_case_id=use_case_id,
+        model=request.model,
+        db_factory=db_factory,
+    )
 
     # Return immediately with placeholder (actual run creation happens in background)
-    # For now, create a placeholder response
     return S1RunResponse(
         run_id="pending",
         status="running",
