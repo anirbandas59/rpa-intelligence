@@ -7,6 +7,13 @@
       "interfaces",
       "technology"
     ],
+    "attribute_descriptions": {
+      "activities": "Activity is a piece of work that forms one logical step within a process. That activity could be subdivided into several keystrokes, therefore on average it would contain up to 10 keystrokes. The Activity is done in a single application",
+      "business_rules": "Number of conditional logic branches or decision rules. Business Rule which results in creation of additional flow",
+      "layouts": "Number of distinct UI screens or forms the bot interacts with. Any different input/output file should be treated as separate layouts.",
+      "interfaces": "Number of external system integrations (APIs, databases, applications). Target application used by the business to perform daily duties, any application/interface should be considered separately",
+      "technology": "Number of technology integration points required for the automation. Requirement of surface automation/Citrix, web services or API to be developed"
+    },
     "tiers": ["XS", "S", "M", "L", "XL"],
     "description": "Weight assignment for each attribute-tier combination with tier definitions"
   },
@@ -14,19 +21,19 @@
     "activities": {
       "XS": {
         "weight": 2,
-        "range": "1-5 activities"
+        "range": "<10 activities"
       },
       "S": {
         "weight": 2,
-        "range": "6-15 activities"
+        "range": "<10 activities"
       },
       "M": {
         "weight": 4,
-        "range": "16-30 activities"
+        "range": "11-20 activities"
       },
       "L": {
         "weight": 6,
-        "range": "31-40 activities"
+        "range": "21-40 activities"
       },
       "XL": {
         "weight": 8,
@@ -36,23 +43,23 @@
     "business_rules": {
       "XS": {
         "weight": 2,
-        "range": "0-1 rule"
+        "range": "0 rule"
       },
       "S": {
         "weight": 2,
-        "range": "2-3 rules"
+        "range": "1 rule"
       },
       "M": {
         "weight": 4,
-        "range": "4 rules"
+        "range": "2 rules"
       },
       "L": {
         "weight": 6,
-        "range": "5 rules"
+        "range": "3-4 rules"
       },
       "XL": {
         "weight": 8,
-        "range": "6+ rules"
+        "range": "5-6+ rules"
       }
     },
     "layouts": {
@@ -62,29 +69,29 @@
       },
       "S": {
         "weight": 1,
-        "range": "2-3 screens"
+        "range": "1 screen"
       },
       "M": {
         "weight": 2,
-        "range": "4 screens"
+        "range": "2-3 screens"
       },
       "L": {
         "weight": 3,
-        "range": "5-6 screens"
+        "range": "4-6 screens"
       },
       "XL": {
         "weight": 4,
-        "range": "7+ screens"
+        "range": "7-10+ screens"
       }
     },
     "interfaces": {
       "XS": {
         "weight": 1,
-        "range": "0 interfaces"
+        "range": "1 interface"
       },
       "S": {
         "weight": 1,
-        "range": "1-2 interfaces"
+        "range": "2 interfaces"
       },
       "M": {
         "weight": 2,
@@ -96,7 +103,7 @@
       },
       "XL": {
         "weight": 4,
-        "range": "7+ interfaces"
+        "range": "7-8+ interfaces"
       }
     },
     "technology": {
@@ -106,19 +113,19 @@
       },
       "S": {
         "weight": 1,
-        "range": "1 integration"
+        "range": "0 integration"
       },
       "M": {
         "weight": 2,
-        "range": "2 integrations"
+        "range": "1 integration"
       },
       "L": {
         "weight": 3,
-        "range": "3-4 integrations"
+        "range": "2-3 integrations"
       },
       "XL": {
         "weight": 4,
-        "range": "5+ integrations"
+        "range": "4-5 integrations"
       }
     }
   }
