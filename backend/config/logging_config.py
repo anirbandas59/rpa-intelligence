@@ -1,5 +1,5 @@
 """
-Structured logging configuration for RPA Complexity Assessment Agent.
+Structured logging configuration for RPA Intelligence App.
 
 Uses Python standard logging to provide consistent formatting and routing
 for all project modules. All loggers use the "rpa_agent" namespace.
@@ -13,7 +13,7 @@ import logging.handlers
 import os
 from pathlib import Path
 
-from config import get_settings
+from config.settings import get_settings
 
 
 class _JsonFormatter(logging.Formatter):
@@ -100,7 +100,9 @@ def setup_logging(log_level: str | None = None) -> None:
     log_dir = Path(log_file).parent
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    file_handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=10_000_000, backupCount=5)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_file, maxBytes=10_000_000, backupCount=5
+    )
     file_handler.setLevel(numeric_level)
     file_handler.setFormatter(formatter)
     rpa_logger.addHandler(file_handler)
