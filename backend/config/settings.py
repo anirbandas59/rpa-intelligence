@@ -140,7 +140,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_provider_keys(self) -> "Settings":
-        """Validate that required API keys are set for the chosen provider."""
+        """Validate that required API keys are set for the chosen provider.
+
+        Skips validation in development mode to allow running without LLM provider
+        for testing API endpoints that don't require LLM calls.
+        """
+        # Skip LLM key validation in development mode
+        if self.environment == "development":
+            return self
+
         provider = self.default_llm_provider.lower()
 
         if provider == "anthropic" and not self.anthropic_api_key:
