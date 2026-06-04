@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from agents.tracker_agent import run_tracker_agent
 from api.dependencies import get_current_user, get_db
@@ -115,6 +116,7 @@ async def update_s4_inputs(
         inputs["process_description_source"] = "manual"
 
     use_case.s4_inputs = inputs
+    flag_modified(use_case, "s4_inputs")
     use_case.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(use_case)
@@ -362,6 +364,7 @@ async def load_from_s2(
         inputs["effort_weeks_source"] = "from_s2"
 
     use_case.s4_inputs = inputs
+    flag_modified(use_case, "s4_inputs")
     use_case.updated_at = datetime.utcnow()
     await db.commit()
 
@@ -410,6 +413,7 @@ async def load_from_s3(
     inputs["timeline_source"] = "from_s3"
 
     use_case.s4_inputs = inputs
+    flag_modified(use_case, "s4_inputs")
     use_case.updated_at = datetime.utcnow()
     await db.commit()
 
