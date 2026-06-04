@@ -1,5 +1,5 @@
 """
-Configuration management for RPA Complexity Agent.
+Configuration management for RPA Intelligence App.
 
 Uses pydantic-settings to load all configuration from environment
 variables and .env file. Settings are validated with model validators
@@ -125,6 +125,12 @@ class Settings(BaseSettings):
         description="Base delay in seconds for exponential backoff",
     )
 
+    # Agent Architecture
+    use_langgraph_complexity_agent: bool = Field(
+        default=False,
+        description="Use LangGraph StateGraph agent for Stage 2 complexity assessment (default: False for legacy pipeline)",
+    )
+
     @model_validator(mode="after")
     def validate_production_guards(self) -> "Settings":
         """Enforce required settings for production deployments."""
@@ -144,7 +150,9 @@ class Settings(BaseSettings):
             raise ValueError("OPENAI_API_KEY is required when DEFAULT_LLM_PROVIDER=openai")
 
         if provider == "watsonx" and not self.watsonx_api_key:
-            raise ValueError("WATSONX_API_KEY and WATSONX_URL required when DEFAULT_LLM_PROVIDER=watsonx")
+            raise ValueError(
+                "WATSONX_API_KEY and WATSONX_URL required when DEFAULT_LLM_PROVIDER=watsonx"
+            )
 
         return self
 

@@ -296,9 +296,12 @@ def classify_and_explain(
     total_score = sum(score.weight for score in attribute_scores)
 
     # Step 2: Classify using deterministic Phase 1 engine
-    tier = classify(total_score, is_xs_special_case=False)
+    tier_str = classify(total_score, is_xs_special_case=False)
 
-    # Step 3: Calculate confidence
+    # Step 3: Convert string to ComplexityTier enum
+    tier = ComplexityTier(tier_str)
+
+    # Step 4: Calculate confidence
     confidence = get_confidence_score(total_score, tier)
 
     # Step 4: Check Tech Lead review
