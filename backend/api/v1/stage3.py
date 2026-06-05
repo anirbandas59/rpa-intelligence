@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from api.dependencies import get_current_user, get_db
-from db.models import StageRun, UseCase, User
+from db.models import StageRun, UploadedFile, UseCase, User
+from db.session import get_session_factory
 from llm.manager import LLMManager
 from prompts.timeline_prompts import S3_NARRATIVE_SYSTEM, S3_NARRATIVE_USER
 from services.timeline_service import calculate_timeline
@@ -51,37 +52,95 @@ async def generate_narrative_background(
     total_weeks: int,
     build_weeks: int,
     phases: list[dict],
-    db: AsyncSession,
 ):
     """Background task: generate narrative summary with Sonnet."""
-    try:
-        llm = LLMManager()
-        phase_list = "\n".join([f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)" for p in phases])
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        try:
+            llm = LLMManager()
+            phase_list = "\n".join([f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)" for p in phases])
 
-        user_prompt = S3_NARRATIVE_USER.format(
-            use_case_name=use_case_name,
-            complexity_class=complexity_class,
-            total_weeks=total_weeks,
-            build_weeks=build_weeks,
-            phase_list=phase_list,
-        )
+            user_prompt = S3_NARRATIVE_USER.format(
+                use_case_name=use_case_name,
+                complexity_class=complexity_class,
+                total_weeks=total_weeks,
+                build_weeks=build_weeks,
+                phase_list=phase_list,
+            )
 
-        narrative = await llm.complete_async(
-            prompt=user_prompt,
-            system=S3_NARRATIVE_SYSTEM,
-            max_tokens=500,
-            temperature=0.5,
-        )
+            narrative = await llm.complete_async(
+                prompt=user_prompt,
+                system=S3_NARRATIVE_SYSTEM,
+                max_tokens=500,
+                temperature=0.5,
+            )
 
-        # Update StageRun with narrative
-        result = await db.execute(select(StageRun).where(StageRun.id == run_id))
-        run = result.scalar_one_or_none()
-        if run:
-            run.result["narrative"] = narrative
-            await db.commit()
-            logger.info(f"Generated narrative for S3 run {run_id}")
-    except Exception as e:
-        logger.error(f"Failed to generate narrative for run {run_id}: {e}")
+            # Update StageRun with narrative
+            result = await db.execute(select(StageRun).where(StageRun.id == run_id))
+            run = result.scalar_one_or_none()
+            if run:
+                run.result["narrative"] = narrative
+                flag_modified(run, "result")
+                await db.commit()
+                logger.info(f"Generated narrative for S3 run {run_id}")
+        except Exception as e:
+            logger.error(f"Failed to generate narrative for run {run_id}: {e}")
+
+
+async def run_task_extraction_background(
+    use_case_id: str,
+    document_path: str,
+    process_name: str,
+    total_effort_hours: float,
+    session_id: str,
+):
+    """
+    Background task: extract tasks with hour-sum constraint via Sonnet.
+    Creates its own DB session (request session is closed by the time this runs).
+    """
+    from agents.task_extraction_agent import run_task_extraction_agent
+
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        try:
+            # Read document text from file
+            with open(document_path, 'r', encoding='utf-8') as f:
+                doc_text = f.read()
+
+            # Run task extraction agent
+            result = await run_task_extraction_agent(
+                use_case_id=use_case_id,
+                document_text=doc_text,
+                process_name=process_name,
+                total_effort_hours=total_effort_hours,
+                session_id=session_id,
+            )
+
+            # Update s3_inputs with result
+            uc_result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+            use_case = uc_result.scalar_one_or_none()
+            if use_case:
+                inputs = use_case.s3_inputs or {}
+                inputs["task_extraction"] = result
+                use_case.s3_inputs = inputs
+                flag_modified(use_case, "s3_inputs")
+                await db.commit()
+                logger.info(f"Task extraction completed for use case {use_case_id}")
+
+        except Exception as e:
+            logger.error(f"Task extraction failed for use case {use_case_id}: {e}")
+            # Mark as failed in s3_inputs
+            uc_result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+            use_case = uc_result.scalar_one_or_none()
+            if use_case:
+                inputs = use_case.s3_inputs or {}
+                inputs["task_extraction"] = {
+                    "extraction_status": "failed",
+                    "error": str(e),
+                }
+                use_case.s3_inputs = inputs
+                flag_modified(use_case, "s3_inputs")
+                await db.commit()
 
 
 @router.patch("/{use_case_id}/s3/inputs")
@@ -194,6 +253,44 @@ async def create_s3_run(
     await db.commit()
     await db.refresh(stage_run)
 
+    # Check if document exists for this use case (uploaded during S2)
+    doc_result = await db.execute(
+        select(UploadedFile)
+        .where(UploadedFile.use_case_id == use_case_id)
+        .where(UploadedFile.stage == "s2")
+        .order_by(UploadedFile.created_at.desc())
+        .limit(1)
+    )
+    uploaded_doc = doc_result.scalar_one_or_none()
+
+    task_extraction_status = "skipped"
+
+    if uploaded_doc:
+        # Document exists — dispatch task extraction as Job A
+        total_effort_hours = effort_weeks * 40  # hours per week from sp_conversion.json
+
+        background_tasks.add_task(
+            run_task_extraction_background,
+            use_case_id=use_case_id,
+            document_path=uploaded_doc.stored_path,
+            process_name=use_case.name,
+            total_effort_hours=total_effort_hours,
+            session_id=stage_run.id,  # Use run_id as session_id
+        )
+
+        task_extraction_status = "pending"
+
+        # Initialize task_extraction field in s3_inputs
+        inputs["task_extraction"] = {
+            "extraction_status": "pending",
+            "activities": [],
+            "total_net_hours": 0.0,
+            "verification_passed": False,
+        }
+        use_case.s3_inputs = inputs
+        flag_modified(use_case, "s3_inputs")
+        await db.commit()
+
     # Fire narrative generation in background (optional)
     background_tasks.add_task(
         generate_narrative_background,
@@ -203,7 +300,6 @@ async def create_s3_run(
         total_weeks=timeline.total_weeks,
         build_weeks=effort_weeks,
         phases=timeline.phases,
-        db=db,
     )
 
     logger.info(f"Created S3 run {stage_run.id} for use case {use_case_id}")
@@ -212,6 +308,7 @@ async def create_s3_run(
         "run_id": stage_run.id,
         "status": stage_run.status,
         "result": stage_run.result,
+        "task_extraction_status": task_extraction_status,
     }
 
 

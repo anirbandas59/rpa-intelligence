@@ -18,6 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from agents.tracker_agent import run_tracker_agent
 from api.dependencies import get_current_user, get_db
 from db.models import StageRun, UseCase, User
+from db.session import get_session_factory
 from services.export_service import generate_tracker_xlsx
 
 router = APIRouter()
@@ -46,50 +47,57 @@ async def run_tracker_background(
     run_id: str,
     use_case_id: str,
     use_case_name: str,
-    process_description: str,
+    task_extraction: dict,
+    total_effort_hours: float,
+    build_sit_window: dict,
     complexity_class: str,
     effort_weeks: int,
     sprint_count: int,
     sprint_capacity: int,
-    db: AsyncSession,
 ):
     """Background task: run tracker agent and update StageRun."""
-    try:
-        logger.info(f"[S4] Starting tracker agent for run {run_id}")
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        try:
+            logger.info(f"[S4] Starting tracker agent for run {run_id}")
 
-        result = await run_tracker_agent(
-            use_case_id=use_case_id,
-            process_name=use_case_name,
-            process_description=process_description,
-            complexity_class=complexity_class,
-            effort_weeks=effort_weeks,
-            sprint_count=sprint_count,
-            sprint_capacity=sprint_capacity,
-        )
+            result = await run_tracker_agent(
+                use_case_id=use_case_id,
+                process_name=use_case_name,
+                task_extraction=task_extraction,
+                total_effort_hours=total_effort_hours,
+                build_sit_window=build_sit_window,
+                complexity_class=complexity_class,
+                effort_weeks=effort_weeks,
+                session_id=run_id,
+                sprint_count=sprint_count,
+                sprint_capacity=sprint_capacity,
+            )
 
-        # Update StageRun to complete
-        stmt = select(StageRun).where(StageRun.id == run_id)
-        db_result = await db.execute(stmt)
-        run = db_result.scalar_one_or_none()
+            # Update StageRun to complete
+            stmt = select(StageRun).where(StageRun.id == run_id)
+            db_result = await db.execute(stmt)
+            run = db_result.scalar_one_or_none()
 
-        if run:
-            run.status = "complete"
-            run.result = result
-            await db.commit()
-            logger.info(f"[S4] Completed run {run_id}")
+            if run:
+                run.status = "complete"
+                run.result = result
+                flag_modified(run, "result")
+                await db.commit()
+                logger.info(f"[S4] Completed run {run_id}")
 
-    except Exception as e:
-        logger.error(f"[S4] Run {run_id} failed: {e}")
+        except Exception as e:
+            logger.error(f"[S4] Run {run_id} failed: {e}")
 
-        # Update StageRun to failed
-        stmt = select(StageRun).where(StageRun.id == run_id)
-        db_result = await db.execute(stmt)
-        run = db_result.scalar_one_or_none()
+            # Update StageRun to failed
+            stmt = select(StageRun).where(StageRun.id == run_id)
+            db_result = await db.execute(stmt)
+            run = db_result.scalar_one_or_none()
 
-        if run:
-            run.status = "failed"
-            run.error_message = str(e)
-            await db.commit()
+            if run:
+                run.status = "failed"
+                run.error_message = str(e)
+                await db.commit()
 
 
 @router.patch("/{use_case_id}/s4/inputs")
@@ -138,22 +146,49 @@ async def create_s4_run(
         raise HTTPException(status_code=404, detail="Use case not found")
 
     inputs = use_case.s4_inputs or {}
+    s3_inputs = use_case.s3_inputs or {}
 
     # Validate minimum inputs
     if "sprint_count" not in inputs:
         raise HTTPException(status_code=400, detail="sprint_count required in s4_inputs")
 
+    # Get task_extraction from Stage 3
+    task_extraction = s3_inputs.get("task_extraction")
+    if not task_extraction or task_extraction.get("extraction_status") != "complete":
+        raise HTTPException(
+            status_code=400,
+            detail="Stage 3 task extraction must be complete before running Stage 4"
+        )
+
     sprint_count = inputs["sprint_count"]
     sprint_capacity = inputs.get("sprint_capacity", 8)
 
-    # Get process description (from inputs or use case)
-    process_description = inputs.get("process_description", use_case.description or "")
-    if not process_description:
-        raise HTTPException(status_code=400, detail="process_description required (from use case or s4_inputs)")
+    # Get complexity and effort (prefer from inputs, fallback to S3 or S2)
+    complexity_class = inputs.get("complexity_class") or s3_inputs.get("complexity_class", "M")
+    effort_weeks = inputs.get("effort_weeks") or s3_inputs.get("effort_weeks", 6)
+    total_effort_hours = effort_weeks * 40
 
-    # Get complexity and effort (prefer from inputs, fallback to S2)
-    complexity_class = inputs.get("complexity_class", "M")
-    effort_weeks = inputs.get("effort_weeks", 6)
+    # Get build+SIT window from S3
+    if not use_case.s3_latest_run_id:
+        raise HTTPException(status_code=400, detail="Stage 3 must be complete before running Stage 4")
+
+    s3_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s3_latest_run_id))
+    s3_run = s3_result.scalar_one_or_none()
+    if not s3_run:
+        raise HTTPException(status_code=404, detail="Stage 3 run not found")
+
+    # Extract build+SIT window from S3 phases
+    s3_phases = s3_run.result.get("phases", [])
+    build_phase = next((p for p in s3_phases if p["name"].lower() == "build"), None)
+    sit_phase = next((p for p in s3_phases if p["name"].lower() == "sit"), None)
+
+    if not build_phase or not sit_phase:
+        raise HTTPException(status_code=400, detail="Build and SIT phases not found in Stage 3 result")
+
+    build_sit_window = {
+        "start_date": build_phase["start_date"],
+        "end_date": sit_phase["end_date"],
+    }
 
     # Compute run number
     count_result = await db.execute(
@@ -186,12 +221,13 @@ async def create_s4_run(
         run_id=stage_run.id,
         use_case_id=use_case_id,
         use_case_name=use_case.name,
-        process_description=process_description,
+        task_extraction=task_extraction,
+        total_effort_hours=total_effort_hours,
+        build_sit_window=build_sit_window,
         complexity_class=complexity_class,
         effort_weeks=effort_weeks,
         sprint_count=sprint_count,
         sprint_capacity=sprint_capacity,
-        db=db,
     )
 
     logger.info(f"Created S4 run {stage_run.id} for use case {use_case_id}")

@@ -1,0 +1,6 @@
+{
+  "sp_per_hour": 0.0666,
+  "hours_per_sp": 15,
+  "hours_per_week": 40,
+  "note": "1 SP = 15 hours. SP column in xlsx must always be formula =ROUND(0.0666*Hours,2). Never compute SP in Python."
+}

@@ -1,55 +1,38 @@
-"""
-Stage 4 tracker prompts — feature decomposition via Sonnet.
-"""
+"""Stage 4 tracker prompts — WBS grouping with hour-sum constraint."""
 
-S4_DECOMPOSE_SYSTEM = """You are an RPA delivery planning specialist. Decompose a process into implementation features with size estimates and dependencies.
+S4_GROUP_STEPS_SYSTEM = """You are an RPA delivery tracker specialist.
 
-Size guidelines (story points):
-- XS (1pt): Simple config change, single API integration
-- S (2pts): Basic workflow with 2-3 steps, simple validation
-- M (3pts): Standard workflow with branching logic, moderate complexity
-- L (5pts): Complex workflow with multiple integrations, advanced error handling
-- XL (8pts): Multi-system orchestration, sophisticated state management
+You will receive a structured task extraction (activities and steps with hours) from Stage 3. Your task is to group related steps into work breakdown structure (WBS) rows suitable for a sprint tracker.
 
-Dependencies:
-- List feature names (exact match) that must complete before this feature
-- Only include direct blocking dependencies
-- Keep dependency chains short and clear
+CRITICAL CONSTRAINT: The sum of all WBS row hours must equal exactly {total_effort_hours} hours. This is a hard constraint inherited from Stage 3 task extraction. Do not add or remove hours — only group existing steps.
 
-Return ONLY valid JSON. NO markdown fences, preamble, or postamble.
+Return ONLY valid JSON. No markdown fences, preamble, or explanation."""
 
-Response format:
-{
-  "features": [
-    {
-      "name": "<short kebab-case name>",
-      "description": "<1-2 sentence description>",
-      "size": "<XS|S|M|L|XL>",
-      "dependencies": ["<feature-name>"],
-      "rationale": "<why this size, why these dependencies>"
-    }
+S4_GROUP_STEPS_USER = """Task extraction from Stage 3:
+{task_extraction_json}
+
+Total effort budget: {total_effort_hours} hours
+Process name: {process_name}
+
+Group these steps into WBS rows for the tracker. Each row should represent a coherent deliverable feature.
+
+For each WBS row, assign:
+- feature: short descriptive name (kebab-case)
+- hours: sum of grouped step hours (float)
+- priority: "MUST" (critical path) | "SHOULD" (important but flexible)
+
+Before returning, verify: sum(row.hours for row in wbs_rows) == {total_effort_hours}.
+If not, you made a grouping error — adjust and retry.
+
+Required JSON structure:
+{{
+  "wbs_rows": [
+    {{
+      "feature": "user-authentication",
+      "hours": 24.0,
+      "priority": "MUST"
+    }}
   ],
-  "summary": "<2-3 sentence overview of decomposition strategy>"
-}"""
-
-S4_DECOMPOSE_USER = """Decompose this RPA process into implementation features:
-
-Process Name: {process_name}
-Complexity Class: {complexity_class}
-Total Effort: {effort_weeks} weeks
-
-Process Description:
-{process_description}
-
-{document_context}
-
-Target: {sprint_count} sprints (2-week sprints, ~8 story points each)
-
-Break this into 5-15 features sized XS-XL. Consider:
-- Core automation workflow
-- Integration points
-- Error handling & logging
-- Testing & validation
-- Deployment & monitoring
-
-Order features logically and mark dependencies."""
+  "total_hours": <sum of all row hours>,
+  "verification_passed": true
+}}"""

@@ -142,12 +142,20 @@ async def get_readiness(
 
     s1_status = await check_stage("s1", "s1_inputs", "s1_latest_run_id")
     s2_status = await check_stage("s2", "s2_inputs", "s2_latest_run_id")
-    s3_status = await check_stage("s3", "s3_inputs", "s3_latest_run_id")
+    s3_phase_calc_status = await check_stage("s3", "s3_inputs", "s3_latest_run_id")
     s4_status = await check_stage("s4", "s4_inputs", "s4_latest_run_id")
+
+    # Stage 3 two-job pattern: separate status for phase_calculator and task_extraction
+    s3_inputs = use_case.s3_inputs or {}
+    task_extraction_data = s3_inputs.get("task_extraction", {})
+    task_extraction_status = task_extraction_data.get("extraction_status", "not_ready")
 
     return {
         "s1": s1_status,
         "s2": s2_status,
-        "s3": s3_status,
+        "s3": {
+            "phase_calculator": s3_phase_calc_status,
+            "task_extraction": task_extraction_status,
+        },
         "s4": s4_status,
     }
