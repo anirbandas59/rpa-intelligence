@@ -9,6 +9,16 @@
 @password = testpass123
 
 #############################################
+# HEALTH CHECKS
+#############################################
+
+### Root Health Check
+GET {{baseUrl}}/
+
+### Health & Database Check
+GET {{baseUrl}}/health
+
+#############################################
 # AUTHENTICATION
 #############################################
 
