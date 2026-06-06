@@ -21,7 +21,6 @@ from agents.complexity_assessment import agent as complexity_assessment_agent
 from agents.document_agent import process_document
 from agents.process_agent import extract_bands_from_text
 from config.settings import get_settings
-from core.constants import ComplexityTier, RPATool
 from core.exceptions import AgentExecutionError
 from core.models.assessment import AssessmentResult
 from core.models.scoring import AttributeBands, AttributeBandsWithSource, ScoringResult

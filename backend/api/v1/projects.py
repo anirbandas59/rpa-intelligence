@@ -197,7 +197,9 @@ async def get_project_weights(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Fetch active weight config
-    config_result = await db.execute(select(WeightConfig).where(WeightConfig.project_id == id, WeightConfig.is_active))
+    config_result = await db.execute(
+        select(WeightConfig).where(WeightConfig.project_id == id, WeightConfig.is_active)
+    )
     weight_config = config_result.scalars().first()
 
     if weight_config:
@@ -299,7 +301,9 @@ async def get_project_phase_config(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Fetch active phase config
-    config_result = await db.execute(select(PhaseConfig).where(PhaseConfig.project_id == id, PhaseConfig.is_active))
+    config_result = await db.execute(
+        select(PhaseConfig).where(PhaseConfig.project_id == id, PhaseConfig.is_active)
+    )
     phase_config = config_result.scalars().first()
 
     if phase_config:
@@ -346,7 +350,9 @@ async def update_project_phase_config(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Deactivate existing active configs
-    existing_result = await db.execute(select(PhaseConfig).where(PhaseConfig.project_id == id, PhaseConfig.is_active))
+    existing_result = await db.execute(
+        select(PhaseConfig).where(PhaseConfig.project_id == id, PhaseConfig.is_active)
+    )
     existing_configs = existing_result.scalars().all()
     for config in existing_configs:
         config.is_active = False
@@ -385,7 +391,9 @@ async def bulk_upload_use_cases(
     Returns column names, first 5 data rows, and total row count.
     """
     # Verify project exists and belongs to current user
-    result = await db.execute(select(Project).where(Project.id == id, Project.created_by == current_user.id))
+    result = await db.execute(
+        select(Project).where(Project.id == id, Project.created_by == current_user.id)
+    )
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -424,15 +432,24 @@ async def bulk_upload_use_cases(
             # Get data rows
             for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
                 if i < 5:
-                    row_dict = {columns[j]: str(val) if val is not None else "" for j, val in enumerate(row) if j < len(columns)}
+                    row_dict = {
+                        columns[j]: str(val) if val is not None else ""
+                        for j, val in enumerate(row)
+                        if j < len(columns)
+                    }
                     preview.append(row_dict)
                 row_count += 1
         else:
-            raise DocumentProcessingError(f"Unsupported file type: {file.filename}. Only .csv and .xlsx are supported.")
+            raise DocumentProcessingError(
+                f"Unsupported file type: {file.filename}. \
+                                          Only .csv and .xlsx are supported."
+            )
     except DocumentProcessingError:
         raise
     except UnicodeDecodeError:
-        raise DocumentProcessingError("File encoding error. Please ensure the file is UTF-8 encoded.")
+        raise DocumentProcessingError(
+            "File encoding error. Please ensure the file is UTF-8 encoded."
+        )
     except Exception as e:
         raise DocumentProcessingError(f"Failed to parse file: {str(e)}")
 
@@ -451,7 +468,9 @@ async def bulk_confirm_use_cases(
     Skips rows with empty name field.
     """
     # Verify project exists and belongs to current user
-    result = await db.execute(select(Project).where(Project.id == id, Project.created_by == current_user.id))
+    result = await db.execute(
+        select(Project).where(Project.id == id, Project.created_by == current_user.id)
+    )
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

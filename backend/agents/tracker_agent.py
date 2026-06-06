@@ -16,7 +16,7 @@ from langgraph.graph import END, StateGraph
 from core.exceptions import AgentExecutionError, LLMProviderError
 from llm.manager import get_default_manager
 from prompts.tracker_prompts import S4_GROUP_STEPS_SYSTEM, S4_GROUP_STEPS_USER
-from tools.output.tracker_sequencer import TrackerRow, SequencerInput, sequence_dates
+from tools.output.tracker_sequencer import SequencerInput, TrackerRow, sequence_dates
 
 logger = logging.getLogger(__name__)
 

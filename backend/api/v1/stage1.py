@@ -53,7 +53,7 @@ async def _execute_s1_background_task(
         try:
             service = AssessmentService(session, model=model)
             await service.run_assessment(use_case_id)
-        except Exception as e:
+        except Exception:
             logger.exception(f"Error in S1 assessment for use case {use_case_id}")
             raise
 

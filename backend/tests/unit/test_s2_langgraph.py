@@ -5,7 +5,6 @@ Tests the v2 (LangGraph) path in isolation and compares output
 with v1 (legacy) path to ensure equivalence.
 """
 
-import pytest
 
 from agents.orchestrator import _run_scoring_v1, _run_scoring_v2, assessment_to_scoring_result
 from core.constants import ComplexityTier
