@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Btn, SectionLabel } from "@/components/rpa";
 import { spacing } from "@/lib/design-tokens";
-import { AgentActivityFeed } from "@/components/shared/AgentActivityFeed";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Gauge } from "@/components/shared/Gauge";
 import { ComplexityChip } from "@/components/shared/ComplexityChip";
 import { PriorityBadge, BAND_META } from "@/components/shared/PriorityBadge";
 import { MiniSpark } from "@/components/shared/MiniSpark";
@@ -27,7 +25,6 @@ import type {
   ReadinessResponse,
   ReadinessStatus,
   S3ReadinessDetail,
-  MigrationDecision,
   Band,
   S1Result,
   S2Result,
@@ -293,567 +290,509 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <div className="gradient-hero border-b border-border/50">
-        <div className="py-6 px-7">
-          <h2 className="text-3xl font-bold tracking-tight gradient-text mb-1">
-            {project.name}
-          </h2>
-          {project.description && (
-            <p className="text-muted-foreground text-sm mb-6">
-              {project.description}
+      <div style={{ height: "calc(100vh - 3.5rem)", overflow: "hidden", padding: "26px 30px", display: "flex", flexDirection: "column", gap: 22 }}>
+        {/* ── Hero ── */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+          <div>
+            <h1 className="rpa-gradient-text" style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.6, margin: 0 }}>
+              {project.name}
+            </h1>
+            <p style={{ fontSize: 13.5, color: "var(--muted-fg)", margin: "6px 0 0" }}>
+              {project.description || "Four-stage delivery intelligence"} · {useCases.length} use case{useCases.length !== 1 ? "s" : ""} · {quickWins} quick win{quickWins !== 1 ? "s" : ""} identified
             </p>
-          )}
-          {/* Stats row */}
-          <div style={{ display: "flex", gap: 20 }}>
+          </div>
+          <div style={{ display: "flex", gap: 26 }}>
             {[
-              {
-                label: "Use cases",
-                value: useCases.length,
-                color: "var(--primary)",
-              },
-              {
-                label: "Quick wins",
-                value: quickWins,
-                color: "var(--c-green)",
-              },
-              {
-                label: "Build weeks",
-                value: totalBuildWeeks || "—",
-                color: "var(--c-teal)",
-              },
-            ].map(({ label, value, color }) => (
-              <div key={label}>
-                <div
-                  style={{
-                    fontFamily: "var(--font-geist-mono)",
-                    fontSize: 28,
-                    fontWeight: 700,
-                    color,
-                    lineHeight: 1,
-                  }}
-                >
-                  {value}
-                </div>
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    color: "var(--muted-foreground)",
-                    marginTop: 3,
-                  }}
-                >
-                  {label}
-                </div>
+              { n: useCases.length, l: "use cases" },
+              { n: quickWins, l: "quick wins" },
+              { n: totalBuildWeeks || "—", l: "build weeks" },
+              { n: totalFeatures || "—", l: "features" },
+            ].map(({ n, l }) => (
+              <div key={l}>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 24, fontWeight: 700 }}>{n}</div>
+                <div style={{ fontSize: 11, color: "var(--muted-fg)" }}>{l}</div>
               </div>
             ))}
           </div>
         </div>
-      </div>
 
-      <div className="py-6 px-7 space-y-6">
-        {/* ── Use-case selector + action row ── */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}>
-              Use case
-            </span>
-            {useCases.length > 0 ? (
-              <select
+        {/* ── View toggle + actions ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 1, borderRadius: 9, border: "1px solid var(--border)", padding: 3 }}>
+            {(["pipeline", "portfolio"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setActiveView(v)}
                 style={{
-                  background: "var(--card)",
-                  border:
-                    "1px solid color-mix(in oklab, var(--border) 70%, transparent)",
-                  color: "var(--foreground)",
-                  fontSize: 13,
-                  borderRadius: 8,
-                  padding: "6px 12px",
-                  outline: "none",
+                  padding: "5px 14px",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: activeView === v ? "color-mix(in oklab, var(--primary) 16%, transparent)" : "transparent",
+                  color: activeView === v ? "var(--primary)" : "var(--muted-fg)",
+                  border: "none",
+                  transition: "all 0.12s",
                 }}
-                value={selectedUcId || ""}
-                onChange={(e) => setSelectedUcId(e.target.value)}
               >
-                {useCases.map((uc) => (
-                  <option key={uc.id} value={uc.id}>
-                    {uc.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span
-                style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}
-              >
-                No use cases yet
-              </span>
-            )}
-            <span
-              style={{
-                padding: "3px 9px",
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "var(--muted-foreground)",
-                border: "1px solid var(--border)",
-                background: "var(--muted)",
-              }}
-            >
-              {useCases.length} total
-            </span>
+                {v === "pipeline" ? "Pipeline" : "Portfolio map"}
+              </button>
+            ))}
           </div>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            {/* View toggle */}
-            <div
-              style={{
-                display: "flex",
-                gap: 1,
-                borderRadius: 8,
-                border: "1px solid var(--border)",
-                padding: 3,
-              }}
-            >
-              {(["pipeline", "portfolio"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setActiveView(v)}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 5,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    background:
-                      activeView === v
-                        ? "color-mix(in oklab, var(--primary) 16%, transparent)"
-                        : "transparent",
-                    color:
-                      activeView === v
-                        ? "var(--primary)"
-                        : "var(--muted-foreground)",
-                    border: "none",
-                    transition: "all 0.12s",
-                  }}
-                >
-                  {v === "pipeline" ? "Pipeline" : "Portfolio map"}
-                </button>
-              ))}
-            </div>
-            <Button size="sm" onClick={() => setNewUcOpen(true)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              New Use Case
-            </Button>
-          </div>
+          <Btn size="sm" onClick={() => setNewUcOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New use case
+          </Btn>
         </div>
 
-        {/* ══ PIPELINE VIEW ══════════════════════════════════════════ */}
-        {activeView === "pipeline" && (
-          <>
-            {selectedUc ? (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 16 }}
-              >
-                <div
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "1.8px",
-                    textTransform: "uppercase",
-                    color: "var(--muted-foreground)",
-                  }}
-                >
-                  Assessment pipeline — {selectedUc.name}
-                </div>
+        {/* ══ PIPELINE VIEW (HubRail pattern) ══════════════════════════ */}
+        {activeView === "pipeline" && selectedUc && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18, flex: 1, minHeight: 0 }}>
+            <div>
+              <SectionLabel style={{ marginBottom: 12 }}>Assessment pipeline · {selectedUc.name}</SectionLabel>
+              <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
+                {STAGES.map((stage, idx) => {
+                  const status: ReadinessStatus = resolveStatus(selectedReadiness, stage.id);
+                  const cfg = STATUS_CONFIG[status];
+                  const cache = ucCache.get(selectedUcId || "");
+                  const href = `/projects/${projectId}/${stage.path}/${selectedUc.id}`;
+                  const stageIcons: Record<string, "target" | "grid" | "calendar" | "layers"> = {
+                    s1: "target",
+                    s2: "grid",
+                    s3: "calendar",
+                    s4: "layers",
+                  };
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: 12,
-                  }}
-                >
-                  {STAGES.map((stage, idx) => {
-                    const status: ReadinessStatus = resolveStatus(
-                      selectedReadiness,
-                      stage.id,
-                    );
-                    const cfg = STATUS_CONFIG[status];
-                    const cache = ucCache.get(selectedUcId || "");
-                    const href = `/projects/${projectId}/${stage.path}/${selectedUc.id}`;
-
-                    return (
+                  return (
+                    <React.Fragment key={stage.id}>
                       <div
-                        key={stage.id}
+                        className="rpa-card-hover"
                         style={{
-                          borderRadius: 13,
-                          border: `1px solid var(--border)`,
-                          background: "var(--card)",
+                          flex: 1,
+                          borderRadius: 14,
                           padding: 16,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 12,
-                          transition: "border-color 0.15s",
+                          background: "var(--surface)",
+                          border: `1px solid ${status === "running" ? "color-mix(in oklab, var(--primary) 40%, transparent)" : "var(--border)"}`,
+                          position: "relative",
                         }}
                       >
-                        {/* Header */}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 10.5,
-                              fontWeight: 700,
-                              padding: "3px 8px",
-                              borderRadius: 5,
-                              fontFamily: "var(--font-geist-mono)",
-                              color: "var(--primary)",
-                              background:
-                                "color-mix(in oklab, var(--primary) 13%, transparent)",
-                              border:
-                                "1px solid color-mix(in oklab, var(--primary) 25%, transparent)",
-                            }}
-                          >
-                            {stage.short}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              style={{
+                                fontFamily: "var(--mono)",
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                color: "var(--primary)",
+                                border: "1px solid color-mix(in oklab, var(--primary) 30%, transparent)",
+                                borderRadius: 5,
+                                padding: "2px 5px",
+                              }}
+                            >
+                              {stage.short}
+                            </span>
+                            <Icon name={stageIcons[stage.id]} size={15} style={{ color: "var(--muted-fg)" }} />
                           </span>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 5,
-                            }}
-                          >
-                            <div
+                          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: cfg.color }}>
+                            <span
                               style={{
                                 width: 7,
                                 height: 7,
                                 borderRadius: 99,
                                 background: cfg.color,
-                                ...(status === "running"
-                                  ? {
-                                      animation:
-                                        "rpaPulse 1.6s ease-in-out infinite",
-                                    }
-                                  : {}),
+                                ...(status === "running" ? { animation: "rpaPulse 1.6s ease-in-out infinite" } : {}),
                               }}
                             />
-                            <span
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                color: cfg.color,
-                              }}
-                            >
-                              {cfg.label}
-                            </span>
-                          </div>
+                            {cfg.label}
+                          </span>
                         </div>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 14, lineHeight: 1.25 }}>{stage.label}</div>
 
-                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>
-                          {stage.label}
-                        </div>
-
-                        {/* Mini viz */}
-                        <div
-                          style={{
-                            minHeight: 36,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                          }}
-                        >
-                          {stage.id === "s1" && cache?.s1 && (
+                        {/* NodeViz - stage-specific mini visualization */}
+                        <div style={{ minHeight: 38, display: "flex", alignItems: "center", gap: 10 }}>
+                          {stage.id === "s1" && cache?.s1 ? (
                             <>
-                              <Gauge
-                                value={cache.s1.total_score}
-                                band={cache.s1.migration_decision}
-                                size={40}
-                                thick={5}
-                              />
-                              <PriorityBadge
-                                band={cache.s1.migration_decision}
-                              />
+                              <div style={{ fontFamily: "var(--mono)", fontSize: 26, fontWeight: 700, color: BAND_META[cache.s1.migration_decision]?.color || "var(--primary)" }}>
+                                {cache.s1.total_score}
+                              </div>
+                              <PriorityBadge band={cache.s1.migration_decision} />
                             </>
-                          )}
-                          {stage.id === "s2" && cache?.s2 && (
+                          ) : stage.id === "s2" && cache?.s2 ? (
                             <>
-                              <ComplexityChip
-                                cls={cache.s2.complexity_class as Band}
-                                size={28}
-                              />
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  color: "var(--muted-foreground)",
-                                  fontFamily: "var(--font-geist-mono)",
-                                }}
-                              >
-                                {cache.s2.effort_min_weeks ===
-                                cache.s2.effort_max_weeks
+                              <ComplexityChip cls={cache.s2.complexity_class as Band} size={30} />
+                              <div style={{ fontSize: 12, color: "var(--fg-2)" }}>
+                                {cache.s2.effort_min_weeks === cache.s2.effort_max_weeks
                                   ? `${cache.s2.effort_min_weeks}w`
                                   : `${cache.s2.effort_min_weeks}–${cache.s2.effort_max_weeks}w`}
-                              </span>
+                              </div>
                             </>
-                          )}
-                          {stage.id === "s3" && cache?.s3 && (
+                          ) : stage.id === "s3" && cache?.s3 ? (
                             <>
-                              <MiniSpark
-                                values={cache.s3.phases.map((p) => p.weeks)}
-                                color="var(--c-teal)"
-                                w={56}
-                                h={22}
-                              />
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  color: "var(--muted-foreground)",
-                                  fontFamily: "var(--font-geist-mono)",
-                                }}
-                              >
-                                {cache.s3.phases.reduce(
-                                  (s, p) => s + p.weeks,
-                                  0,
-                                )}
-                                w
+                              <MiniSpark values={cache.s3.phases.map((p) => p.weeks)} color="var(--primary)" w={70} h={22} />
+                              <span style={{ fontSize: 11.5, color: "var(--fg-2)" }}>
+                                ~{cache.s3.phases.reduce((s, p) => s + p.weeks, 0)} wks
                               </span>
                             </>
-                          )}
-                          {stage.id === "s4" && status === "complete" && (
-                            <span
-                              style={{ fontSize: 12, color: "var(--c-violet)" }}
-                            >
-                              Sprint plan ready
+                          ) : stage.id === "s4" && status === "complete" ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              {/* Placeholder: sprint count visualization */}
+                              <span style={{ fontSize: 11.5, color: "var(--fg-2)" }}>Sprint plan ready</span>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>
+                              {status === "not_ready" ? "Not ready" : "No data yet"}
                             </span>
                           )}
                         </div>
 
-                        {/* Open button */}
                         <Link href={href}>
-                          <button
-                            style={{
-                              width: "100%",
-                              height: 30,
-                              borderRadius: 7,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 6,
-                              background:
-                                status === "not_ready"
-                                  ? "color-mix(in oklab, var(--muted) 50%, transparent)"
-                                  : "color-mix(in oklab, var(--primary) 16%, transparent)",
-                              color:
-                                status === "not_ready"
-                                  ? "var(--muted-foreground)"
-                                  : "var(--primary)",
-                              border: `1px solid ${status === "not_ready" ? "var(--border)" : "color-mix(in oklab, var(--primary) 28%, transparent)"}`,
-                              transition: "all 0.12s",
-                            }}
+                          <Btn
+                            variant={status === "not_ready" ? "outline" : "subtle"}
+                            size="sm"
+                            iconR="arrowR"
+                            style={{ width: "100%", marginTop: 14 }}
                           >
-                            {status === "running"
-                              ? "View progress"
-                              : status === "not_ready"
-                                ? "Configure"
-                                : "Open"}
-                            <Icon name="arrowR" size={11} />
-                          </button>
+                            {status === "running" ? "View progress" : "Open"}
+                          </Btn>
                         </Link>
                       </div>
-                    );
-                  })}
-                </div>
-
-                {orchestratorSession && (
-                  <AgentActivityFeed
-                    useCaseId={selectedUc.id}
-                    sessionId={orchestratorSession}
-                  />
-                )}
+                      {idx < STAGES.length - 1 && (
+                        <div style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted-fg)" }}>
+                          <Icon name="chevR" size={16} style={{ opacity: 0.5 }} />
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
-            ) : (
-              <EmptyState
-                icon={<Users className="h-8 w-8" />}
-                title="No use cases yet"
-                description="Create your first use case to start the four-stage assessment pipeline."
-                action={
-                  <Button size="sm" onClick={() => setNewUcOpen(true)}>
-                    <Plus className="mr-1.5 h-4 w-4" />
-                    Create Use Case
-                  </Button>
-                }
-              />
-            )}
-          </>
+            </div>
+
+            {/* Portfolio table */}
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <SectionLabel style={{ marginBottom: 10 }}>All use cases</SectionLabel>
+              <div style={{ borderRadius: 13, border: "1px solid var(--border)", overflow: "hidden", background: "var(--surface)" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr",
+                    gap: 0,
+                    padding: "9px 16px",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: 0.6,
+                    color: "var(--muted-fg)",
+                    textTransform: "uppercase",
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                >
+                  <span>Use case</span>
+                  <span>Priority</span>
+                  <span>Complexity</span>
+                  <span>Pipeline</span>
+                  <span style={{ textAlign: "right" }}>Progress</span>
+                </div>
+                {useCases.map((u, idx) => {
+                  const ucReadiness = readiness.get(u.id);
+                  const stages = STAGES.map((s) => resolveStatus(ucReadiness, s.id));
+                  const done = stages.filter((s) => s === "complete").length;
+                  const cache = ucCache.get(u.id);
+                  const isHighlighted = u.id === selectedUcId;
+
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => setSelectedUcId(u.id)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        display: "grid",
+                        gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr",
+                        gap: 0,
+                        padding: "12px 16px",
+                        alignItems: "center",
+                        borderBottom: idx < useCases.length - 1 ? "1px solid var(--border)" : "none",
+                        background: isHighlighted ? "color-mix(in oklab, var(--primary) 6%, transparent)" : "transparent",
+                        border: "none",
+                        transition: "background 0.12s",
+                      }}
+                    >
+                      <div style={{ minWidth: 0, paddingRight: 12 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {u.name}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--muted-fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {u.description || "No description"}
+                        </div>
+                      </div>
+                      <div>
+                        {cache?.s1 ? (
+                          <PriorityBadge band={cache.s1.migration_decision} />
+                        ) : (
+                          <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>—</span>
+                        )}
+                      </div>
+                      <div>
+                        {cache?.s2 ? (
+                          <ComplexityChip cls={cache.s2.complexity_class as Band} size={26} />
+                        ) : (
+                          <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>—</span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        {STAGES.map((stage) => {
+                          const status: ReadinessStatus = resolveStatus(ucReadiness, stage.id);
+                          const cfg = STATUS_CONFIG[status];
+                          return (
+                            <span
+                              key={stage.id}
+                              title={`${stage.short}: ${cfg.label}`}
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: 99,
+                                background: cfg.color,
+                                display: "inline-block",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                        <div style={{ width: 52, height: 5, borderRadius: 99, background: "var(--track)", overflow: "hidden" }}>
+                          <div style={{ width: `${(done / 4) * 100}%`, height: "100%", background: "var(--c-green)" }} />
+                        </div>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-fg)" }}>{done}/4</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* ══ PORTFOLIO MAP ══════════════════════════════════════════ */}
-        {activeView === "portfolio" && (
-          <div
-            style={{
-              borderRadius: 14,
-              border: "1px solid var(--border)",
-              background: "var(--card)",
-              overflow: "hidden",
-            }}
-          >
-            {/* Quadrant SVG bubble chart */}
-            <div
-              style={{
-                padding: "18px 18px 10px",
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: "1.4px",
-                textTransform: "uppercase",
-                color: "var(--muted-foreground)",
-              }}
-            >
-              Priority × Complexity map
-            </div>
-            <div
-              style={{
-                position: "relative",
-                height: 320,
-                margin: "0 18px 18px",
-              }}
-            >
-              <svg
-                width="100%"
-                height="100%"
-                style={{ position: "absolute", inset: 0 }}
-              >
-                {/* Quick-win zone tint */}
-                <rect
-                  x="50%"
-                  y="0"
-                  width="50%"
-                  height="50%"
-                  rx={8}
-                  fill="color-mix(in oklab, var(--c-green) 8%, transparent)"
-                />
-                {/* Axis labels */}
-                <text
-                  x="50%"
-                  y={14}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fill="var(--muted-foreground)"
-                >
-                  ← lower complexity
-                </text>
-                <text
-                  x={14}
-                  y="50%"
-                  dominantBaseline="middle"
-                  fontSize={9}
-                  fill="var(--muted-foreground)"
-                  transform={`rotate(-90, 14, 160)`}
-                >
-                  ← lower score
-                </text>
+        {!selectedUc && activeView === "pipeline" && (
+          <EmptyState
+            icon={<Users className="h-8 w-8" />}
+            title="No use cases yet"
+            description="Create your first use case to start the four-stage assessment pipeline."
+            action={
+              <Button size="sm" onClick={() => setNewUcOpen(true)}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Create Use Case
+              </Button>
+            }
+          />
+        )}
 
+        {/* ══ PORTFOLIO MAP (HubMatrix pattern) ══════════════════════ */}
+        {activeView === "portfolio" && (
+          <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 22, minHeight: 0 }}>
+            {/* Matrix */}
+            <div
+              style={{
+                borderRadius: 14,
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                padding: "20px 22px 16px 50px",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  left: 14,
+                  top: "50%",
+                  transform: "rotate(-90deg) translateX(50%)",
+                  transformOrigin: "left center",
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  color: "var(--muted-fg)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                MIGRATION SCORE →
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  position: "relative",
+                  borderLeft: "1px solid var(--border)",
+                  borderBottom: "1px solid var(--border)",
+                  margin: "4px 4px 22px 4px",
+                }}
+              >
+                {/* Quick win zone tint */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    width: "45%",
+                    height: "42%",
+                    background: "color-mix(in oklab, var(--c-green) 8%, transparent)",
+                    borderRight: "1px dashed var(--border)",
+                    borderBottom: "1px dashed var(--border)",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 8,
+                    top: 8,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--c-green)",
+                    letterSpacing: 0.5,
+                    opacity: 0.8,
+                  }}
+                >
+                  QUICK WINS
+                </div>
+                {/* Gridlines */}
+                {[0.25, 0.5, 0.75].map((g) => (
+                  <div
+                    key={g}
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      top: `${g * 100}%`,
+                      borderTop: "1px dashed color-mix(in oklab, var(--border) 60%, transparent)",
+                    }}
+                  />
+                ))}
+                {/* Bubbles */}
                 {useCases.map((uc) => {
                   const cache = ucCache.get(uc.id);
                   if (!cache?.s1 || !cache.s2) return null;
-                  const score = cache.s1.total_score;
-                  const complexityMap: Record<string, number> = {
-                    XS: 1,
-                    S: 2,
-                    M: 3,
-                    L: 4,
-                    XL: 5,
-                  };
-                  const cxVal = complexityMap[cache.s2.complexity_class] || 3;
-                  const cx =
-                    (1 - (cxVal - 1) / 4) * 90 +
-                    5; /* invert: low complexity = right */
-                  const cy = (1 - score / 100) * 90 + 5;
-                  const color =
-                    BAND_META[cache.s1.migration_decision]?.color ||
-                    "var(--primary)";
-                  const r = 8 + (cache.s2.effort_max_weeks || 4) * 1.2;
+                  const complexityMap: Record<string, number> = { XS: 0, S: 1, M: 2, L: 3, XL: 4 };
+                  const x = (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4;
+                  const y = (1 - cache.s1.total_score / 100) * 86 + 2;
+                  const wk = cache.s2.effort_max_weeks || 5;
+                  const sz = 26 + wk * 3;
+                  const c = BAND_META[cache.s1.migration_decision]?.color || "var(--primary)";
                   return (
-                    <g key={uc.id}>
-                      <circle
-                        cx={`${cx}%`}
-                        cy={`${cy}%`}
-                        r={r}
-                        fill={`color-mix(in oklab, ${color} 30%, transparent)`}
-                        stroke={color}
-                        strokeWidth={1.5}
-                      />
-                      <text
-                        x={`${cx}%`}
-                        y={`${cy}%`}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fontSize={8.5}
-                        fill="var(--foreground)"
-                        fontWeight={600}
+                    <div
+                      key={uc.id}
+                      title={uc.name}
+                      style={{
+                        position: "absolute",
+                        left: `${x}%`,
+                        top: `${y}%`,
+                        transform: "translate(-50%,-50%)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: sz,
+                          height: sz,
+                          borderRadius: 99,
+                          background: `color-mix(in oklab, ${c} 24%, transparent)`,
+                          border: `1.5px solid ${c}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontFamily: "var(--mono)",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: c,
+                          boxShadow: `0 0 14px color-mix(in oklab, ${c} 30%, transparent)`,
+                        }}
                       >
-                        {uc.name.slice(0, 8)}
-                      </text>
-                    </g>
+                        {cache.s1.total_score}
+                      </div>
+                    </div>
                   );
                 })}
-              </svg>
-            </div>
-            {/* Legend */}
-            <div
-              style={{
-                display: "flex",
-                gap: 14,
-                padding: "0 18px 16px",
-                flexWrap: "wrap",
-              }}
-            >
-              {(
-                [
-                  "QUICK_WIN",
-                  "STRATEGIC",
-                  "HOLD",
-                  "DO_NOT_MIGRATE",
-                ] as MigrationDecision[]
-              ).map((b) => (
-                <div
-                  key={b}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 11,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 99,
-                      background: BAND_META[b].color,
-                    }}
-                  />
-                  {BAND_META[b].label}
-                </div>
-              ))}
+              </div>
               <div
                 style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingLeft: 4,
                   fontSize: 10.5,
-                  color: "var(--muted-foreground)",
-                  marginLeft: 4,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  color: "var(--muted-fg)",
                 }}
               >
-                Bubble size = effort weeks
+                <span>COMPLEXITY →</span>
+                <span style={{ display: "flex", gap: 30 }}>
+                  {["XS", "S", "M", "L", "XL"].map((c) => (
+                    <span key={c}>{c}</span>
+                  ))}
+                </span>
+              </div>
+            </div>
+
+            {/* Ranked recommendations */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+              <SectionLabel>Recommended sequence</SectionLabel>
+              <div style={{ display: "flex", flexDirection: "column", gap: 9, overflow: "auto" }}>
+                {[...useCases]
+                  .filter((u) => ucCache.get(u.id)?.s1)
+                  .sort((a, b) => {
+                    const aScore = ucCache.get(a.id)?.s1?.total_score || 0;
+                    const bScore = ucCache.get(b.id)?.s1?.total_score || 0;
+                    return bScore - aScore;
+                  })
+                  .map((u, i) => {
+                    const cache = ucCache.get(u.id);
+                    const ucReadiness = readiness.get(u.id);
+                    const stages = STAGES.map((s) => resolveStatus(ucReadiness, s.id));
+                    return (
+                      <div
+                        key={u.id}
+                        className="rpa-card-hover"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "11px 13px",
+                          borderRadius: 11,
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        <span style={{ fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700, color: "var(--muted-fg)", width: 20 }}>
+                          {i + 1}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {u.name}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                            {cache?.s1 && <PriorityBadge band={cache.s1.migration_decision} />}
+                            {cache?.s2 && <ComplexityChip cls={cache.s2.complexity_class as Band} size={20} />}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          {STAGES.map((stage) => {
+                            const status: ReadinessStatus = resolveStatus(ucReadiness, stage.id);
+                            const cfg = STATUS_CONFIG[status];
+                            return (
+                              <span
+                                key={stage.id}
+                                title={`${stage.short}: ${cfg.label}`}
+                                style={{
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: 99,
+                                  background: cfg.color,
+                                  display: "inline-block",
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           </div>
