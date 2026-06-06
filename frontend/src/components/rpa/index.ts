@@ -24,3 +24,6 @@ export type { PillProps } from './Pill'
 
 export { SectionLabel } from './SectionLabel'
 export type { SectionLabelProps } from './SectionLabel'
+
+export { FieldRow } from './FieldRow'
+export type { FieldRowProps } from './FieldRow'

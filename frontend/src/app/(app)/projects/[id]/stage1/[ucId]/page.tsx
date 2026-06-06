@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Btn, SectionLabel } from "@/components/rpa";
+import { Btn, SectionLabel, Card, Pill, FieldRow } from "@/components/rpa";
 import { spacing } from "@/lib/design-tokens";
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress";
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer";
@@ -504,12 +504,10 @@ export default function Stage1Page() {
                   style={{ display: "flex", flexDirection: "column", gap: 18 }}
                 >
                   {/* Score card */}
-                  <div
+                  <Card
                     style={{
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      background: "var(--card)",
-                      padding: "26px 18px 22px",
+                      paddingTop: 26,
+                      paddingBottom: 22,
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
@@ -533,99 +531,45 @@ export default function Stage1Page() {
                         fontSize: 12,
                       }}
                     >
-                      <span style={{ color: "var(--muted-foreground)" }}>
+                      <span style={{ color: "var(--muted-fg)" }}>
                         Confidence
                       </span>
-                      <span
-                        style={{
-                          padding: "3px 8px",
-                          borderRadius: 6,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: CONF_COLOR[latestResult.confidence],
-                          background: `color-mix(in oklab, ${CONF_COLOR[latestResult.confidence]} 14%, transparent)`,
-                          border: `1px solid color-mix(in oklab, ${CONF_COLOR[latestResult.confidence]} 30%, transparent)`,
-                        }}
-                      >
+                      <Pill color={CONF_COLOR[latestResult.confidence]}>
                         {latestResult.confidence}
-                      </span>
+                      </Pill>
                     </div>
-                  </div>
+                  </Card>
 
                   {/* Inputs card */}
-                  <div
-                    style={{
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      background: "var(--card)",
-                      padding: 18,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 10.5,
-                        fontWeight: 700,
-                        letterSpacing: "1.4px",
-                        textTransform: "uppercase",
-                        color: "var(--muted-foreground)",
-                        marginBottom: 14,
-                      }}
-                    >
-                      Inputs
-                    </div>
-                    {[
-                      ["Use case", useCase.name, "manual"],
-                      ["Platform", useCase.source_platform || "—", "imported"],
-                      ["Install", useCase.install_status || "—", "manual"],
-                    ].map(([lbl, val, src]) => (
-                      <div
-                        key={lbl}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "9px 0",
-                          borderBottom: "1px solid var(--border)",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 12.5,
-                            color: "var(--muted-foreground)",
-                          }}
-                        >
-                          {lbl}
-                        </span>
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                          }}
-                        >
-                          <span style={{ fontSize: 12.5, fontWeight: 500 }}>
-                            {val}
-                          </span>
-                          <InputSourceBadge source={src as never} />
-                        </span>
-                      </div>
-                    ))}
+                  <Card>
+                    <SectionLabel style={{ marginBottom: 6 }}>Inputs</SectionLabel>
+                    <FieldRow
+                      label="Use case"
+                      value={useCase.name}
+                      source="manual"
+                    />
+                    <FieldRow
+                      label="Platform"
+                      value={useCase.source_platform || "—"}
+                      source="imported"
+                    />
+                    <FieldRow
+                      label="Install"
+                      value={useCase.install_status || "—"}
+                      source="manual"
+                    />
                     <div style={{ paddingTop: 10 }}>
-                      <Button
+                      <Btn
                         variant="outline"
                         size="sm"
                         onClick={handleBackfill}
+                        icon="link"
                         style={{ width: "100%" }}
                       >
-                        <Icon
-                          name="link"
-                          size={13}
-                          style={{ marginRight: 6 }}
-                        />
                         Backfill from Stage 2 (Sonnet)
-                      </Button>
+                      </Btn>
                     </div>
-                  </div>
+                  </Card>
                 </div>
 
                 {/* ── Right column ── */}
@@ -638,14 +582,7 @@ export default function Stage1Page() {
                   }}
                 >
                   {/* Scoring dims */}
-                  <div
-                    style={{
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      background: "var(--card)",
-                      padding: 18,
-                    }}
-                  >
+                  <Card>
                     <div
                       style={{
                         display: "flex",
@@ -654,22 +591,12 @@ export default function Stage1Page() {
                         marginBottom: 16,
                       }}
                     >
-                      <div
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          letterSpacing: "1.4px",
-                          textTransform: "uppercase",
-                          color: "var(--muted-foreground)",
-                        }}
-                      >
-                        Scoring dimensions
-                      </div>
+                      <SectionLabel>Scoring dimensions</SectionLabel>
                       <span
                         style={{
                           fontSize: 11,
-                          color: "var(--muted-foreground)",
-                          fontFamily: "var(--font-geist-mono)",
+                          color: "var(--muted-fg)",
+                          fontFamily: "var(--mono)",
                         }}
                       >
                         weighted · Haiku 4.5
@@ -692,16 +619,13 @@ export default function Stage1Page() {
                         />
                       ))}
                     </div>
-                  </div>
+                  </Card>
 
                   {/* AI analysis */}
-                  <div
+                  <Card
                     style={{
                       flex: 1,
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      background: "var(--card)",
-                      padding: 18,
+                      minHeight: 0,
                       display: "flex",
                       flexDirection: "column",
                     }}
@@ -714,35 +638,10 @@ export default function Stage1Page() {
                         marginBottom: 12,
                       }}
                     >
-                      <div
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          letterSpacing: "1.4px",
-                          textTransform: "uppercase",
-                          color: "var(--muted-foreground)",
-                        }}
-                      >
-                        AI analysis
-                      </div>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          padding: "3px 8px",
-                          borderRadius: 6,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: "var(--primary)",
-                          background:
-                            "color-mix(in oklab, var(--primary) 13%, transparent)",
-                          border:
-                            "1px solid color-mix(in oklab, var(--primary) 28%, transparent)",
-                        }}
-                      >
+                      <SectionLabel>AI analysis</SectionLabel>
+                      <Pill color="var(--primary)">
                         <Icon name="spark" size={11} /> Generated
-                      </span>
+                      </Pill>
                     </div>
                     <p
                       style={{
@@ -841,9 +740,10 @@ export default function Stage1Page() {
                           {latestResult.power_automate_fit}
                         </div>
                       </div>
-                      <Button
+                      <Btn
                         variant="ghost"
                         size="sm"
+                        icon="edit"
                         onClick={() => {
                           setOverrideDims({
                             technical_feasibility:
@@ -856,15 +756,10 @@ export default function Stage1Page() {
                           setOverrideOpen(true);
                         }}
                       >
-                        <Icon
-                          name="edit"
-                          size={13}
-                          style={{ marginRight: 6 }}
-                        />
                         Override decision
-                      </Button>
+                      </Btn>
                     </div>
-                  </div>
+                  </Card>
                 </div>
               </div>
             )}
