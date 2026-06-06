@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { InputSourceBadge } from "@/components/shared/InputSourceBadge"
+import { Card, Btn, SectionLabel, Pill } from "@/components/rpa"
+import { spacing } from "@/lib/design-tokens"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress"
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer"
@@ -245,139 +247,136 @@ export default function Stage2Page() {
             </div>
 
             {/* 5×5 band grid */}
-            <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", padding: 18 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>
-                  Complexity bands
-                </div>
-                <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>weight · 0 → 28 pts</span>
+            <Card pad={0} style={{ overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: spacing.cardDefault, paddingBottom: 0, marginBottom: 18 }}>
+                <SectionLabel>Complexity bands</SectionLabel>
+                <span style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--mono)" }}>weight · 0 → 28 pts</span>
               </div>
 
-              {/* Header row */}
+              {/* Header row - matching exploration stage2.jsx line 113 */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: "160px repeat(5, 1fr)",
-                gap: 6, marginBottom: 10,
+                gridTemplateColumns: "1.5fr repeat(5, 1fr) 0.7fr",
+                alignItems: "center",
+                padding: "12px 18px",
+                borderBottom: "1px solid var(--border)",
               }}>
-                <div />
+                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase" }}>Attribute</span>
                 {BANDS.map((b) => (
-                  <div key={b} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: CLS_COLORS[b] }}>
+                  <span key={b} style={{ textAlign: "center", fontFamily: "var(--mono)", fontSize: 12, fontWeight: 700, color: CLS_COLORS[b] }}>
                     {b}
-                  </div>
+                  </span>
                 ))}
+                <span style={{ textAlign: "right", fontSize: 10.5, fontWeight: 700, color: "var(--muted-fg)" }}>WT</span>
               </div>
 
-              {/* Attribute rows */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {ATTRS.map(({ key, label }) => {
-                  const active = bands[key]
-                  const source = useCase.s2_inputs?.[`${key}_source`] as InputSource | undefined
-                  return (
-                    <div key={key} style={{ display: "grid", gridTemplateColumns: "160px repeat(5, 1fr)", gap: 6, alignItems: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <span style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}>{label}</span>
-                        {active && source && <InputSourceBadge source={source} />}
-                      </div>
-                      {BANDS.map((b) => {
-                        const weight = WEIGHTS[key]?.[b] ?? 0
-                        const isActive = active === b
-                        const color = CLS_COLORS[b]
-                        return (
+              {/* Attribute rows - matching exploration stage2.jsx line 119 */}
+              {ATTRS.map(({ key, label }, idx) => {
+                const active = bands[key]
+                const source = useCase.s2_inputs?.[`${key}_source`] as InputSource | undefined
+                return (
+                  <div key={key} style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.5fr repeat(5, 1fr) 0.7fr",
+                    alignItems: "center",
+                    padding: "12px 18px",
+                    borderBottom: idx < ATTRS.length - 1 ? "1px solid var(--border)" : "none",
+                  }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 500 }}>
+                      {label} {active && source && <InputSourceBadge source={source} />}
+                    </span>
+                    {BANDS.map((b) => {
+                      const weight = WEIGHTS[key]?.[b] ?? 0
+                      const isActive = active === b
+                      const color = CLS_COLORS[b]
+                      return (
+                        <div key={b} style={{ display: "flex", justifyContent: "center" }}>
                           <button
-                            key={b}
                             onClick={() => handleBandChange(key, b)}
                             disabled={isRunning}
                             style={{
-                              height: 44, borderRadius: 9, border: `1.5px solid`,
-                              borderColor: isActive ? color : "color-mix(in oklab, var(--border) 80%, transparent)",
-                              background: isActive
-                                ? `color-mix(in oklab, ${color} 20%, transparent)`
-                                : "color-mix(in oklab, var(--muted) 15%, transparent)",
-                              color: isActive ? color : "var(--muted-foreground)",
-                              fontWeight: isActive ? 700 : 500,
-                              fontSize: 13,
+                              width: 42,
+                              height: 34,
+                              borderRadius: 8,
                               cursor: "pointer",
-                              boxShadow: isActive ? `0 0 0 1px ${color}33, 0 2px 10px ${color}22` : "none",
-                              transition: "all 0.12s",
-                              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                              gap: 1,
+                              fontFamily: "var(--mono)",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: isActive ? "#0b0b12" : "var(--muted-fg)",
+                              background: isActive ? color : "var(--surface-2)",
+                              border: `1px solid ${isActive ? color : "var(--border)"}`,
+                              boxShadow: isActive ? `0 0 12px color-mix(in oklab, ${color} 45%, transparent)` : "none",
+                              transition: "all .14s",
                             }}
                           >
-                            <span>{b}</span>
-                            <span style={{ fontSize: 9.5, opacity: 0.75, fontWeight: 500 }}>{weight}pt</span>
+                            {weight}
                           </button>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+                        </div>
+                      )
+                    })}
+                    <span style={{ textAlign: "right", fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: "var(--fg)" }}>
+                      {active ? WEIGHTS[key]?.[active] ?? 0 : "—"}
+                    </span>
+                  </div>
+                )
+              })}
+            </Card>
           </div>
 
           {/* ── Right: result panel ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {displayScore ? (
               <>
-                {/* Complexity chip + score */}
-                <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", padding: "22px 18px", textAlign: "center" }}>
+                {/* Complexity class card - matching exploration S2Result (stage2.jsx line 47) */}
+                <Card style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingTop: 24,
+                  background: `linear-gradient(160deg, color-mix(in oklab, ${CLS_COLORS[displayScore.complexity_class as Band]} 12%, var(--surface)), var(--surface) 75%)`,
+                }}>
+                  <SectionLabel>Complexity class</SectionLabel>
                   <ComplexityChip cls={displayScore.complexity_class as Band} size={76} />
-                  <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 28, fontWeight: 700, marginTop: 12 }}>
-                    {displayScore.total_score}
-                    <span style={{ fontSize: 15, color: "var(--muted-foreground)", fontWeight: 400 }}>/28</span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "var(--muted-foreground)", marginTop: 3 }}>complexity score</div>
-                  {liveScore && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px", borderRadius: 6,
-                      marginTop: 10, fontSize: 10.5, fontWeight: 600,
-                      color: "var(--c-blue)", background: "color-mix(in oklab, var(--c-blue) 13%, transparent)",
-                    }}>
-                      Live preview
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 30, fontWeight: 700 }}>
+                      {displayScore.total_score}
                     </span>
-                  )}
-                </div>
-
-                {/* Score ladder */}
-                <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", padding: "16px 18px" }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: "var(--muted-foreground)", marginBottom: 12 }}>
-                    Score ladder
+                    <span style={{ fontSize: 13, color: "var(--muted-fg)" }}>/ 28 pts</span>
                   </div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {LADDER_RANGES.map(({ band, max, label }, i) => {
-                      const prevMax = i === 0 ? 0 : LADDER_RANGES[i - 1].max
-                      const rangeWidth = max - prevMax
-                      const isActive = displayScore.complexity_class === band
-                      const color = CLS_COLORS[band]
-                      return (
+                  {/* Score scale ladder - matching exploration stage2.jsx line 56 */}
+                  <div style={{ width: "100%", marginTop: 4 }}>
+                    <div style={{ display: "flex", height: 8, borderRadius: 99, overflow: "hidden", gap: 2 }}>
+                      {BANDS.map((k) => (
                         <div
-                          key={band}
+                          key={k}
                           style={{
-                            flex: rangeWidth,
-                            height: isActive ? 32 : 22,
-                            borderRadius: 5,
-                            background: isActive
-                              ? `color-mix(in oklab, ${color} 55%, transparent)`
-                              : `color-mix(in oklab, ${color} 20%, transparent)`,
-                            border: `1px solid color-mix(in oklab, ${color} ${isActive ? 80 : 28}%, transparent)`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 10, fontWeight: 700, color: isActive ? color : `color-mix(in oklab, ${color} 60%, transparent)`,
-                            transition: "all 0.15s",
-                            marginTop: isActive ? 0 : 5,
+                            flex: k === displayScore.complexity_class ? 1.6 : 1,
+                            background: k === displayScore.complexity_class ? CLS_COLORS[k] : "var(--track)",
+                            transition: "flex .3s, background .3s",
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 9.5, color: "var(--muted-fg)", fontFamily: "var(--mono)" }}>
+                      {BANDS.map((k) => (
+                        <span
+                          key={k}
+                          style={{
+                            color: k === displayScore.complexity_class ? CLS_COLORS[k] : "var(--muted-fg)",
+                            fontWeight: k === displayScore.complexity_class ? 700 : 400,
                           }}
                         >
-                          {label}
-                        </div>
-                      )
-                    })}
+                          {k}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </Card>
 
-                {/* Effort card */}
-                <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", padding: "16px 18px" }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: "var(--muted-foreground)", marginBottom: 12 }}>
-                    Effort estimate
-                  </div>
+                {/* Effort estimate card - matching exploration S2Result (stage2.jsx line 68) */}
+                <Card>
+                  <SectionLabel style={{ marginBottom: 12 }}>Effort estimate</SectionLabel>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     {[
                       { label: "Min weeks", value: displayScore.effort_min_weeks },
@@ -396,7 +395,7 @@ export default function Stage2Page() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
               </>
             ) : (
               <div style={{
