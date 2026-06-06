@@ -154,6 +154,66 @@ def _run_scoring_v2(
     return assessment_result
 
 
+def _select_latest_input(
+    document_path: str | None,
+    document_created_at: datetime | None,
+    pasted_text: str | None,
+    pasted_text_updated_at: str | None,
+    manual_bands: dict | None,
+    manual_bands_updated_at: str | None,
+) -> tuple[str, str | None, dict | None]:
+    """
+    Select the most recently modified input source based on timestamps.
+
+    Args:
+        document_path: Path to uploaded document
+        document_created_at: Timestamp when document was uploaded
+        pasted_text: User-pasted text description
+        pasted_text_updated_at: ISO timestamp when text was last updated
+        manual_bands: Manual band entry dict (all 5 bands)
+        manual_bands_updated_at: ISO timestamp when bands were last updated
+
+    Returns:
+        Tuple of (source_type, data_or_path, manual_bands)
+        - source_type: "document" | "text" | "manual"
+        - data_or_path: document path or pasted text (None for manual)
+        - manual_bands: dict or None
+
+    Raises:
+        AgentExecutionError: If no valid input source provided
+    """
+    from core.exceptions import AgentExecutionError
+
+    candidates = []
+
+    if document_path and document_created_at:
+        candidates.append(("document", document_created_at, document_path, None))
+
+    if pasted_text and pasted_text_updated_at:
+        ts = datetime.fromisoformat(pasted_text_updated_at)
+        candidates.append(("text", ts, pasted_text, None))
+
+    if manual_bands and manual_bands_updated_at:
+        ts = datetime.fromisoformat(manual_bands_updated_at)
+        candidates.append(("manual", ts, None, manual_bands))
+
+    if not candidates:
+        raise AgentExecutionError("No input provided: must supply document, pasted text, or manual bands")
+
+    # Sort by timestamp descending, take most recent
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    source_type, _, data, bands = candidates[0]
+
+    logger.info(f"Selected input source: {source_type} (most recent)")
+
+    if source_type == "document":
+        return ("document", data, None)
+    elif source_type == "text":
+        return ("text", data, None)
+    else:
+        return ("manual", None, bands)
+
+
 async def run_s2_assessment(
     use_case_id: str,
     document_path: str | None,
@@ -190,18 +250,22 @@ async def run_s2_assessment(
 
     # Determine path and extract bands
     bands_with_source: AttributeBandsWithSource | None = None
+    process_summary: dict | None = None
 
     if manual_bands:
         # Path 3: Manual bands (no LLM)
         logger.info("Using manual band entry (no LLM calls)")
         bands_with_source = AttributeBandsWithSource(**manual_bands)
         extraction_notes = "Manual entry by user"
+        process_summary = None  # No process_summary for manual entry
 
     elif pasted_text:
         # Path 2: Pasted text → extraction
         logger.info("Extracting bands from pasted text")
         bands_with_source = await extract_bands_from_text(pasted_text, model=model)
         extraction_notes = "Extracted from pasted text"
+        # Extract process_summary from result
+        process_summary = getattr(bands_with_source, "_process_summary", None)
 
     elif document_path:
         # Path 1: Document → text → extraction
@@ -211,6 +275,8 @@ async def run_s2_assessment(
         logger.info("Extracting bands from document text")
         bands_with_source = await extract_bands_from_text(document_text, model=model)
         extraction_notes = f"Extracted from {document_path}"
+        # Extract process_summary from result
+        process_summary = getattr(bands_with_source, "_process_summary", None)
 
     else:
         raise AgentExecutionError("No input provided: must supply document_path, pasted_text, or manual_bands")
@@ -269,6 +335,7 @@ async def run_s2_assessment(
             "scoring": scoring_result.model_dump(),
             "extraction_notes": extraction_notes,
             "model_used": model if (pasted_text or document_path) else None,
+            "process_summary": process_summary,  # NEW: include validated process summary
             # Store full assessment for future use
             "_assessment_result": {
                 "complexity_tier": assessment_result.complexity_tier.value,
@@ -288,6 +355,7 @@ async def run_s2_assessment(
             "scoring": scoring_result.model_dump(),
             "extraction_notes": extraction_notes,
             "model_used": model if (pasted_text or document_path) else None,
+            "process_summary": process_summary,  # NEW: include validated process summary
         }
 
     logger.info(f"S2 assessment complete: {scoring_result.complexity_class} class, {scoring_result.total_score} score")

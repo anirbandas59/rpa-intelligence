@@ -20,8 +20,43 @@ Response format:
   "layouts": "<XS|S|M|L|XL>",
   "interfaces": "<XS|S|M|L|XL>",
   "technology": "<XS|S|M|L|XL>",
-  "extraction_notes": "<brief notes on confidence and ambiguities>"
-}"""
+  "extraction_notes": "<brief notes on confidence and ambiguities>",
+  "process_summary": {
+    "description": "<1-2 sentence process overview>",
+    "key_activities": [
+      "<activity description (contextually relevant to process type)>"
+    ],
+    "key_logical_points": [
+      "<business rule or condition>"
+    ],
+    "key_applications": [
+      "<system or application name>"
+    ],
+    "key_layouts": [
+      "<screen/form name or file type>"
+    ],
+    "key_additional_technologies": [
+      "<OCR, API, database type, etc.>"
+    ]
+  }
+}
+
+CRITICAL INSTRUCTIONS FOR process_summary:
+1. Each array (key_activities, key_logical_points, etc.) must JUSTIFY the corresponding band classification
+2. Count alignment examples:
+   - activities=XS → 1-5 key_activities listed
+   - activities=S → 6-10 key_activities listed
+   - activities=M → 11-20 key_activities listed
+   - activities=L → 21-40 key_activities listed
+   - activities=XL → 41+ key_activities listed
+3. Context-awareness: Only include logically relevant activities for the process type
+   - Web app automation: "login to web app", "navigate menus", "logout" are valid
+   - Excel/PDF automation: "login to web app" is INVALID (no web UI involved)
+   - Infer process type from description, applications, layouts, and technologies
+4. Provide specific evidence: Don't use generic placeholders
+   - Good: "Extract invoice line items from Excel", "Post to SAP FB60 transaction"
+   - Bad: "Step 1", "Process data", "Update system"
+5. The user will review these lists to validate your understanding before Stage 3 runs"""
 
 S2_EXTRACTION_USER = """Extract complexity attribute bands from this process document:
 

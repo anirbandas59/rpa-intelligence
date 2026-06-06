@@ -31,7 +31,6 @@ class OverrideS1Request(BaseModel):
     migration_effort: int | None = None
     platform_suitability: int | None = None
     risk: int | None = None
-    migration_decision: str | None = None
     reason: str
 
 
@@ -217,8 +216,9 @@ async def override_s1_decision(
         + result_data.get("risk", 0)
     )
 
-    if request.migration_decision is not None:
-        result_data["migration_decision"] = request.migration_decision
+    # Auto-derive migration_decision from new total_score
+    from core.assessment.decision_utils import derive_migration_decision
+    result_data["migration_decision"] = derive_migration_decision(result_data["total_score"])
 
     # Add override metadata
     result_data["override_reason"] = request.reason

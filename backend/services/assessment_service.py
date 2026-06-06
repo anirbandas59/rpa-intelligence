@@ -60,15 +60,10 @@ class AssessmentService:
         )
 
         # Derive decision from total if missing
+        from core.assessment.decision_utils import derive_migration_decision
+
         if "migration_decision" not in parsed:
-            if total >= 75:
-                decision = "QUICK_WIN"
-            elif total >= 50:
-                decision = "STRATEGIC"
-            elif total >= 25:
-                decision = "HOLD"
-            else:
-                decision = "DO_NOT_MIGRATE"
+            decision = derive_migration_decision(total)
         else:
             decision = parsed["migration_decision"]
 

@@ -192,6 +192,7 @@ async def save_pasted_text(
         **use_case.s2_inputs,
         "pasted_text": request.pasted_text,
         "pasted_text_source": "manual",
+        "pasted_text_updated_at": datetime.utcnow().isoformat(),
     }
     use_case.updated_at = datetime.utcnow()
 
@@ -240,6 +241,16 @@ async def update_s2_inputs(
     if request.pasted_text is not None:
         updates["pasted_text"] = request.pasted_text
 
+    # Add timestamp when any manual band is updated
+    if any([
+        request.activities,
+        request.business_rules,
+        request.layouts,
+        request.interfaces,
+        request.technology,
+    ]):
+        updates["manual_bands_updated_at"] = datetime.utcnow().isoformat()
+
     use_case.s2_inputs = {**use_case.s2_inputs, **updates}
     use_case.updated_at = datetime.utcnow()
 
@@ -272,11 +283,7 @@ async def create_s2_run(
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
 
-    # Determine input path
-    document_path = None
-    pasted_text = None
-    manual_bands = None
-
+    # Gather all inputs WITH timestamps
     s2_inputs = use_case.s2_inputs or {}
 
     # Check for document
@@ -286,15 +293,17 @@ async def create_s2_run(
         .order_by(UploadedFile.created_at.desc())
     )
     latest_file = file_result.scalars().first()
-    if latest_file:
-        document_path = latest_file.stored_path
+    document_path = latest_file.stored_path if latest_file else None
+    document_created_at = latest_file.created_at if latest_file else None
 
     # Check for pasted text
-    if "pasted_text" in s2_inputs and s2_inputs["pasted_text"]:
-        pasted_text = s2_inputs["pasted_text"]
+    pasted_text = s2_inputs.get("pasted_text") if s2_inputs.get("pasted_text") else None
+    pasted_text_updated_at = s2_inputs.get("pasted_text_updated_at")
 
     # Check for manual bands (all five present)
     required_bands = ["activities", "business_rules", "layouts", "interfaces", "technology"]
+    manual_bands = None
+    manual_bands_updated_at = None
     if all(band in s2_inputs for band in required_bands):
         manual_bands = {
             "activities": s2_inputs["activities"],
@@ -308,10 +317,39 @@ async def create_s2_run(
             "technology": s2_inputs["technology"],
             "technology_source": s2_inputs.get("technology_source", "manual"),
         }
+        manual_bands_updated_at = s2_inputs.get("manual_bands_updated_at")
 
-    if not document_path and not pasted_text and not manual_bands:
+    # Use timestamp-aware selection to pick the most recent input
+    from agents.orchestrator import _select_latest_input
+
+    try:
+        source_type, input_data, selected_bands = _select_latest_input(
+            document_path,
+            document_created_at,
+            pasted_text,
+            pasted_text_updated_at,
+            manual_bands,
+            manual_bands_updated_at,
+        )
+
+        # Map to background task params (only one will be non-None)
+        if source_type == "document":
+            document_path = input_data
+            pasted_text = None
+            manual_bands = None
+        elif source_type == "text":
+            pasted_text = input_data
+            document_path = None
+            manual_bands = None
+        else:  # manual
+            manual_bands = selected_bands
+            document_path = None
+            pasted_text = None
+
+    except Exception as e:
         raise HTTPException(
-            status_code=400, detail="No input provided. Upload a document, paste text, or enter bands manually."
+            status_code=400,
+            detail=f"No valid input provided: {str(e)}",
         )
 
     # Create StageRun record — use s2_inputs as snapshot so staleness hash matches readiness check
@@ -350,7 +388,9 @@ async def list_s2_runs(
         List of StageRun records
     """
     result = await db.execute(
-        select(StageRun).where(StageRun.use_case_id == id, StageRun.stage == "s2").order_by(StageRun.created_at.desc())
+        select(StageRun)
+        .where(StageRun.use_case_id == id, StageRun.stage == "s2")
+        .order_by(StageRun.created_at.desc())
     )
     runs = result.scalars().all()
 
@@ -384,7 +424,9 @@ async def get_s2_run(
         StageRun record
     """
     result = await db.execute(
-        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == id, StageRun.stage == "s2")
+        select(StageRun).where(
+            StageRun.id == run_id, StageRun.use_case_id == id, StageRun.stage == "s2"
+        )
     )
     run = result.scalar_one_or_none()
     if not run:
