@@ -253,6 +253,21 @@ async def create_s3_run(
     await db.commit()
     await db.refresh(stage_run)
 
+    # CRITICAL PREREQUISITE: S2 must be complete with process_summary
+    if not use_case.s2_latest_run_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Stage 2 must be complete before running Stage 3. S2 provides complexity and process summary required for task extraction.",
+        )
+
+    s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
+    s2_run = s2_result.scalar_one_or_none()
+    if not s2_run or not s2_run.result.get("process_summary"):
+        raise HTTPException(
+            status_code=400,
+            detail="Stage 2 process summary is required. Re-run S2 with updated extraction to capture process details.",
+        )
+
     # Check if document exists for this use case (uploaded during S2)
     doc_result = await db.execute(
         select(UploadedFile)
@@ -263,33 +278,82 @@ async def create_s3_run(
     )
     uploaded_doc = doc_result.scalar_one_or_none()
 
-    task_extraction_status = "skipped"
+    total_effort_hours = effort_weeks * 40  # hours per week
 
     if uploaded_doc:
-        # Document exists — dispatch task extraction as Job A
-        total_effort_hours = effort_weeks * 40  # hours per week from sp_conversion.json
-
+        # Path A: Document exists → run extraction from document (existing logic)
         background_tasks.add_task(
             run_task_extraction_background,
             use_case_id=use_case_id,
             document_path=uploaded_doc.stored_path,
             process_name=use_case.name,
             total_effort_hours=total_effort_hours,
-            session_id=stage_run.id,  # Use run_id as session_id
+            session_id=stage_run.id,
         )
 
         task_extraction_status = "pending"
 
-        # Initialize task_extraction field in s3_inputs
         inputs["task_extraction"] = {
             "extraction_status": "pending",
+            "source": "document",
             "activities": [],
             "total_net_hours": 0.0,
             "verification_passed": False,
         }
-        use_case.s3_inputs = inputs
-        flag_modified(use_case, "s3_inputs")
-        await db.commit()
+
+    else:
+        # Path B: No document → MANDATORY synthesis from S2 process_summary
+        from agents.task_synthesis_agent import synthesize_task_extraction
+
+        async def run_synthesis_background():
+            """Background task for synthesis."""
+            from db.session import get_session_maker
+
+            async with get_session_maker()() as session:
+                try:
+                    synthesis_result = await synthesize_task_extraction(
+                        use_case_id=use_case_id,
+                        process_summary=s2_run.result["process_summary"],
+                        total_effort_hours=total_effort_hours,
+                        complexity_class=complexity_class,
+                        session_id=stage_run.id,
+                    )
+
+                    # Update s3_inputs with synthesis result
+                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
+                    uc = uc_result.scalar_one_or_none()
+                    if uc:
+                        uc.s3_inputs["task_extraction"] = synthesis_result
+                        flag_modified(uc, "s3_inputs")
+                        await session.commit()
+
+                    logger.info(f"Task synthesis complete for use case {use_case_id}")
+
+                except Exception as e:
+                    logger.error(f"Task synthesis failed for use case {use_case_id}: {e}")
+                    # Update status to failed
+                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
+                    uc = uc_result.scalar_one_or_none()
+                    if uc and "task_extraction" in uc.s3_inputs:
+                        uc.s3_inputs["task_extraction"]["extraction_status"] = "failed"
+                        uc.s3_inputs["task_extraction"]["error"] = str(e)
+                        flag_modified(uc, "s3_inputs")
+                        await session.commit()
+
+        background_tasks.add_task(run_synthesis_background)
+        task_extraction_status = "synthesizing"
+
+        inputs["task_extraction"] = {
+            "extraction_status": "pending",
+            "source": "s2_summary",
+            "activities": [],
+            "total_net_hours": 0.0,
+            "verification_passed": False,
+        }
+
+    use_case.s3_inputs = inputs
+    flag_modified(use_case, "s3_inputs")
+    await db.commit()
 
     # Fire narrative generation in background (optional)
     background_tasks.add_task(

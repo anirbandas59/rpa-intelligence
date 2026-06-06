@@ -5,8 +5,12 @@
 ### Configuration Variables
 @baseUrl = http://localhost:8000
 @apiVersion = v1
-@email = test@example.com
+@email = test123@example.com
 @password = testpass123
+@samplePath=/home/anirban/workspace/projects/rpa-intelligence/backend/data/samples/
+@stageOneSample={{samplePath}}output_CMDB_Assessment.xlsx
+@stageTwoSample={{samplePath}}sample_simple.pdf
+
 
 #############################################
 # HEALTH CHECKS
@@ -88,7 +92,7 @@ Content-Type: application/json
     "interfaces": {"XS": 1, "S": 1, "M": 2, "L": 3, "XL": 4},
     "technology": {"XS": 1, "S": 1, "M": 2, "L": 3, "XL": 4}
   },
-  "yes_threshold": 50
+  "yes_threshold": 40
 }
 
 ### Get Project Phase Configuration
@@ -116,7 +120,7 @@ Content-Type: application/json
 POST {{baseUrl}}/api/{{apiVersion}}/projects/{{project_id}}/use-cases/bulk-upload
 Authorization: Bearer {{access_token}}
 
-< ./sample_use_cases.xlsx
+< {{stageOneSample}}
 
 ### Bulk Confirm Use Cases
 # Confirm column mapping and import
@@ -195,6 +199,7 @@ Content-Type: application/json
 GET {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs
 Authorization: Bearer {{access_token}}
 
+@s1_run_id=11fcbeca-7138-47d9-b832-fca47a3708dc
 ### Get Specific S1 Run
 GET {{baseUrl}}/api/{{apiVersion}}/stage1/{{use_case_id}}/s1/runs/{{s1_run_id}}
 Authorization: Bearer {{access_token}}
@@ -206,11 +211,10 @@ Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "technical_feasibility": 35,
-  "migration_effort": 20,
+  "technical_feasibility": 30,
+  "migration_effort": 10,
   "platform_suitability": 15,
   "risk": 10,
-  "migration_decision": "STRATEGIC",
   "reason": "Manual override based on stakeholder input and business priority"
 }
 
@@ -241,7 +245,7 @@ Content-Type: application/json
 POST {{baseUrl}}/api/{{apiVersion}}/stage2/{{use_case_id}}/s2/documents
 Authorization: Bearer {{access_token}}
 
-< ./sample_process_doc.pdf
+< {{stageTwoSample}}
 
 ### Update S2 Inputs (Manual Bands)
 # Manually set complexity bands instead of AI extraction

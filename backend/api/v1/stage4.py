@@ -154,10 +154,13 @@ async def create_s4_run(
 
     # Get task_extraction from Stage 3
     task_extraction = s3_inputs.get("task_extraction")
-    if not task_extraction or task_extraction.get("extraction_status") != "complete":
+    valid_statuses = ["complete", "synthesized"]  # Accept both document extraction and synthesis
+
+    if not task_extraction or task_extraction.get("extraction_status") not in valid_statuses:
+        current_status = task_extraction.get("extraction_status") if task_extraction else "missing"
         raise HTTPException(
             status_code=400,
-            detail="Stage 3 task extraction must be complete before running Stage 4"
+            detail=f"Stage 3 task extraction must have status in {valid_statuses} before running Stage 4. Current status: {current_status}",
         )
 
     sprint_count = inputs["sprint_count"]
