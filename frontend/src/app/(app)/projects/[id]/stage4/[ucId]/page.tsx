@@ -3,17 +3,18 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress"
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer"
-import { ComplexityChip, CLS_COLORS } from "@/components/shared/ComplexityChip"
+import { CLS_COLORS } from "@/components/shared/ComplexityChip"
+import { Card, Btn, SectionLabel, Pill } from "@/components/rpa"
 import { Icon } from "@/components/shared/icons"
-import { ArrowLeft, Play, Download, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { spacing } from "@/lib/design-tokens"
 import { apiGet, apiGetRuns, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
 import type { UseCase, StageRun, S4Result, SprintPlan, ReadinessResponse, Band } from "@/lib/types"
 
@@ -27,32 +28,31 @@ function FeatureCard({ sp, compact }: FeatureCardProps) {
   const { feature } = sp
   const color = CLS_COLORS[feature.size] || "var(--primary)"
   return (
-    <div style={{
+    <div className="rpa-card-hover" style={{
       borderRadius: 10, border: "1px solid var(--border)",
-      background: "var(--card)",
-      padding: compact ? "10px 12px" : "13px 14px",
+      background: "var(--surface-2)",
+      padding: compact ? "9px 11px" : "11px 13px",
       borderLeft: `3px solid ${color}`,
-      transition: "border-color 0.12s",
     }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: compact ? 11.5 : 12.5, fontWeight: 700, lineHeight: 1.3 }}>{feature.name}</span>
-        <ComplexityChip cls={feature.size} size={22} />
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3 }}>{feature.name}</span>
+        <span style={{
+          flexShrink: 0, fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700,
+          color, background: `color-mix(in oklab, ${color} 15%, transparent)`,
+          border: `1px solid color-mix(in oklab, ${color} 32%, transparent)`,
+          borderRadius: 5, padding: "2px 6px",
+        }}>
+          {feature.size}
+        </span>
       </div>
       {!compact && feature.description && (
-        <p style={{ fontSize: 11.5, color: "var(--muted-foreground)", lineHeight: 1.5, margin: "0 0 8px" }}>
+        <div style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 5, lineHeight: 1.4 }}>
           {feature.description}
-        </p>
+        </div>
       )}
       {feature.dependencies.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          <Icon name="link" size={11} style={{ color: "var(--muted-foreground)", marginTop: 1.5, flexShrink: 0 }} />
-          {feature.dependencies.map((dep, i) => (
-            <span key={i} style={{
-              fontSize: 10, padding: "2px 6px", borderRadius: 5,
-              background: "var(--muted)", border: "1px solid var(--border)",
-              color: "var(--muted-foreground)",
-            }}>{dep}</span>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 7, fontSize: 10, color: "var(--muted-fg)" }}>
+          <Icon name="link" size={10} /> depends on {feature.dependencies[0].split(" ").slice(0, 2).join(" ")}…
         </div>
       )}
     </div>
@@ -74,7 +74,6 @@ export default function Stage4Page() {
   const [loading, setLoading] = useState(true)
   const [runningStage, setRunningStage] = useState(false)
   const [error, setError] = useState("")
-  const [activeTab, setActiveTab] = useState<"board" | "features">("board")
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/auth/login"); return }
@@ -208,9 +207,9 @@ export default function Stage4Page() {
         <div className="flex h-14 items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link href={`/projects/${projectId}`}>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+              <Btn variant="ghost" size="sm" style={{ marginLeft: -8 }}>
                 <ArrowLeft className="mr-1.5 h-4 w-4" />Back
-              </Button>
+              </Btn>
             </Link>
             <div className="h-4 w-px bg-border/50" />
             <div>
@@ -221,30 +220,23 @@ export default function Stage4Page() {
           <div className="flex items-center gap-2">
             {latestResult && (
               <>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 10px",
-                  borderRadius: 6, fontSize: 11.5, fontWeight: 600,
-                  color: "var(--c-green)",
-                  background: "color-mix(in oklab, var(--c-green) 12%, transparent)",
-                  border: "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
-                }}>
-                  <Icon name="check" size={12} /> {latestResult.features.length} features · {sprintNumbers.length} sprints
-                </span>
-                <Button variant="outline" size="sm" onClick={handleExport}>
-                  <Download className="mr-1.5 h-3.5 w-3.5" />Export XLSX
-                </Button>
+                <Pill color="var(--c-green)">
+                  <Icon name="check" size={11} /> {latestResult.features.length} features · {sprintNumbers.length} sprints
+                </Pill>
+                <Btn variant="outline" size="sm" onClick={handleExport} icon="download">
+                  Export XLSX
+                </Btn>
               </>
             )}
             <RunHistoryDrawer runs={runs} stage="s4" stageName="Stage 4 - Sprint Tracker" />
-            <Button size="sm" onClick={handleRunStage} disabled={!canRun || isRunning}>
-              <Play className="mr-1.5 h-3.5 w-3.5" />
+            <Btn size="sm" onClick={handleRunStage} disabled={!canRun || isRunning} icon="play">
               {isRunning ? "Running…" : "Decompose & Assign"}
-            </Button>
+            </Btn>
           </div>
         </div>
       </header>
 
-      <div className="py-6 px-7 space-y-6">
+      <div style={{ height: "calc(100vh - 56px)", overflow: "hidden", padding: "24px 28px", display: "flex", flexDirection: "column", gap: spacing.gapDefault }}>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {isStale && <StalenessIndicator isStale stageName="Stage 4" />}
         {isRunning && (
@@ -252,10 +244,8 @@ export default function Stage4Page() {
         )}
 
         {/* ── Config card ── */}
-        <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", padding: 20 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: "var(--muted-foreground)", marginBottom: 16 }}>
-            Sprint configuration
-          </div>
+        <Card>
+          <SectionLabel style={{ marginBottom: 14 }}>Sprint configuration</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
             <div>
               <Label style={{ fontSize: 12, marginBottom: 6, display: "block" }}>Number of sprints</Label>
@@ -266,160 +256,97 @@ export default function Stage4Page() {
               <Input type="number" min="1" value={sprintLength} onChange={(e) => setSprintLength(parseInt(e.target.value) || 2)} disabled={isRunning} />
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button onClick={handleRunStage} disabled={!canRun || isRunning}>
-              <Play className="mr-2 h-4 w-4" />
-              {isRunning ? "Running…" : "Decompose & Assign Sprints"}
-            </Button>
-            <Button variant="outline" onClick={handleLoadFromS2} disabled={isRunning}>
-              <Icon name="link" size={13} style={{ marginRight: 6 }} />Load from S2
-            </Button>
-            <Button variant="outline" onClick={handleLoadFromS3} disabled={isRunning}>
-              <Icon name="link" size={13} style={{ marginRight: 6 }} />Load from S3
-            </Button>
+          <div style={{ display: "flex", gap: spacing.gapTight }}>
+            <Btn onClick={handleRunStage} disabled={!canRun || isRunning} icon="play" style={{ flex: 1 }}>
+              {isRunning ? "Running…" : "Decompose & Assign"}
+            </Btn>
+            <Btn variant="outline" onClick={handleLoadFromS2} disabled={isRunning} icon="link" style={{ flex: 1 }}>
+              Load from S2
+            </Btn>
+            <Btn variant="outline" onClick={handleLoadFromS3} disabled={isRunning} icon="link" style={{ flex: 1 }}>
+              Load from S3
+            </Btn>
           </div>
-        </div>
+        </Card>
 
         {/* ── Sprint board ── */}
         {latestResult && sprintNumbers.length > 0 && (
           <>
-            {/* View tabs */}
+            {/* Header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", gap: 1, borderRadius: 9, border: "1px solid var(--border)", padding: 3 }}>
-                {(["board", "features"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    style={{
-                      padding: "5px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                      background: activeTab === tab ? "color-mix(in oklab, var(--primary) 16%, transparent)" : "transparent",
-                      color: activeTab === tab ? "var(--primary)" : "var(--muted-foreground)",
-                      border: "none",
-                      transition: "all 0.12s",
-                    }}
-                  >
-                    {tab === "board" ? "Sprint board" : "Feature list"}
-                  </button>
-                ))}
+              <div>
+                <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>Sprint plan</h2>
+                <p style={{ fontSize: 12.5, color: "var(--muted-fg)", margin: "4px 0 0" }}>
+                  {latestResult.features.length} features · {sprintNumbers.length} sprints × {sprintLength} weeks · bin-packed by size after Sonnet decomposition
+                </p>
               </div>
-              <div style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
-                {latestResult.features.length} features · {sprintLength}w sprints · Sonnet 4.5
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--muted-fg)" }}>Sprint length</span>
+                <Pill color="var(--primary)" style={{ height: 28 }}>{sprintLength} weeks</Pill>
+                <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>from S3 window ÷ length</span>
               </div>
             </div>
 
-            {/* Board view */}
-            {activeTab === "board" && (
-              <div style={{ display: "grid", gap: 14, gridTemplateColumns: `repeat(${Math.min(sprintNumbers.length, 4)}, 1fr)` }}>
-                {sprintNumbers.map((sprintNum) => {
-                  const items = sprintGroups[sprintNum] || []
-                  const fillPct = (items.length / maxFeaturesInSprint) * 100
-                  return (
-                    <div key={sprintNum}>
-                      {/* Sprint header */}
-                      <div style={{
-                        borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)",
-                        padding: "12px 14px", marginBottom: 10,
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                          <span style={{
-                            fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6,
-                            color: "var(--primary)",
-                            background: "color-mix(in oklab, var(--primary) 14%, transparent)",
-                            border: "1px solid color-mix(in oklab, var(--primary) 28%, transparent)",
-                          }}>
-                            Sprint {sprintNum}
-                          </span>
-                          <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-                            {items.length} feature{items.length !== 1 ? "s" : ""}
-                          </span>
-                        </div>
-                        {/* Capacity bar */}
-                        <div style={{ height: 5, borderRadius: 99, background: "var(--track)", overflow: "hidden" }}>
-                          <div style={{
-                            width: `${fillPct}%`, height: "100%",
-                            background: fillPct > 80 ? "var(--c-amber)" : "var(--primary)",
-                            borderRadius: 99, transition: "width 0.3s",
-                          }} />
-                        </div>
+            {/* Sprint swimlanes */}
+            <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `repeat(${Math.min(sprintNumbers.length, 4)}, 1fr)`, gap: 14 }}>
+              {sprintNumbers.map((sprintNum) => {
+                const items = sprintGroups[sprintNum] || []
+                const fillPct = (items.length / maxFeaturesInSprint) * 100
+                return (
+                  <div key={sprintNum} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
+                    <Card pad={13} style={{ flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>Sprint {sprintNum}</span>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-fg)" }}>
+                          {items.length} features
+                        </span>
                       </div>
-
-                      {/* Feature cards */}
-                      <div style={{
-                        padding: "6px 0", borderRadius: 12,
-                        border: "1px dashed color-mix(in oklab, var(--border) 60%, transparent)",
-                        display: "flex", flexDirection: "column", gap: 6, minHeight: 60,
-                      }}>
-                        {items.map((sp, idx) => (
-                          <div key={idx} style={{ padding: "0 6px" }}>
-                            <FeatureCard sp={sp} />
-                          </div>
-                        ))}
+                      <div style={{ height: 6, borderRadius: 99, background: "var(--track)", overflow: "hidden" }}>
+                        <div style={{
+                          width: `${fillPct}%`, height: "100%", borderRadius: 99,
+                          background: fillPct > 85 ? "var(--c-amber)" : "var(--primary)",
+                        }} />
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Feature list view */}
-            {activeTab === "features" && (
-              <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", overflow: "hidden" }}>
-                {/* Table header */}
-                <div style={{
-                  display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px",
-                  padding: "10px 18px", fontSize: 10, fontWeight: 700,
-                  letterSpacing: 0.5, textTransform: "uppercase",
-                  color: "var(--muted-foreground)", borderBottom: "1px solid var(--border)",
-                }}>
-                  <span>Feature</span>
-                  <span>Size</span>
-                  <span>Dependencies</span>
-                  <span style={{ textAlign: "right" }}>Sprint</span>
-                </div>
-                {latestResult.sprint_plan.map((sp, idx) => (
-                  <div key={idx} style={{
-                    display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px",
-                    padding: "11px 18px", alignItems: "center",
-                    borderBottom: idx < latestResult.sprint_plan.length - 1 ? "1px solid var(--border)" : "none",
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 12.5, fontWeight: 600 }}>{sp.feature.name}</div>
-                      {sp.feature.description && (
-                        <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 2 }}>
-                          {sp.feature.description}
+                    </Card>
+                    <div style={{
+                      flex: 1, display: "flex", flexDirection: "column", gap: 9, padding: 4, borderRadius: 12,
+                      background: "color-mix(in oklab, var(--surface) 50%, transparent)",
+                      border: "1px dashed var(--border)",
+                    }}>
+                      {items.map((sp) => (
+                        <FeatureCard key={sp.feature.name} sp={sp} />
+                      ))}
+                      {items.length < 2 && (
+                        <div style={{
+                          flex: 1, minHeight: 40, borderRadius: 9, border: "1px dashed var(--border)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 11, color: "var(--muted-fg)",
+                        }}>
+                          <Icon name="plus" size={13} style={{ marginRight: 5 }} /> capacity free
                         </div>
                       )}
                     </div>
-                    <ComplexityChip cls={sp.feature.size} size={26} />
-                    <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-                      {sp.feature.dependencies.length > 0
-                        ? sp.feature.dependencies.join(", ")
-                        : "—"}
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
-                        color: "var(--primary)",
-                        background: "color-mix(in oklab, var(--primary) 13%, transparent)",
-                      }}>
-                        S{sp.sprint_number}
-                      </span>
-                    </div>
                   </div>
-                ))}
-              </div>
-            )}
+                )
+              })}
+            </div>
 
             {/* Size legend */}
-            <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 4 }}>
-              <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Size legend:</span>
-              {(["XS", "S", "M", "L", "XL"] as Band[]).map((b) => (
-                <div key={b} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted-foreground)" }}>
-                  <ComplexityChip cls={b} size={18} />
-                  {b === "XS" ? "1w" : b === "S" ? "2–4w" : b === "M" ? "5w" : b === "L" ? "6w" : "8w"}
-                </div>
-              ))}
-            </div>
+            <Card style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <SectionLabel>Feature size</SectionLabel>
+              <div style={{ display: "flex", gap: 13 }}>
+                {(["XS", "S", "M", "L", "XL"] as Band[]).map((b) => (
+                  <span key={b} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--fg-2)" }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: CLS_COLORS[b] }} />
+                    {b} = {b === "XS" ? "1wk" : b === "S" ? "2–4wk" : b === "M" ? "5wk" : b === "L" ? "6wk" : "8wk"}
+                  </span>
+                ))}
+              </div>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 11, color: "var(--muted-fg)", display: "flex", alignItems: "center", gap: 6 }}>
+                <Icon name="refresh" size={12} /> Change sprint length → re-run redistributes features · each run versioned
+              </span>
+            </Card>
           </>
         )}
       </div>
