@@ -18,6 +18,15 @@ import { spacing } from "@/lib/design-tokens"
 import { apiGet, apiGetRuns, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
 import type { UseCase, StageRun, S4Result, SprintPlan, ReadinessResponse, Band } from "@/lib/types"
 
+// Story points mapping (from exploration stage4.jsx line 6)
+const SIZE_POINTS: Record<Band, number> = {
+  XS: 1,
+  S: 2,
+  M: 3,
+  L: 5,
+  XL: 8,
+}
+
 /* FeatureCard */
 interface FeatureCardProps {
   sp: SprintPlan
@@ -74,6 +83,7 @@ export default function Stage4Page() {
   const [loading, setLoading] = useState(true)
   const [runningStage, setRunningStage] = useState(false)
   const [error, setError] = useState("")
+  const [activeTab, setActiveTab] = useState<"board" | "features">("board")
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/auth/login"); return }
@@ -272,64 +282,210 @@ export default function Stage4Page() {
         {/* ── Sprint board ── */}
         {latestResult && sprintNumbers.length > 0 && (
           <>
-            {/* Header */}
+            {/* Header with view toggle */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>Sprint plan</h2>
+                <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>
+                  {activeTab === "board" ? "Sprint plan" : "Decomposed features"}
+                </h2>
                 <p style={{ fontSize: 12.5, color: "var(--muted-fg)", margin: "4px 0 0" }}>
-                  {latestResult.features.length} features · {sprintNumbers.length} sprints × {sprintLength} weeks · bin-packed by size after Sonnet decomposition
+                  {activeTab === "board"
+                    ? `${latestResult.features.length} features · ${sprintNumbers.length} sprints × ${sprintLength} weeks · bin-packed by size after Sonnet decomposition`
+                    : "Sonnet read the S2 documents and split the process into deliverables."}
                 </p>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "var(--muted-fg)" }}>Sprint length</span>
-                <Pill color="var(--primary)" style={{ height: 28 }}>{sprintLength} weeks</Pill>
-                <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>from S3 window ÷ length</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                {/* View toggle */}
+                <div style={{ display: "flex", gap: 1, borderRadius: 9, border: "1px solid var(--border)", padding: 3 }}>
+                  {(["board", "features"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      style={{
+                        padding: "5px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        background: activeTab === tab ? "color-mix(in oklab, var(--primary) 16%, transparent)" : "transparent",
+                        color: activeTab === tab ? "var(--primary)" : "var(--muted-fg)",
+                        border: "none",
+                        fontFamily: "inherit",
+                        transition: "all 0.12s",
+                      }}
+                    >
+                      {tab === "board" ? "Sprint board" : "Feature table"}
+                    </button>
+                  ))}
+                </div>
+                {activeTab === "board" && (
+                  <>
+                    <span style={{ fontSize: 12, color: "var(--muted-fg)" }}>Sprint length</span>
+                    <Pill color="var(--primary)" style={{ height: 28 }}>{sprintLength} weeks</Pill>
+                  </>
+                )}
               </div>
             </div>
 
             {/* Sprint swimlanes */}
-            <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `repeat(${Math.min(sprintNumbers.length, 4)}, 1fr)`, gap: 14 }}>
-              {sprintNumbers.map((sprintNum) => {
-                const items = sprintGroups[sprintNum] || []
-                const fillPct = (items.length / maxFeaturesInSprint) * 100
-                return (
-                  <div key={sprintNum} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
-                    <Card pad={13} style={{ flexShrink: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>Sprint {sprintNum}</span>
-                        <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-fg)" }}>
-                          {items.length} features
+            {activeTab === "board" && (
+              <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `repeat(${Math.min(sprintNumbers.length, 4)}, 1fr)`, gap: 14 }}>
+                {sprintNumbers.map((sprintNum) => {
+                  const items = sprintGroups[sprintNum] || []
+                  const fillPct = (items.length / maxFeaturesInSprint) * 100
+                  return (
+                    <div key={sprintNum} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
+                      <Card pad={13} style={{ flexShrink: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>Sprint {sprintNum}</span>
+                          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-fg)" }}>
+                            {items.length} features
+                          </span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 99, background: "var(--track)", overflow: "hidden" }}>
+                          <div style={{
+                            width: `${fillPct}%`, height: "100%", borderRadius: 99,
+                            background: fillPct > 85 ? "var(--c-amber)" : "var(--primary)",
+                          }} />
+                        </div>
+                      </Card>
+                      <div style={{
+                        flex: 1, display: "flex", flexDirection: "column", gap: 9, padding: 4, borderRadius: 12,
+                        background: "color-mix(in oklab, var(--surface) 50%, transparent)",
+                        border: "1px dashed var(--border)",
+                      }}>
+                        {items.map((sp) => (
+                          <FeatureCard key={sp.feature.name} sp={sp} />
+                        ))}
+                        {items.length < 2 && (
+                          <div style={{
+                            flex: 1, minHeight: 40, borderRadius: 9, border: "1px dashed var(--border)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 11, color: "var(--muted-fg)",
+                          }}>
+                            <Icon name="plus" size={13} style={{ marginRight: 5 }} /> capacity free
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Feature table */}
+            {activeTab === "features" && (
+              <Card pad={0} style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                {/* Table header */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "2.2fr 0.6fr 0.5fr 0.7fr 0.6fr 0.7fr",
+                  padding: "10px 16px",
+                  borderBottom: "1px solid var(--border)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: 0.5,
+                  color: "var(--muted-fg)",
+                  textTransform: "uppercase",
+                }}>
+                  <span>Feature</span>
+                  <span style={{ textAlign: "center" }}>Size</span>
+                  <span style={{ textAlign: "center" }}>Pts</span>
+                  <span style={{ textAlign: "center" }}>Deps</span>
+                  <span style={{ textAlign: "center" }}>Status</span>
+                  <span style={{ textAlign: "right" }}>Sprint</span>
+                </div>
+
+                {/* Table rows */}
+                <div style={{ flex: 1, overflow: "auto" }}>
+                  {latestResult.sprint_plan.map((sp, idx) => {
+                    const points = SIZE_POINTS[sp.feature.size] || 0
+                    const color = CLS_COLORS[sp.feature.size] || "var(--primary)"
+                    return (
+                      <div
+                        key={idx}
+                        className="rpa-card-hover"
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "2.2fr 0.6fr 0.5fr 0.7fr 0.6fr 0.7fr",
+                          padding: "12px 16px",
+                          alignItems: "center",
+                          borderBottom: idx < latestResult.sprint_plan.length - 1 ? "1px solid var(--border)" : "none",
+                        }}
+                      >
+                        {/* Feature name + description */}
+                        <div style={{ minWidth: 0, paddingRight: 8 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{sp.feature.name}</div>
+                          {sp.feature.description && (
+                            <div style={{
+                              fontSize: 10.5,
+                              color: "var(--muted-fg)",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}>
+                              {sp.feature.description}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Size chip */}
+                        <span style={{ textAlign: "center", display: "flex", justifyContent: "center" }}>
+                          <span style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color,
+                            background: `color-mix(in oklab, ${color} 14%, transparent)`,
+                            borderRadius: 5,
+                            padding: "2px 7px",
+                          }}>
+                            {sp.feature.size}
+                          </span>
+                        </span>
+
+                        {/* Story points */}
+                        <span style={{
+                          textAlign: "center",
+                          fontFamily: "var(--mono)",
+                          fontSize: 12,
+                          color: "var(--fg-2)",
+                        }}>
+                          {points}
+                        </span>
+
+                        {/* Dependencies */}
+                        <span style={{ textAlign: "center", fontSize: 11.5, color: "var(--muted-fg)" }}>
+                          {sp.feature.dependencies.length || "—"}
+                        </span>
+
+                        {/* Status (placeholder - from tracker export) */}
+                        <span style={{ textAlign: "center" }}>
+                          <span style={{
+                            fontSize: 9.5,
+                            fontWeight: 600,
+                            padding: "3px 7px",
+                            borderRadius: 5,
+                            color: "var(--muted-fg)",
+                            background: "var(--surface-2)",
+                            border: "1px solid var(--border)",
+                          }}>
+                            Planned
+                          </span>
+                        </span>
+
+                        {/* Sprint */}
+                        <span style={{
+                          textAlign: "right",
+                          fontFamily: "var(--mono)",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: "var(--primary)",
+                        }}>
+                          S{sp.sprint_number}
                         </span>
                       </div>
-                      <div style={{ height: 6, borderRadius: 99, background: "var(--track)", overflow: "hidden" }}>
-                        <div style={{
-                          width: `${fillPct}%`, height: "100%", borderRadius: 99,
-                          background: fillPct > 85 ? "var(--c-amber)" : "var(--primary)",
-                        }} />
-                      </div>
-                    </Card>
-                    <div style={{
-                      flex: 1, display: "flex", flexDirection: "column", gap: 9, padding: 4, borderRadius: 12,
-                      background: "color-mix(in oklab, var(--surface) 50%, transparent)",
-                      border: "1px dashed var(--border)",
-                    }}>
-                      {items.map((sp) => (
-                        <FeatureCard key={sp.feature.name} sp={sp} />
-                      ))}
-                      {items.length < 2 && (
-                        <div style={{
-                          flex: 1, minHeight: 40, borderRadius: 9, border: "1px dashed var(--border)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 11, color: "var(--muted-fg)",
-                        }}>
-                          <Icon name="plus" size={13} style={{ marginRight: 5 }} /> capacity free
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
+              </Card>
+            )}
 
             {/* Size legend */}
             <Card style={{ display: "flex", alignItems: "center", gap: 16 }}>
