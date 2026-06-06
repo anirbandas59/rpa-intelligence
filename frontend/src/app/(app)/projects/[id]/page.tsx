@@ -158,7 +158,7 @@ export default function ProjectDetailPage() {
   if (error || !project) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="container py-8">
+        <div className="py-6 px-7">
           <Alert variant="destructive"><AlertDescription>{error || "Project not found"}</AlertDescription></Alert>
           <Link href="/projects"><Button className="mt-4">Back to Projects</Button></Link>
         </div>
@@ -187,7 +187,7 @@ export default function ProjectDetailPage() {
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container flex h-14 items-center gap-3">
+        <div className="flex h-14 items-center gap-3 px-6">
           <Link href="/projects">
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
               <ArrowLeft className="mr-1.5 h-4 w-4" />Projects
@@ -200,7 +200,7 @@ export default function ProjectDetailPage() {
 
       {/* ── Hero ── */}
       <div className="gradient-hero border-b border-border/50">
-        <div className="container py-8">
+        <div className="py-6 px-7">
           <h2 className="text-3xl font-bold tracking-tight gradient-text mb-1">{project.name}</h2>
           {project.description && (
             <p className="text-muted-foreground text-sm mb-6">{project.description}</p>
@@ -223,7 +223,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      <div className="container py-8 space-y-8">
+      <div className="py-6 px-7 space-y-6">
         {/* ── Use-case selector + action row ── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

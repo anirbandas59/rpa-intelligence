@@ -186,7 +186,7 @@ export default function Stage3Page() {
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container flex h-14 items-center justify-between">
+        <div className="flex h-14 items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link href={`/projects/${projectId}`}>
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
@@ -221,7 +221,7 @@ export default function Stage3Page() {
         </div>
       </header>
 
-      <div className="container max-w-5xl py-6 space-y-6">
+      <div className="py-6 px-7 space-y-6">
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {isStale && <StalenessIndicator isStale stageName="Stage 3" />}
 

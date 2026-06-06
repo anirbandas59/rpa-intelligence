@@ -41,7 +41,7 @@ export default function NewProjectPage() {
   return (
     <div className="min-h-screen bg-muted/50">
       <div className="border-b bg-background">
-        <div className="container flex h-16 items-center">
+        <div className="flex h-16 items-center px-6">
           <Link href="/projects">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -51,7 +51,7 @@ export default function NewProjectPage() {
         </div>
       </div>
 
-      <div className="container max-w-2xl py-8">
+      <div className="py-6 px-7">
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">Create New Project</CardTitle>

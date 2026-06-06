@@ -4,12 +4,109 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { EmptyState } from "@/components/shared/EmptyState"
 import { Plus, FolderOpen, Loader2, LogOut, Settings, Layers } from "lucide-react"
-import { apiGet, isAuthenticated, clearAuthToken } from "@/lib/api"
-import type { Project } from "@/lib/types"
+import { apiGet, apiPost, isAuthenticated, clearAuthToken } from "@/lib/api"
+import type { Project, CreateProjectRequest } from "@/lib/types"
+
+function NewProjectSheet({ onCreated }: { onCreated: (project: Project) => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const reset = () => { setName(""); setDescription(""); setError("") }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+    try {
+      const project = await apiPost<Project>("/api/v1/projects", {
+        name,
+        description: description || undefined,
+      } as CreateProjectRequest)
+      reset()
+      setOpen(false)
+      onCreated(project)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create project")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset() }}>
+      <SheetTrigger render={<Button className="glow-primary" />}>
+        <Plus className="mr-2 h-4 w-4" />
+        New Project
+      </SheetTrigger>
+      <SheetContent className="w-full sm:max-w-md flex flex-col">
+        <SheetHeader>
+          <SheetTitle>New Project</SheetTitle>
+          <SheetDescription>
+            Create a new RPA migration and assessment project.
+          </SheetDescription>
+        </SheetHeader>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5 mt-6 flex-1">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="new-proj-name">Project Name</Label>
+            <Input
+              id="new-proj-name"
+              placeholder="My RPA Migration Project"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              disabled={loading}
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="new-proj-desc">Description <span className="text-muted-foreground">(optional)</span></Label>
+            <Input
+              id="new-proj-desc"
+              placeholder="Brief description of this project"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="flex gap-3 mt-auto pt-4 border-t border-border/50">
+            <Button type="submit" disabled={loading || !name.trim()} className="flex-1">
+              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating…</> : "Create Project"}
+            </Button>
+            <Button type="button" variant="outline" disabled={loading} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
 
 export default function ProjectsPage() {
   const router = useRouter()
@@ -42,6 +139,10 @@ export default function ProjectsPage() {
     router.push("/auth/login")
   }
 
+  const handleProjectCreated = (project: Project) => {
+    router.push(`/projects/${project.id}`)
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -54,7 +155,7 @@ export default function ProjectsPage() {
     <div className="min-h-screen bg-background">
       {/* Top nav */}
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container flex h-14 items-center justify-between">
+        <div className="flex h-14 items-center justify-between px-6">
           <div className="flex items-center gap-2.5">
             <div className="h-7 w-7 rounded-lg bg-primary/20 flex items-center justify-center">
               <Layers className="h-4 w-4 text-primary" />
@@ -78,7 +179,7 @@ export default function ProjectsPage() {
 
       {/* Hero band */}
       <div className="gradient-hero border-b border-border/50">
-        <div className="container py-12">
+        <div className="py-12 px-7">
           <div className="flex items-end justify-between gap-4">
             <div>
               <h1 className="text-4xl font-bold tracking-tight gradient-text mb-2">
@@ -88,12 +189,7 @@ export default function ProjectsPage() {
                 Manage your RPA migration and complexity assessment projects across all four stages.
               </p>
             </div>
-            <Link href="/projects/new">
-              <Button className="glow-primary">
-                <Plus className="mr-2 h-4 w-4" />
-                New Project
-              </Button>
-            </Link>
+            <NewProjectSheet onCreated={handleProjectCreated} />
           </div>
 
           {/* Stats row */}
@@ -116,7 +212,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Content */}
-      <div className="container py-8">
+      <div className="py-6 px-7">
         {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertDescription>{error}</AlertDescription>
@@ -128,14 +224,7 @@ export default function ProjectsPage() {
             icon={<FolderOpen className="h-8 w-8" />}
             title="No projects yet"
             description="Get started by creating your first RPA assessment project."
-            action={
-              <Link href="/projects/new">
-                <Button className="glow-primary">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Project
-                </Button>
-              </Link>
-            }
+            action={<NewProjectSheet onCreated={handleProjectCreated} />}
           />
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -144,37 +233,25 @@ export default function ProjectsPage() {
               return (
                 <Link key={project.id} href={`/projects/${project.id}`}>
                   <div className="group relative glass-card rounded-xl hover:glow-primary hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden h-full flex">
-                    {/* Left accent bar */}
                     <div className="w-1 shrink-0 bg-primary/60 rounded-l-xl" />
-
                     <div className="flex-1 p-5">
-                      {/* Header row */}
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="font-semibold text-base leading-snug group-hover:text-primary transition-colors line-clamp-2 pr-2">
                           {project.name}
                         </h3>
-                        <Badge
-                          variant="outline"
-                          className="shrink-0 text-xs border-border/50 text-muted-foreground"
-                        >
+                        <Badge variant="outline" className="shrink-0 text-xs border-border/50 text-muted-foreground">
                           {useCaseCount} {useCaseCount === 1 ? "case" : "cases"}
                         </Badge>
                       </div>
-
-                      {/* Description */}
                       {project.description && (
                         <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
                           {project.description}
                         </p>
                       )}
-
-                      {/* Footer */}
                       <div className="mt-auto pt-3 border-t border-border/30">
                         <span className="text-xs text-muted-foreground/60">
                           Created {new Date(project.created_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
+                            month: "short", day: "numeric", year: "numeric",
                           })}
                         </span>
                       </div>
