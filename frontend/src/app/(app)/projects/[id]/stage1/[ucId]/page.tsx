@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -15,7 +14,6 @@ import { spacing } from "@/lib/design-tokens";
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress";
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer";
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator";
-import { InputSourceBadge } from "@/components/shared/InputSourceBadge";
 import { Gauge } from "@/components/shared/Gauge";
 import { DimBar } from "@/components/shared/DimBar";
 import { RadialDim } from "@/components/shared/RadialDim";
@@ -25,7 +23,6 @@ import {
   ArrowLeft,
   Loader2,
   Play,
-  RefreshCw,
   BarChart3,
   LayoutList,
 } from "lucide-react";
@@ -34,7 +31,6 @@ import {
   apiGet,
   apiGetRuns,
   apiPost,
-  apiPatch,
   isAuthenticated,
 } from "@/lib/api";
 import type {
@@ -109,86 +105,101 @@ export default function Stage1Page() {
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [scoringAll, setScoringAll] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [ucData, readinessData, runsData] = await Promise.all([
-        apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
-        apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
-        apiGetRuns<StageRun>(`/api/v1/stage1/${ucId}/s1/runs`).catch(
-          () => [] as StageRun[],
-        ),
-      ]);
-      setUseCase(ucData);
-      setReadiness(readinessData);
-      setRuns(runsData);
-
-      if (ucData.s1_latest_run_id && runsData.length > 0) {
-        const latestRun = runsData.find(
-          (r) => r.id === ucData.s1_latest_run_id,
-        );
-        if (latestRun?.status === "complete") {
-          setLatestResult(latestRun.result as unknown as S1Result);
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  }, [ucId]);
-
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push("/auth/login");
       return;
     }
+
+    const fetchData = async () => {
+      try {
+        const [ucData, readinessData, runsData] = await Promise.all([
+          apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
+          apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
+          apiGetRuns<StageRun>(`/api/v1/stage1/${ucId}/s1/runs`).catch(
+            () => [] as StageRun[],
+          ),
+        ]);
+        setUseCase(ucData);
+        setReadiness(readinessData);
+        setRuns(runsData);
+
+        if (ucData.s1_latest_run_id && runsData.length > 0) {
+          const latestRun = runsData.find(
+            (r) => r.id === ucData.s1_latest_run_id,
+          );
+          if (latestRun?.status === "complete") {
+            setLatestResult(latestRun.result as unknown as S1Result);
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchData();
-  }, [fetchData, router]);
+  }, [ucId, router]);
 
   /* portfolio: fetch all UCs + their s1 runs */
-  const loadPortfolio = useCallback(async () => {
-    setPortfolioLoading(true);
-    try {
-      const allUcs = await apiGet<UseCase[]>(
-        `/api/v1/projects/${projectId}/use-cases`,
-      );
-      const rows: PortfolioRow[] = await Promise.all(
-        allUcs.map(async (u) => {
-          if (!u.s1_latest_run_id)
-            return { uc: u, result: null, status: "not_ready" };
-          try {
-            const ucRuns = await apiGetRuns<StageRun>(
-              `/api/v1/stage1/${u.id}/s1/runs`,
-            );
-            const latest = ucRuns.find((r) => r.id === u.s1_latest_run_id);
-            if (latest?.status === "complete") {
+  useEffect(() => {
+    if (viewMode !== "portfolio") return;
+
+    let cancelled = false;
+
+    const loadPortfolio = async () => {
+      setPortfolioLoading(true);
+      try {
+        const allUcs = await apiGet<UseCase[]>(
+          `/api/v1/projects/${projectId}/use-cases`,
+        );
+        const rows: PortfolioRow[] = await Promise.all(
+          allUcs.map(async (u) => {
+            if (!u.s1_latest_run_id)
+              return { uc: u, result: null, status: "not_ready" };
+            try {
+              const ucRuns = await apiGetRuns<StageRun>(
+                `/api/v1/stage1/${u.id}/s1/runs`,
+              );
+              const latest = ucRuns.find((r) => r.id === u.s1_latest_run_id);
+              if (latest?.status === "complete") {
+                return {
+                  uc: u,
+                  result: latest.result as unknown as S1Result,
+                  status: "complete",
+                };
+              }
               return {
                 uc: u,
-                result: latest.result as unknown as S1Result,
-                status: "complete",
+                result: null,
+                status: latest?.status || "not_ready",
               };
+            } catch {
+              return { uc: u, result: null, status: "not_ready" };
             }
-            return {
-              uc: u,
-              result: null,
-              status: latest?.status || "not_ready",
-            };
-          } catch {
-            return { uc: u, result: null, status: "not_ready" };
-          }
-        }),
-      );
-      setPortfolioRows(rows);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load portfolio");
-    } finally {
-      setPortfolioLoading(false);
-    }
-  }, [projectId]);
+          }),
+        );
+        if (!cancelled) {
+          setPortfolioRows(rows);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load portfolio");
+        }
+      } finally {
+        if (!cancelled) {
+          setPortfolioLoading(false);
+        }
+      }
+    };
 
-  useEffect(() => {
-    if (viewMode === "portfolio") loadPortfolio();
-  }, [viewMode, loadPortfolio]);
+    loadPortfolio();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewMode, projectId]);
 
   const handleRun = async () => {
     setRunningStage(true);
@@ -249,7 +260,11 @@ export default function Stage1Page() {
         ),
       );
       toast.success(`Started scoring ${unscored.length} use cases`);
-      setTimeout(() => loadPortfolio(), 3000);
+      // Trigger portfolio reload by toggling viewMode briefly
+      setTimeout(() => {
+        setViewMode("scorecard");
+        setTimeout(() => setViewMode("portfolio"), 50);
+      }, 3000);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Scoring failed");
     } finally {
@@ -277,7 +292,8 @@ export default function Stage1Page() {
 
   const isStale = readiness?.s1 === "stale";
   const isRunning = readiness?.s1 === "running" || runningStage;
-  const isComplete = readiness?.s1 === "complete" && !!latestResult;
+  // Show scorecard if we have a result, regardless of readiness status
+  const isComplete = !!latestResult;
 
   return (
     <div className="min-h-screen bg-background">

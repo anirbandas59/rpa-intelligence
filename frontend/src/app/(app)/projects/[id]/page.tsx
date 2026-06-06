@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -108,9 +108,9 @@ export default function ProjectDetailPage() {
   const [selectedUcId, setSelectedUcId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [orchestratorSession, setOrchestratorSession] = useState<string | null>(
-    null,
-  );
+  // const [orchestratorSession, setOrchestratorSession] = useState<string | null>(
+  //   null,
+  // );
   const [newUcOpen, setNewUcOpen] = useState(false);
   const [newUcName, setNewUcName] = useState("");
   const [newUcDesc, setNewUcDesc] = useState("");
@@ -119,87 +119,98 @@ export default function ProjectDetailPage() {
     "pipeline",
   );
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [projectData, useCasesData] = await Promise.all([
-        apiGet<Project>(`/api/v1/projects/${projectId}`),
-        apiGet<UseCase[]>(`/api/v1/projects/${projectId}/use-cases`),
-      ]);
-      setProject(projectData);
-      setUseCases(useCasesData);
-      if (useCasesData.length > 0) setSelectedUcId(useCasesData[0].id);
-
-      const readinessMap = new Map<string, ReadinessResponse>();
-      await Promise.all(
-        useCasesData.map(async (uc) => {
-          try {
-            const r = await apiGet<ReadinessResponse>(
-              `/api/v1/use-cases/${uc.id}/readiness`,
-            );
-            readinessMap.set(uc.id, r);
-          } catch {
-            /* skip */
-          }
-        }),
-      );
-      setReadiness(readinessMap);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load project");
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push("/auth/login");
       return;
     }
+
+    const fetchData = async () => {
+      try {
+        const [projectData, useCasesData] = await Promise.all([
+          apiGet<Project>(`/api/v1/projects/${projectId}`),
+          apiGet<UseCase[]>(`/api/v1/projects/${projectId}/use-cases`),
+        ]);
+        setProject(projectData);
+        setUseCases(useCasesData);
+        if (useCasesData.length > 0) setSelectedUcId(useCasesData[0].id);
+
+        const readinessMap = new Map<string, ReadinessResponse>();
+        await Promise.all(
+          useCasesData.map(async (uc) => {
+            try {
+              const r = await apiGet<ReadinessResponse>(
+                `/api/v1/use-cases/${uc.id}/readiness`,
+              );
+              readinessMap.set(uc.id, r);
+            } catch {
+              /* skip */
+            }
+          }),
+        );
+        setReadiness(readinessMap);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load project");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchData();
-  }, [fetchData, router]);
+  }, [projectId, router]);
 
   /* Lazily resolve stage results for hero stats */
   useEffect(() => {
     if (useCases.length === 0) return;
-    useCases.forEach(async (uc) => {
-      const cache: UCCache = {};
-      try {
-        if (uc.s1_latest_run_id) {
-          const runs = await apiGetRuns<{
-            id: string;
-            status: string;
-            result: unknown;
-          }>(`/api/v1/stage1/${uc.id}/s1/runs`);
-          const lr = runs.find(
-            (r) => r.id === uc.s1_latest_run_id && r.status === "complete",
-          );
-          if (lr) cache.s1 = lr.result as S1Result;
-        }
-        if (uc.s2_latest_run_id) {
-          const runs = await apiGetRuns<{
-            id: string;
-            status: string;
-            result: unknown;
-          }>(`/api/v1/stage2/${uc.id}/s2/runs`);
-          const lr = runs.find(
-            (r) => r.id === uc.s2_latest_run_id && r.status === "complete",
-          );
-          if (lr) cache.s2 = lr.result as S2Result;
-        }
-        if (uc.s3_latest_run_id) {
-          // S3 list returns summary only — fetch full result directly
-          const fullRun = await apiGet<{
-            id: string;
-            status: string;
-            result: S3Result;
-          }>(`/api/v1/stage3/${uc.id}/s3/runs/${uc.s3_latest_run_id}`);
-          if (fullRun.status === "complete") cache.s3 = fullRun.result;
-        }
-      } catch {
-        /* silent */
-      }
-      setUcCache((prev) => new Map(prev).set(uc.id, cache));
-    });
+
+    // Proper async handling with Promise.all instead of forEach
+    const loadCaches = async () => {
+      const cacheEntries = await Promise.all(
+        useCases.map(async (uc) => {
+          const cache: UCCache = {};
+          try {
+            if (uc.s1_latest_run_id) {
+              const runs = await apiGetRuns<{
+                id: string;
+                status: string;
+                result: unknown;
+              }>(`/api/v1/stage1/${uc.id}/s1/runs`);
+              const lr = runs.find(
+                (r) => r.id === uc.s1_latest_run_id && r.status === "complete",
+              );
+              if (lr) cache.s1 = lr.result as S1Result;
+            }
+            if (uc.s2_latest_run_id) {
+              const runs = await apiGetRuns<{
+                id: string;
+                status: string;
+                result: unknown;
+              }>(`/api/v1/stage2/${uc.id}/s2/runs`);
+              const lr = runs.find(
+                (r) => r.id === uc.s2_latest_run_id && r.status === "complete",
+              );
+              if (lr) cache.s2 = lr.result as S2Result;
+            }
+            if (uc.s3_latest_run_id) {
+              // S3 list returns summary only — fetch full result directly
+              const fullRun = await apiGet<{
+                id: string;
+                status: string;
+                result: S3Result;
+              }>(`/api/v1/stage3/${uc.id}/s3/runs/${uc.s3_latest_run_id}`);
+              if (fullRun.status === "complete") cache.s3 = fullRun.result;
+            }
+          } catch {
+            /* silent */
+          }
+          return [uc.id, cache] as const;
+        }),
+      );
+
+      setUcCache(new Map(cacheEntries));
+    };
+
+    loadCaches();
   }, [useCases]);
 
   const handleCreateUc = async () => {
@@ -218,7 +229,8 @@ export default function ProjectDetailPage() {
       setNewUcOpen(false);
       setNewUcName("");
       setNewUcDesc("");
-      fetchData();
+      // Reload page to fetch updated data
+      window.location.reload();
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to create use case",
@@ -290,15 +302,46 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      <div style={{ height: "calc(100vh - 3.5rem)", overflow: "hidden", padding: "26px 30px", display: "flex", flexDirection: "column", gap: 22 }}>
+      <div
+        style={{
+          height: "calc(100vh - 3.5rem)",
+          overflow: "hidden",
+          padding: "26px 30px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 22,
+        }}
+      >
         {/* ── Hero ── */}
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+          }}
+        >
           <div>
-            <h1 className="rpa-gradient-text" style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.6, margin: 0 }}>
+            <h1
+              className="rpa-gradient-text"
+              style={{
+                fontSize: 30,
+                fontWeight: 700,
+                letterSpacing: -0.6,
+                margin: 0,
+              }}
+            >
               {project.name}
             </h1>
-            <p style={{ fontSize: 13.5, color: "var(--muted-fg)", margin: "6px 0 0" }}>
-              {project.description || "Four-stage delivery intelligence"} · {useCases.length} use case{useCases.length !== 1 ? "s" : ""} · {quickWins} quick win{quickWins !== 1 ? "s" : ""} identified
+            <p
+              style={{
+                fontSize: 13.5,
+                color: "var(--muted-fg)",
+                margin: "6px 0 0",
+              }}
+            >
+              {project.description || "Four-stage delivery intelligence"} ·{" "}
+              {useCases.length} use case{useCases.length !== 1 ? "s" : ""} ·{" "}
+              {quickWins} quick win{quickWins !== 1 ? "s" : ""} identified
             </p>
           </div>
           <div style={{ display: "flex", gap: 26 }}>
@@ -309,16 +352,40 @@ export default function ProjectDetailPage() {
               { n: totalFeatures || "—", l: "features" },
             ].map(({ n, l }) => (
               <div key={l}>
-                <div style={{ fontFamily: "var(--mono)", fontSize: 24, fontWeight: 700 }}>{n}</div>
-                <div style={{ fontSize: 11, color: "var(--muted-fg)" }}>{l}</div>
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 24,
+                    fontWeight: 700,
+                  }}
+                >
+                  {n}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--muted-fg)" }}>
+                  {l}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
         {/* ── View toggle + actions ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 1, borderRadius: 9, border: "1px solid var(--border)", padding: 3 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 1,
+              borderRadius: 9,
+              border: "1px solid var(--border)",
+              padding: 3,
+            }}
+          >
             {(["pipeline", "portfolio"] as const).map((v) => (
               <button
                 key={v}
@@ -329,8 +396,12 @@ export default function ProjectDetailPage() {
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",
-                  background: activeView === v ? "color-mix(in oklab, var(--primary) 16%, transparent)" : "transparent",
-                  color: activeView === v ? "var(--primary)" : "var(--muted-fg)",
+                  background:
+                    activeView === v
+                      ? "color-mix(in oklab, var(--primary) 16%, transparent)"
+                      : "transparent",
+                  color:
+                    activeView === v ? "var(--primary)" : "var(--muted-fg)",
                   border: "none",
                   transition: "all 0.12s",
                 }}
@@ -347,16 +418,32 @@ export default function ProjectDetailPage() {
 
         {/* ══ PIPELINE VIEW (HubRail pattern) ══════════════════════════ */}
         {activeView === "pipeline" && selectedUc && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18, flex: 1, minHeight: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
             <div>
-              <SectionLabel style={{ marginBottom: 12 }}>Assessment pipeline · {selectedUc.name}</SectionLabel>
+              <SectionLabel style={{ marginBottom: 12 }}>
+                Assessment pipeline · {selectedUc.name}
+              </SectionLabel>
               <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
                 {STAGES.map((stage, idx) => {
-                  const status: ReadinessStatus = resolveStatus(selectedReadiness, stage.id);
+                  const status: ReadinessStatus = resolveStatus(
+                    selectedReadiness,
+                    stage.id,
+                  );
                   const cfg = STATUS_CONFIG[status];
                   const cache = ucCache.get(selectedUcId || "");
                   const href = `/projects/${projectId}/${stage.path}/${selectedUc.id}`;
-                  const stageIcons: Record<string, "target" | "grid" | "calendar" | "layers"> = {
+                  const stageIcons: Record<
+                    string,
+                    "target" | "grid" | "calendar" | "layers"
+                  > = {
                     s1: "target",
                     s2: "grid",
                     s3: "calendar",
@@ -376,78 +463,170 @@ export default function ProjectDetailPage() {
                           position: "relative",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 14,
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                          >
                             <span
                               style={{
                                 fontFamily: "var(--mono)",
                                 fontSize: 10.5,
                                 fontWeight: 700,
                                 color: "var(--primary)",
-                                border: "1px solid color-mix(in oklab, var(--primary) 30%, transparent)",
+                                border:
+                                  "1px solid color-mix(in oklab, var(--primary) 30%, transparent)",
                                 borderRadius: 5,
                                 padding: "2px 5px",
                               }}
                             >
                               {stage.short}
                             </span>
-                            <Icon name={stageIcons[stage.id]} size={15} style={{ color: "var(--muted-fg)" }} />
+                            <Icon
+                              name={stageIcons[stage.id]}
+                              size={15}
+                              style={{ color: "var(--muted-fg)" }}
+                            />
                           </span>
-                          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: cfg.color }}>
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              fontSize: 11,
+                              color: cfg.color,
+                            }}
+                          >
                             <span
                               style={{
                                 width: 7,
                                 height: 7,
                                 borderRadius: 99,
                                 background: cfg.color,
-                                ...(status === "running" ? { animation: "rpaPulse 1.6s ease-in-out infinite" } : {}),
+                                ...(status === "running"
+                                  ? {
+                                      animation:
+                                        "rpaPulse 1.6s ease-in-out infinite",
+                                    }
+                                  : {}),
                               }}
                             />
                             {cfg.label}
                           </span>
                         </div>
-                        <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 14, lineHeight: 1.25 }}>{stage.label}</div>
+                        <div
+                          style={{
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                            marginBottom: 14,
+                            lineHeight: 1.25,
+                          }}
+                        >
+                          {stage.label}
+                        </div>
 
                         {/* NodeViz - stage-specific mini visualization */}
-                        <div style={{ minHeight: 38, display: "flex", alignItems: "center", gap: 10 }}>
+                        <div
+                          style={{
+                            minHeight: 38,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                          }}
+                        >
                           {stage.id === "s1" && cache?.s1 ? (
                             <>
-                              <div style={{ fontFamily: "var(--mono)", fontSize: 26, fontWeight: 700, color: BAND_META[cache.s1.migration_decision]?.color || "var(--primary)" }}>
+                              <div
+                                style={{
+                                  fontFamily: "var(--mono)",
+                                  fontSize: 26,
+                                  fontWeight: 700,
+                                  color:
+                                    BAND_META[cache.s1.migration_decision]
+                                      ?.color || "var(--primary)",
+                                }}
+                              >
                                 {cache.s1.total_score}
                               </div>
-                              <PriorityBadge band={cache.s1.migration_decision} />
+                              <PriorityBadge
+                                band={cache.s1.migration_decision}
+                              />
                             </>
                           ) : stage.id === "s2" && cache?.s2 ? (
                             <>
-                              <ComplexityChip cls={cache.s2.complexity_class as Band} size={30} />
-                              <div style={{ fontSize: 12, color: "var(--fg-2)" }}>
-                                {cache.s2.effort_min_weeks === cache.s2.effort_max_weeks
+                              <ComplexityChip
+                                cls={cache.s2.complexity_class as Band}
+                                size={30}
+                              />
+                              <div
+                                style={{ fontSize: 12, color: "var(--fg-2)" }}
+                              >
+                                {cache.s2.effort_min_weeks ===
+                                cache.s2.effort_max_weeks
                                   ? `${cache.s2.effort_min_weeks}w`
                                   : `${cache.s2.effort_min_weeks}–${cache.s2.effort_max_weeks}w`}
                               </div>
                             </>
                           ) : stage.id === "s3" && cache?.s3 ? (
                             <>
-                              <MiniSpark values={cache.s3.phases.map((p) => p.weeks)} color="var(--primary)" w={70} h={22} />
-                              <span style={{ fontSize: 11.5, color: "var(--fg-2)" }}>
-                                ~{cache.s3.phases.reduce((s, p) => s + p.weeks, 0)} wks
+                              <MiniSpark
+                                values={cache.s3.phases.map((p) => p.weeks)}
+                                color="var(--primary)"
+                                w={70}
+                                h={22}
+                              />
+                              <span
+                                style={{ fontSize: 11.5, color: "var(--fg-2)" }}
+                              >
+                                ~
+                                {cache.s3.phases.reduce(
+                                  (s, p) => s + p.weeks,
+                                  0,
+                                )}{" "}
+                                wks
                               </span>
                             </>
                           ) : stage.id === "s4" && status === "complete" ? (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
                               {/* Placeholder: sprint count visualization */}
-                              <span style={{ fontSize: 11.5, color: "var(--fg-2)" }}>Sprint plan ready</span>
+                              <span
+                                style={{ fontSize: 11.5, color: "var(--fg-2)" }}
+                              >
+                                Sprint plan ready
+                              </span>
                             </div>
                           ) : (
-                            <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>
-                              {status === "not_ready" ? "Not ready" : "No data yet"}
+                            <span
+                              style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                            >
+                              {status === "not_ready"
+                                ? "Not ready"
+                                : "No data yet"}
                             </span>
                           )}
                         </div>
 
                         <Link href={href}>
                           <Btn
-                            variant={status === "not_ready" ? "outline" : "subtle"}
+                            variant={
+                              status === "not_ready" ? "outline" : "subtle"
+                            }
                             size="sm"
                             iconR="arrowR"
                             style={{ width: "100%", marginTop: 14 }}
@@ -457,8 +636,20 @@ export default function ProjectDetailPage() {
                         </Link>
                       </div>
                       {idx < STAGES.length - 1 && (
-                        <div style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted-fg)" }}>
-                          <Icon name="chevR" size={16} style={{ opacity: 0.5 }} />
+                        <div
+                          style={{
+                            width: 28,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "var(--muted-fg)",
+                          }}
+                        >
+                          <Icon
+                            name="chevR"
+                            size={16}
+                            style={{ opacity: 0.5 }}
+                          />
                         </div>
                       )}
                     </React.Fragment>
@@ -468,9 +659,25 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Portfolio table */}
-            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-              <SectionLabel style={{ marginBottom: 10 }}>All use cases</SectionLabel>
-              <div style={{ borderRadius: 13, border: "1px solid var(--border)", overflow: "hidden", background: "var(--surface)" }}>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <SectionLabel style={{ marginBottom: 10 }}>
+                All use cases
+              </SectionLabel>
+              <div
+                style={{
+                  borderRadius: 13,
+                  border: "1px solid var(--border)",
+                  overflow: "hidden",
+                  background: "var(--surface)",
+                }}
+              >
                 <div
                   style={{
                     display: "grid",
@@ -493,7 +700,9 @@ export default function ProjectDetailPage() {
                 </div>
                 {useCases.map((u, idx) => {
                   const ucReadiness = readiness.get(u.id);
-                  const stages = STAGES.map((s) => resolveStatus(ucReadiness, s.id));
+                  const stages = STAGES.map((s) =>
+                    resolveStatus(ucReadiness, s.id),
+                  );
                   const done = stages.filter((s) => s === "complete").length;
                   const cache = ucCache.get(u.id);
                   const isHighlighted = u.id === selectedUcId;
@@ -511,17 +720,38 @@ export default function ProjectDetailPage() {
                         gap: 0,
                         padding: "12px 16px",
                         alignItems: "center",
-                        borderBottom: idx < useCases.length - 1 ? "1px solid var(--border)" : "none",
-                        background: isHighlighted ? "color-mix(in oklab, var(--primary) 6%, transparent)" : "transparent",
+                        borderBottom:
+                          idx < useCases.length - 1
+                            ? "1px solid var(--border)"
+                            : "none",
+                        background: isHighlighted
+                          ? "color-mix(in oklab, var(--primary) 6%, transparent)"
+                          : "transparent",
                         border: "none",
                         transition: "background 0.12s",
                       }}
                     >
                       <div style={{ minWidth: 0, paddingRight: 12 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
                           {u.name}
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--muted-fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--muted-fg)",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
                           {u.description || "No description"}
                         </div>
                       </div>
@@ -529,19 +759,39 @@ export default function ProjectDetailPage() {
                         {cache?.s1 ? (
                           <PriorityBadge band={cache.s1.migration_decision} />
                         ) : (
-                          <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>—</span>
+                          <span
+                            style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                          >
+                            —
+                          </span>
                         )}
                       </div>
                       <div>
                         {cache?.s2 ? (
-                          <ComplexityChip cls={cache.s2.complexity_class as Band} size={26} />
+                          <ComplexityChip
+                            cls={cache.s2.complexity_class as Band}
+                            size={26}
+                          />
                         ) : (
-                          <span style={{ fontSize: 11, color: "var(--muted-fg)" }}>—</span>
+                          <span
+                            style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                          >
+                            —
+                          </span>
                         )}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                        }}
+                      >
                         {STAGES.map((stage) => {
-                          const status: ReadinessStatus = resolveStatus(ucReadiness, stage.id);
+                          const status: ReadinessStatus = resolveStatus(
+                            ucReadiness,
+                            stage.id,
+                          );
                           const cfg = STATUS_CONFIG[status];
                           return (
                             <span
@@ -558,11 +808,40 @@ export default function ProjectDetailPage() {
                           );
                         })}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-                        <div style={{ width: 52, height: 5, borderRadius: 99, background: "var(--track)", overflow: "hidden" }}>
-                          <div style={{ width: `${(done / 4) * 100}%`, height: "100%", background: "var(--c-green)" }} />
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                          gap: 8,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 52,
+                            height: 5,
+                            borderRadius: 99,
+                            background: "var(--track)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${(done / 4) * 100}%`,
+                              height: "100%",
+                              background: "var(--c-green)",
+                            }}
+                          />
                         </div>
-                        <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-fg)" }}>{done}/4</span>
+                        <span
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 11,
+                            color: "var(--muted-fg)",
+                          }}
+                        >
+                          {done}/4
+                        </span>
                       </div>
                     </button>
                   );
@@ -588,7 +867,15 @@ export default function ProjectDetailPage() {
 
         {/* ══ PORTFOLIO MAP (HubMatrix pattern) ══════════════════════ */}
         {activeView === "portfolio" && (
-          <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 22, minHeight: 0 }}>
+          <div
+            style={{
+              flex: 1,
+              display: "grid",
+              gridTemplateColumns: "1.55fr 1fr",
+              gap: 22,
+              minHeight: 0,
+            }}
+          >
             {/* Matrix */}
             <div
               style={{
@@ -634,7 +921,8 @@ export default function ProjectDetailPage() {
                     top: 0,
                     width: "45%",
                     height: "42%",
-                    background: "color-mix(in oklab, var(--c-green) 8%, transparent)",
+                    background:
+                      "color-mix(in oklab, var(--c-green) 8%, transparent)",
                     borderRight: "1px dashed var(--border)",
                     borderBottom: "1px dashed var(--border)",
                   }}
@@ -662,7 +950,8 @@ export default function ProjectDetailPage() {
                       left: 0,
                       right: 0,
                       top: `${g * 100}%`,
-                      borderTop: "1px dashed color-mix(in oklab, var(--border) 60%, transparent)",
+                      borderTop:
+                        "1px dashed color-mix(in oklab, var(--border) 60%, transparent)",
                     }}
                   />
                 ))}
@@ -670,12 +959,21 @@ export default function ProjectDetailPage() {
                 {useCases.map((uc) => {
                   const cache = ucCache.get(uc.id);
                   if (!cache?.s1 || !cache.s2) return null;
-                  const complexityMap: Record<string, number> = { XS: 0, S: 1, M: 2, L: 3, XL: 4 };
-                  const x = (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4;
+                  const complexityMap: Record<string, number> = {
+                    XS: 0,
+                    S: 1,
+                    M: 2,
+                    L: 3,
+                    XL: 4,
+                  };
+                  const x =
+                    (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4;
                   const y = (1 - cache.s1.total_score / 100) * 86 + 2;
                   const wk = cache.s2.effort_max_weeks || 5;
                   const sz = 26 + wk * 3;
-                  const c = BAND_META[cache.s1.migration_decision]?.color || "var(--primary)";
+                  const c =
+                    BAND_META[cache.s1.migration_decision]?.color ||
+                    "var(--primary)";
                   return (
                     <div
                       key={uc.id}
@@ -731,9 +1029,23 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Ranked recommendations */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                minHeight: 0,
+              }}
+            >
               <SectionLabel>Recommended sequence</SectionLabel>
-              <div style={{ display: "flex", flexDirection: "column", gap: 9, overflow: "auto" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 9,
+                  overflow: "auto",
+                }}
+              >
                 {[...useCases]
                   .filter((u) => ucCache.get(u.id)?.s1)
                   .sort((a, b) => {
@@ -744,7 +1056,9 @@ export default function ProjectDetailPage() {
                   .map((u, i) => {
                     const cache = ucCache.get(u.id);
                     const ucReadiness = readiness.get(u.id);
-                    const stages = STAGES.map((s) => resolveStatus(ucReadiness, s.id));
+                    const stages = STAGES.map((s) =>
+                      resolveStatus(ucReadiness, s.id),
+                    );
                     return (
                       <div
                         key={u.id}
@@ -759,21 +1073,57 @@ export default function ProjectDetailPage() {
                           border: "1px solid var(--border)",
                         }}
                       >
-                        <span style={{ fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700, color: "var(--muted-fg)", width: 20 }}>
+                        <span
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "var(--muted-fg)",
+                            width: 20,
+                          }}
+                        >
                           {i + 1}
                         </span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <div
+                            style={{
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
                             {u.name}
                           </div>
-                          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                            {cache?.s1 && <PriorityBadge band={cache.s1.migration_decision} />}
-                            {cache?.s2 && <ComplexityChip cls={cache.s2.complexity_class as Band} size={20} />}
+                          <div
+                            style={{ display: "flex", gap: 6, marginTop: 4 }}
+                          >
+                            {cache?.s1 && (
+                              <PriorityBadge
+                                band={cache.s1.migration_decision}
+                              />
+                            )}
+                            {cache?.s2 && (
+                              <ComplexityChip
+                                cls={cache.s2.complexity_class as Band}
+                                size={20}
+                              />
+                            )}
                           </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
                           {STAGES.map((stage) => {
-                            const status: ReadinessStatus = resolveStatus(ucReadiness, stage.id);
+                            const status: ReadinessStatus = resolveStatus(
+                              ucReadiness,
+                              stage.id,
+                            );
                             const cfg = STATUS_CONFIG[status];
                             return (
                               <span
@@ -799,189 +1149,26 @@ export default function ProjectDetailPage() {
         )}
 
         {/* ── All use cases list ── */}
-        {useCases.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "1.8px",
-                textTransform: "uppercase",
-                color: "var(--muted-foreground)",
-              }}
-            >
-              All use cases
-            </div>
+        {/* {useCases.length > 0 && ( */}
 
-            {/* Table header */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr 110px 80px",
-                padding: "9px 16px",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-                color: "var(--muted-foreground)",
-                borderBottom: "1px solid var(--border)",
-              }}
-            >
-              <span>Name</span>
-              <span>Priority</span>
-              <span>Complexity</span>
-              <span>Stages</span>
-              <span style={{ textAlign: "right" }}>Progress</span>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {useCases.map((uc) => {
-                const ucReadiness = readiness.get(uc.id);
-                const stages = STAGES.map((s) =>
-                  resolveStatus(ucReadiness, s.id),
-                );
-                const completedCount = stages.filter(
-                  (s) => s === "complete",
-                ).length;
-                const cache = ucCache.get(uc.id);
-                const isSelected = uc.id === selectedUcId;
-
-                return (
-                  <button
-                    key={uc.id}
-                    onClick={() => setSelectedUcId(uc.id)}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      display: "grid",
-                      gridTemplateColumns: "2fr 1fr 1fr 110px 80px",
-                      alignItems: "center",
-                      padding: "12px 16px",
-                      borderRadius: 10,
-                      border: "1px solid",
-                      borderColor: isSelected
-                        ? "color-mix(in oklab, var(--primary) 40%, transparent)"
-                        : "color-mix(in oklab, var(--border) 60%, transparent)",
-                      background: isSelected
-                        ? "color-mix(in oklab, var(--primary) 6%, var(--card))"
-                        : "var(--card)",
-                      transition: "all 0.12s",
-                    }}
-                  >
-                    <div style={{ minWidth: 0, paddingRight: 12 }}>
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          fontWeight: 600,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {uc.name}
-                      </div>
-                      {uc.description && (
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "var(--muted-foreground)",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {uc.description}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      {cache?.s1?.migration_decision ? (
-                        <PriorityBadge band={cache.s1.migration_decision} />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "var(--muted-foreground)",
-                          }}
-                        >
-                          —
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      {cache?.s2?.complexity_class ? (
-                        <ComplexityChip
-                          cls={cache.s2.complexity_class as Band}
-                          size={24}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "var(--muted-foreground)",
-                          }}
-                        >
-                          —
-                        </span>
-                      )}
-                    </div>
-
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 5 }}
-                    >
-                      {STAGES.map((stage) => {
-                        const status: ReadinessStatus = resolveStatus(
-                          ucReadiness,
-                          stage.id,
-                        );
-                        const cfg = STATUS_CONFIG[status];
-                        return (
-                          <div
-                            key={stage.id}
-                            title={`${stage.short}: ${cfg.label}`}
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: 99,
-                              background: cfg.color,
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-
-                    <div style={{ textAlign: "right" }}>
-                      <span
-                        style={{
-                          fontFamily: "var(--font-geist-mono)",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color:
-                            completedCount === 4
-                              ? "var(--c-green)"
-                              : "var(--muted-foreground)",
-                        }}
-                      >
-                        {completedCount}/4
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* )} */}
       </div>
 
       {/* ── New Use Case Sheet ── */}
       <Sheet open={newUcOpen} onOpenChange={setNewUcOpen}>
-        <SheetContent className="w-110" style={{ padding: spacing.cardDefault }}>
+        <SheetContent
+          className="w-110"
+          style={{ padding: spacing.cardDefault }}
+        >
           <SheetHeader style={{ marginBottom: spacing.gapDefault }}>
             <SectionLabel>New Use Case</SectionLabel>
-            <p style={{ fontSize: 12.8, color: "var(--muted-foreground)", marginTop: 8 }}>
+            <p
+              style={{
+                fontSize: 12.8,
+                color: "var(--muted-foreground)",
+                marginTop: 8,
+              }}
+            >
               Add a use case to this project. You can run all four stages
               independently after creation.
             </p>
@@ -991,7 +1178,11 @@ export default function ProjectDetailPage() {
               e.preventDefault();
               handleCreateUc();
             }}
-            style={{ display: "flex", flexDirection: "column", gap: spacing.gapDefault }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: spacing.gapDefault,
+            }}
           >
             <div className="space-y-2">
               <Label>
@@ -1016,7 +1207,13 @@ export default function ProjectDetailPage() {
                 rows={3}
               />
             </div>
-            <div style={{ display: "flex", gap: spacing.gapTight, paddingTop: spacing.gapTight }}>
+            <div
+              style={{
+                display: "flex",
+                gap: spacing.gapTight,
+                paddingTop: spacing.gapTight,
+              }}
+            >
               <Btn
                 type="button"
                 variant="outline"

@@ -43,6 +43,10 @@ class UseCaseListItem(BaseModel):
     description: str | None
     source_platform: str | None
     install_status: str | None
+    s1_latest_run_id: str | None = None
+    s2_latest_run_id: str | None = None
+    s3_latest_run_id: str | None = None
+    s4_latest_run_id: str | None = None
     created_at: datetime
 
 
