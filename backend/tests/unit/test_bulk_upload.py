@@ -115,7 +115,7 @@ def test_bulk_upload_empty_csv():
 
 def test_column_mapping_validation():
     """Test ColumnMapping Pydantic model validation."""
-    from api.routes.projects import ColumnMapping
+    from api.v1.projects import ColumnMapping
 
     # Valid mapping with only required field
     mapping1 = ColumnMapping(name="process_name")
@@ -139,7 +139,7 @@ def test_column_mapping_validation():
 
 def test_bulk_confirm_request_validation():
     """Test BulkConfirmRequest Pydantic model validation."""
-    from api.routes.projects import BulkConfirmRequest, ColumnMapping
+    from api.v1.projects import BulkConfirmRequest, ColumnMapping
 
     mapping = ColumnMapping(name="name", description="description")
     rows = [
@@ -155,7 +155,7 @@ def test_bulk_confirm_request_validation():
 
 def test_bulk_upload_response_model():
     """Test BulkUploadResponse Pydantic model."""
-    from api.routes.projects import BulkUploadResponse
+    from api.v1.projects import BulkUploadResponse
 
     response = BulkUploadResponse(
         columns=["name", "description"],
@@ -173,7 +173,7 @@ def test_bulk_upload_response_model():
 
 def test_bulk_confirm_response_model():
     """Test BulkConfirmResponse Pydantic model."""
-    from api.routes.projects import BulkConfirmResponse
+    from api.v1.projects import BulkConfirmResponse
 
     response = BulkConfirmResponse(
         created=5,
