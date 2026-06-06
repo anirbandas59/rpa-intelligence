@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -12,9 +11,11 @@ import {
 } from "@/components/ui/select"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer"
+import { Card, Btn, SectionLabel, Pill } from "@/components/rpa"
 import { Icon } from "@/components/shared/icons"
-import { ArrowLeft, Play, Download, Plus, Minus, RefreshCw, Loader2, Copy } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { spacing } from "@/lib/design-tokens"
 import { apiGet, apiGetRuns, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
 import type { UseCase, StageRun, Phase, S3Result, ReadinessResponse, S3ReadinessDetail, ComplexityClass } from "@/lib/types"
 
@@ -189,9 +190,9 @@ export default function Stage3Page() {
         <div className="flex h-14 items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link href={`/projects/${projectId}`}>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+              <Btn variant="ghost" size="sm" style={{ marginLeft: -8 }}>
                 <ArrowLeft className="mr-1.5 h-4 w-4" />Back
-              </Button>
+              </Btn>
             </Link>
             <div className="h-4 w-px bg-border/50" />
             <div>
@@ -201,35 +202,27 @@ export default function Stage3Page() {
           </div>
           <div className="flex items-center gap-2">
             {latestResult && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 10px",
-                borderRadius: 6, fontSize: 11.5, fontWeight: 600,
-                color: "var(--c-green)",
-                background: "color-mix(in oklab, var(--c-green) 12%, transparent)",
-                border: "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
-              }}>
-                <Icon name="check" size={12} /> Complete · {totalWeeks}w total
-              </span>
+              <Pill color="var(--c-green)">
+                <Icon name="check" size={11} /> Complete · {totalWeeks}w total
+              </Pill>
             )}
             {Object.keys(phaseDeltas).length > 0 && (
-              <Button variant="outline" size="sm" onClick={handleResetDeltas}>
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />Reset
-              </Button>
+              <Btn variant="outline" size="sm" onClick={handleResetDeltas} icon="refresh">
+                Reset
+              </Btn>
             )}
             <RunHistoryDrawer runs={runs} stage="s3" stageName="Stage 3 - Timeline" />
           </div>
         </div>
       </header>
 
-      <div className="py-6 px-7 space-y-6">
+      <div style={{ height: "calc(100vh - 56px)", overflow: "hidden", padding: "24px 28px", display: "flex", flexDirection: "column", gap: spacing.gapDefault }}>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {isStale && <StalenessIndicator isStale stageName="Stage 3" />}
 
         {/* ── Config card ── */}
-        <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", padding: 20 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: "var(--muted-foreground)", marginBottom: 16 }}>
-            Timeline configuration
-          </div>
+        <Card>
+          <SectionLabel style={{ marginBottom: 14 }}>Timeline configuration</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 16 }}>
             <div>
               <Label style={{ fontSize: 12, marginBottom: 6, display: "block" }}>Build effort (weeks)</Label>
@@ -255,219 +248,233 @@ export default function Stage3Page() {
               </Select>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button onClick={handleRunStage} disabled={!canRun}>
-              <Play className="mr-2 h-4 w-4" />Calculate Timeline
-            </Button>
-            <Button variant="outline" onClick={handleLoadFromS2}>
-              <Download className="mr-2 h-4 w-4" />Load from Stage 2
-            </Button>
+          <div style={{ display: "flex", gap: spacing.gapTight }}>
+            <Btn onClick={handleRunStage} disabled={!canRun} icon="play" style={{ flex: 1 }}>
+              Calculate Timeline
+            </Btn>
+            <Btn variant="outline" onClick={handleLoadFromS2} icon="download" style={{ flex: 1 }}>
+              Load from Stage 2
+            </Btn>
           </div>
-        </div>
+        </Card>
 
         {latestResult && (
           <>
             {/* ── Hero stats strip ── */}
             {firstPhase && lastPhase && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
-                {[
-                  { label: "Start date",      value: fmtDate(firstPhase.start_date), color: "var(--c-blue)"   },
-                  { label: "Build effort",    value: `${buildPhase ? buildPhase.weeks + (phaseDeltas[buildPhase.name] || 0) : "—"} wks`, color: "var(--primary)" },
-                  { label: "Total duration",  value: `${totalWeeks} weeks`,           color: "var(--c-teal)"  },
-                  { label: "Go-live",         value: fmtDate(lastPhase.end_date),     color: "var(--c-green)" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} style={{
-                    borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)",
-                    padding: "14px 16px",
-                    borderTop: `3px solid ${color}`,
-                  }}>
-                    <div style={{ fontSize: 10.5, color: "var(--muted-foreground)", marginBottom: 5 }}>{label}</div>
-                    <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 14, fontWeight: 700, color }}>{value}</div>
-                  </div>
+              <div style={{ display: "flex", gap: 14 }}>
+                {([
+                  { label: "Start",           value: fmtDate(firstPhase.start_date), icon: "calendar" as const, color: "var(--c-blue)"   },
+                  { label: "Build effort",    value: `${buildPhase ? buildPhase.weeks + (phaseDeltas[buildPhase.name] || 0) : "—"} wks`, icon: "clock" as const, color: "var(--primary)" },
+                  { label: "Total duration",  value: `${totalWeeks} weeks`,           icon: "target" as const, color: "var(--c-teal)"  },
+                  { label: "Go-live",         value: fmtDate(lastPhase.end_date),     icon: "check" as const, color: "var(--c-green)" },
+                ] as const).map(({ label, value, icon, color }) => (
+                  <Card key={label} pad={15} style={{ flex: 1, display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{
+                      width: 34, height: 34, borderRadius: 9,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "var(--surface-2)",
+                      color: label === "Go-live" ? "var(--c-green)" : "var(--primary)",
+                    }}>
+                      <Icon name={icon} size={17} />
+                    </span>
+                    <div>
+                      <div style={{ fontSize: 10.5, color: "var(--muted-fg)" }}>{label}</div>
+                      <div style={{
+                        fontSize: 15, fontWeight: 700,
+                        fontFamily: label === "Build effort" || label === "Total duration" ? "var(--mono)" : "inherit",
+                      }}>
+                        {value}
+                      </div>
+                    </div>
+                  </Card>
                 ))}
               </div>
             )}
 
             {/* ── Gantt chart ── */}
-            <div style={{ borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", padding: 20, overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: "var(--muted-foreground)" }}>
-                  Phase timeline — {totalWeeks} weeks
+            <Card style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <SectionLabel>Delivery Gantt · adjust phases with +/- buttons</SectionLabel>
+                <div style={{ display: "flex", gap: 14, fontSize: 11, color: "var(--muted-fg)" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ width: 18, height: 8, borderRadius: 2, background: "var(--primary)" }} /> Sprint window
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <Icon name="edit" size={11} style={{ color: "var(--c-amber)" }} /> Manual delta
+                  </span>
                 </div>
-                <span style={{ fontSize: 11, fontFamily: "var(--font-geist-mono)", color: "var(--muted-foreground)" }}>
-                  {complexityClass} · pure Python
-                </span>
               </div>
 
               {/* Week axis */}
-              <div style={{ display: "flex", marginLeft: 172, marginBottom: 8, position: "relative" }}>
+              <div style={{ display: "flex", paddingLeft: 168, marginBottom: 6 }}>
                 {Array.from({ length: totalWeeks }, (_, i) => (
                   <div key={i} style={{
-                    flex: 1, textAlign: "center",
-                    fontSize: 9, color: "var(--muted-foreground)", opacity: 0.6,
-                    fontFamily: "var(--font-geist-mono)",
+                    width: `${COL_W}%`, fontSize: 9.5, color: "var(--muted-fg)",
+                    textAlign: "center", fontFamily: "var(--mono)",
                   }}>
-                    {i + 1}
+                    W{i + 1}
                   </div>
                 ))}
               </div>
 
-              {/* Phase rows */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {ganttPhases.map((phase, idx) => {
-                  const delta = phaseDeltas[phase.name] || 0
-                  const color = phaseColor(phase.name)
-                  return (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 0 }}>
-                      {/* Label */}
-                      <div style={{
-                        width: 168, flexShrink: 0, paddingRight: 14,
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        gap: 6,
-                      }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {phase.name}
-                        </span>
-                        <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                          <button
-                            onClick={() => handlePhaseDelta(phase.name, -1)}
-                            disabled={phase.adjWeeks <= 1}
-                            style={{
-                              width: 20, height: 20, borderRadius: 5, border: "1px solid var(--border)",
-                              background: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          >
-                            <Minus style={{ width: 10, height: 10 }} />
-                          </button>
-                          <button
-                            onClick={() => handlePhaseDelta(phase.name, 1)}
-                            style={{
-                              width: 20, height: 20, borderRadius: 5, border: "1px solid var(--border)",
-                              background: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          >
-                            <Plus style={{ width: 10, height: 10 }} />
-                          </button>
-                        </div>
-                      </div>
+              {/* Phase rows with gridlines */}
+              <div style={{ position: "relative", flex: 1 }}>
+                {/* Gridlines */}
+                <div style={{
+                  position: "absolute", left: 168, right: 0, top: 0, bottom: 0,
+                  display: "flex", pointerEvents: "none",
+                }}>
+                  {Array.from({ length: totalWeeks + 1 }).map((_, i) => (
+                    <div key={i} style={{
+                      width: `${COL_W}%`,
+                      borderLeft: "1px solid color-mix(in oklab, var(--border) 55%, transparent)",
+                    }} />
+                  ))}
+                </div>
 
-                      {/* Bar container */}
-                      <div style={{ flex: 1, position: "relative", height: 28 }}>
-                        {/* Track */}
-                        <div style={{
-                          position: "absolute", inset: 0,
-                          borderRadius: 6, background: "var(--track)",
-                        }} />
-                        {/* Bar */}
-                        <div style={{
-                          position: "absolute",
-                          left: `${phase.offset * COL_W}%`,
-                          width: `${phase.adjWeeks * COL_W}%`,
-                          top: 0, bottom: 0,
-                          borderRadius: 6,
-                          background: `color-mix(in oklab, ${color} 45%, transparent)`,
-                          border: `1px solid color-mix(in oklab, ${color} 65%, transparent)`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          transition: "all 0.25s",
-                          overflow: "hidden",
-                        }}>
-                          {delta !== 0 && (
-                            <span style={{
-                              position: "absolute", right: 5, top: -1,
-                              fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 4,
-                              background: color, color: "#0b0b12",
-                            }}>
-                              {delta > 0 ? `+${delta}` : delta}w
+                <div style={{ display: "flex", flexDirection: "column", gap: 9, position: "relative" }}>
+                  {ganttPhases.map((phase, idx) => {
+                    const delta = phaseDeltas[phase.name] || 0
+                    const color = phaseColor(phase.name)
+                    const kindLabels: Record<string, string> = {
+                      "Define": "Fixed buffer",
+                      "Design": "Complexity-adjusted",
+                      "Build": "Variable · from S2",
+                      "Build + Unit Testing": "Variable · from S2",
+                      "SIT": "Fixed buffer",
+                      "UAT": "Complexity-adjusted",
+                      "Deployment": "Fixed buffer",
+                    }
+                    return (
+                      <div key={idx} style={{ display: "flex", alignItems: "center", height: 40 }}>
+                        {/* Label column */}
+                        <div style={{ width: 168, paddingRight: 14, flexShrink: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
+                            {phase.name}
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--muted-fg)", marginLeft: 15 }}>
+                            {kindLabels[phase.name] || "Phase"}
+                          </div>
+                        </div>
+
+                        {/* Gantt track */}
+                        <div style={{ flex: 1, position: "relative", height: 26 }}>
+                          <div style={{
+                            position: "absolute",
+                            left: `${phase.offset * COL_W}%`,
+                            width: `${phase.adjWeeks * COL_W}%`,
+                            height: "100%",
+                            borderRadius: 7,
+                            background: `linear-gradient(90deg, ${color}, color-mix(in oklab, ${color} 78%, black))`,
+                            boxShadow: `0 2px 10px color-mix(in oklab, ${color} 35%, transparent)`,
+                            display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px",
+                            border: delta ? "1.5px dashed color-mix(in oklab, var(--c-amber) 80%, white)" : "none",
+                          }}>
+                            <button
+                              onClick={() => handlePhaseDelta(phase.name, -1)}
+                              disabled={phase.adjWeeks <= 1}
+                              style={{
+                                width: 4, height: "60%", borderRadius: 2,
+                                background: "rgba(255,255,255,.5)", cursor: "ew-resize",
+                                border: "none", padding: 0,
+                              }}
+                            />
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: "#0b0b12", fontFamily: "var(--mono)" }}>
+                              {phase.adjWeeks}w
                             </span>
+                            <button
+                              onClick={() => handlePhaseDelta(phase.name, 1)}
+                              style={{
+                                width: 4, height: "60%", borderRadius: 2,
+                                background: "rgba(255,255,255,.5)", cursor: "ew-resize",
+                                border: "none", padding: 0,
+                              }}
+                            />
+                          </div>
+                          {delta !== 0 && (
+                            <div style={{
+                              position: "absolute",
+                              left: `calc(${(phase.offset + phase.adjWeeks) * COL_W}% - 4px)`,
+                              top: -16,
+                              fontSize: 9.5, color: "var(--c-amber)", fontWeight: 700,
+                              fontFamily: "var(--mono)", whiteSpace: "nowrap",
+                              transform: "translateX(-100%)",
+                            }}>
+                              {delta > 0 ? `+${delta}` : delta}w delta
+                            </div>
                           )}
                         </div>
                       </div>
-
-                      {/* Week count */}
-                      <div style={{
-                        width: 52, textAlign: "right", paddingLeft: 10,
-                        fontSize: 11.5, fontFamily: "var(--font-geist-mono)", color: "var(--muted-foreground)",
-                      }}>
-                        {phase.adjWeeks}w
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            </Card>
 
             {/* ── Phase cards grid ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
               {latestResult.phases.map((phase, idx) => {
                 const delta = phaseDeltas[phase.name] || 0
                 const color = phaseColor(phase.name)
                 const adjWeeks = phase.weeks + delta
                 return (
-                  <div key={idx} style={{
-                    borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)",
-                    padding: "14px 16px",
-                    borderTop: `3px solid ${color}`,
-                  }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>{phase.name}</div>
-                    <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 20, fontWeight: 700, color, marginBottom: 4 }}>
-                      {adjWeeks}w
+                  <Card key={idx} pad={13} hover style={{ borderTop: `2px solid ${color}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{phase.name}</div>
+                    <div style={{
+                      fontFamily: "var(--mono)", fontSize: 20, fontWeight: 700, color,
+                    }}>
+                      {adjWeeks}<span style={{ fontSize: 11, color: "var(--muted-fg)" }}>wk</span>
                     </div>
-                    <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-                      {fmtShort(phase.start_date)} → {fmtShort(phase.end_date)}
+                    <div style={{ fontSize: 10.5, color: "var(--muted-fg)", marginTop: 8 }}>
+                      {fmtShort(phase.start_date)} – {fmtShort(phase.end_date)}
                     </div>
                     {delta !== 0 && (
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", marginTop: 8, fontSize: 10, fontWeight: 600,
-                        padding: "2px 7px", borderRadius: 5,
-                        color: delta > 0 ? "var(--c-amber)" : "var(--c-green)",
-                        background: delta > 0
-                          ? "color-mix(in oklab, var(--c-amber) 14%, transparent)"
-                          : "color-mix(in oklab, var(--c-green) 14%, transparent)",
-                      }}>
-                        {delta > 0 ? `+${delta}` : delta}w adjusted
-                      </span>
+                      <div style={{ marginTop: 6 }}>
+                        <Pill color="var(--c-amber)" style={{ fontSize: 9 }}>
+                          edited {delta > 0 ? `+${delta}` : delta}w
+                        </Pill>
+                      </div>
                     )}
-                  </div>
+                  </Card>
                 )
               })}
             </div>
 
             {/* ── Narrative card ── */}
             {latestResult.narrative && (
-              <div style={{
-                borderRadius: 14, padding: 22,
-                background: "color-mix(in oklab, var(--c-violet) 9%, var(--card))",
-                border: "1px solid color-mix(in oklab, var(--c-violet) 28%, transparent)",
+              <Card style={{
+                display: "flex", flexDirection: "column", gap: 12,
+                background: "linear-gradient(160deg, color-mix(in oklab, var(--c-violet) 8%, var(--surface)), var(--surface) 70%)",
               }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                     <span style={{
-                      width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center",
-                      background: "color-mix(in oklab, var(--c-violet) 22%, transparent)", color: "var(--c-violet)",
-                    }}>
-                      <Icon name="spark" size={14} />
-                    </span>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>Delivery narrative</span>
-                    <span style={{
-                      padding: "3px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                      width: 30, height: 30, borderRadius: 8,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "color-mix(in oklab, var(--c-violet) 18%, transparent)",
                       color: "var(--c-violet)",
-                      background: "color-mix(in oklab, var(--c-violet) 15%, transparent)",
-                    }}>Sonnet 4.5 · background</span>
+                    }}>
+                      <Icon name="spark" size={16} />
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Client-ready summary</span>
                   </div>
-                  <Button
+                  <Btn
                     variant="ghost" size="sm"
                     onClick={() => {
                       navigator.clipboard.writeText(latestResult.narrative || "")
                       toast.success("Copied")
                     }}
+                    icon="copy"
                   >
-                    <Copy className="h-3.5 w-3.5 mr-1.5" />Copy
-                  </Button>
+                    Copy
+                  </Btn>
                 </div>
-                <p style={{ fontSize: 13, lineHeight: 1.65, color: "var(--muted-foreground)", margin: 0 }}>
+                <p style={{ fontSize: 12.8, lineHeight: 1.65, color: "var(--fg-2)", margin: 0 }}>
                   {latestResult.narrative}
                 </p>
-              </div>
+              </Card>
             )}
           </>
         )}
