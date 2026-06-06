@@ -11,12 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { Btn, SectionLabel } from "@/components/rpa";
+import { spacing } from "@/lib/design-tokens";
 import {
   Plus,
   FolderOpen,
@@ -77,16 +78,21 @@ function NewProjectSheet({
         New Project
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-md flex flex-col">
-        <SheetHeader className="my-4">
-          <SheetTitle>New Project</SheetTitle>
-          <SheetDescription>
+        <SheetHeader style={{ marginTop: spacing.gapDefault, marginBottom: spacing.gapTight }}>
+          <SectionLabel>New Project</SectionLabel>
+          <p style={{ fontSize: 12.8, color: "var(--muted-foreground)", marginTop: 8 }}>
             Create a new RPA migration and assessment project.
-          </SheetDescription>
+          </p>
         </SheetHeader>
-        <div className="m-3">
+        <div style={{ padding: `0 ${spacing.cardDefault}px`, flex: 1 }}>
           <form
             onSubmit={handleSubmit}
-            className="flex flex-col gap-5 mt-6 flex-1"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: spacing.gapDefault,
+              height: "100%"
+            }}
           >
             {error && (
               <Alert variant="destructive">
@@ -121,11 +127,28 @@ function NewProjectSheet({
               />
             </div>
 
-            <div className="flex gap-3 mt-auto pt-4 border-t border-border/50">
-              <Button
+            <div
+              style={{
+                display: "flex",
+                gap: spacing.gapTight,
+                marginTop: "auto",
+                paddingTop: spacing.gapDefault,
+                borderTop: "1px solid var(--border)"
+              }}
+            >
+              <Btn
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => setOpen(false)}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </Btn>
+              <Btn
                 type="submit"
                 disabled={loading || !name.trim()}
-                className="flex-1"
+                style={{ flex: 1 }}
               >
                 {loading ? (
                   <>
@@ -135,15 +158,7 @@ function NewProjectSheet({
                 ) : (
                   "Create Project"
                 )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loading}
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </Button>
+              </Btn>
             </div>
           </form>
         </div>

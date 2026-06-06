@@ -6,15 +6,12 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Btn, SectionLabel } from "@/components/rpa";
+import { spacing } from "@/lib/design-tokens";
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress";
 import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer";
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator";
@@ -1156,15 +1153,15 @@ export default function Stage1Page() {
 
       {/* ── Override Sheet ── */}
       <Sheet open={overrideOpen} onOpenChange={setOverrideOpen}>
-        <SheetContent className="w-120">
-          <SheetHeader>
-            <SheetTitle>Manual Override</SheetTitle>
+        <SheetContent className="w-120" style={{ padding: spacing.cardDefault }}>
+          <SheetHeader style={{ marginBottom: spacing.gapDefault }}>
+            <SectionLabel>Manual Override</SectionLabel>
+            <p style={{ fontSize: 12.8, color: "var(--muted-foreground)", marginTop: 8 }}>
+              Adjust dimensions directly. Overrides are stored as a new run with a
+              required reason.
+            </p>
           </SheetHeader>
-          <p className="text-sm text-muted-foreground mt-2 mb-6">
-            Adjust dimensions directly. Overrides are stored as a new run with a
-            required reason.
-          </p>
-          <div className="space-y-6">
+          <div style={{ display: "flex", flexDirection: "column", gap: spacing.gapLoose }}>
             <div className="flex justify-around">
               {S1_DIMS.map((d) => (
                 <RadialDim
@@ -1252,18 +1249,18 @@ export default function Stage1Page() {
               />
             </div>
 
-            <div className="flex gap-2">
-              <Button
+            <div style={{ display: "flex", gap: spacing.gapTight }}>
+              <Btn
                 variant="outline"
-                className="flex-1"
+                style={{ flex: 1 }}
                 onClick={() => setOverrideOpen(false)}
               >
                 Cancel
-              </Button>
-              <Button className="flex-1" onClick={handleOverrideSave}>
+              </Btn>
+              <Btn style={{ flex: 1 }} onClick={handleOverrideSave}>
                 <Icon name="check" size={13} style={{ marginRight: 6 }} />
                 Save Override
-              </Button>
+              </Btn>
             </div>
           </div>
         </SheetContent>

@@ -5,15 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Btn, SectionLabel } from "@/components/rpa";
+import { spacing } from "@/lib/design-tokens";
 import { AgentActivityFeed } from "@/components/shared/AgentActivityFeed";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Gauge } from "@/components/shared/Gauge";
@@ -1042,15 +1039,21 @@ export default function ProjectDetailPage() {
 
       {/* ── New Use Case Sheet ── */}
       <Sheet open={newUcOpen} onOpenChange={setNewUcOpen}>
-        <SheetContent className="w-110 m-3">
-          <SheetHeader>
-            <SheetTitle>New Use Case</SheetTitle>
+        <SheetContent className="w-110" style={{ padding: spacing.cardDefault }}>
+          <SheetHeader style={{ marginBottom: spacing.gapDefault }}>
+            <SectionLabel>New Use Case</SectionLabel>
+            <p style={{ fontSize: 12.8, color: "var(--muted-foreground)", marginTop: 8 }}>
+              Add a use case to this project. You can run all four stages
+              independently after creation.
+            </p>
           </SheetHeader>
-          <p className="text-sm text-muted-foreground mt-2 mb-6 mx-3">
-            Add a use case to this project. You can run all four stages
-            independently after creation.
-          </p>
-          <div className="space-y-4 m-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateUc();
+            }}
+            style={{ display: "flex", flexDirection: "column", gap: spacing.gapDefault }}
+          >
             <div className="space-y-2">
               <Label>
                 Name <span className="text-destructive">*</span>
@@ -1059,9 +1062,8 @@ export default function ProjectDetailPage() {
                 placeholder="e.g., Invoice processing automation"
                 value={newUcName}
                 onChange={(e) => setNewUcName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreateUc();
-                }}
+                required
+                autoFocus
               />
             </div>
             <div className="space-y-2">
@@ -1075,28 +1077,34 @@ export default function ProjectDetailPage() {
                 rows={3}
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button
+            <div style={{ display: "flex", gap: spacing.gapTight, paddingTop: spacing.gapTight }}>
+              <Btn
+                type="button"
                 variant="outline"
-                className="flex-1"
+                style={{ flex: 1 }}
                 onClick={() => setNewUcOpen(false)}
               >
                 Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={handleCreateUc}
-                disabled={creatingUc}
+              </Btn>
+              <Btn
+                type="submit"
+                style={{ flex: 1 }}
+                disabled={creatingUc || !newUcName.trim()}
               >
                 {creatingUc ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Creating
+                  </>
                 ) : (
-                  <Plus className="h-4 w-4 mr-2" />
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create
+                  </>
                 )}
-                Create
-              </Button>
+              </Btn>
             </div>
-          </div>
+          </form>
         </SheetContent>
       </Sheet>
     </div>
