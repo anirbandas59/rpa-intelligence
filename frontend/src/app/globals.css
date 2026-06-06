@@ -115,6 +115,18 @@
   --chart-3:              oklch(0.70 0.18 140);
   --chart-4:              oklch(0.70 0.20 50);
   --chart-5:              oklch(0.65 0.22 27);
+
+  /* RPA design-system palette */
+  --c-blue:    oklch(0.65 0.22 264);
+  --c-teal:    oklch(0.70 0.18 190);
+  --c-violet:  oklch(0.65 0.20 290);
+  --c-amber:   oklch(0.72 0.17 60);
+  --c-green:   oklch(0.70 0.18 140);
+  --c-red:     oklch(0.65 0.22 27);
+  --c-yellow:  oklch(0.80 0.14 90);
+  --surface-2: oklch(0.18 0.015 270);
+  --track:     oklch(1 0 0 / 10%);
+  --fg-2:      oklch(0.75 0.008 270);
 }
 
 @layer base {
@@ -150,4 +162,23 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  .rpa-gradient-text {
+    background: linear-gradient(135deg, oklch(0.80 0.20 264), oklch(0.70 0.22 290));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .rpa-card-hover {
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .rpa-card-hover:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes rpaPulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in oklab, currentColor 22%, transparent); }
+  50%       { box-shadow: 0 0 0 5px color-mix(in oklab, currentColor 10%, transparent); }
 }

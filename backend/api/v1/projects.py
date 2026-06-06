@@ -140,6 +140,19 @@ async def list_projects(
     return result.scalars().all()
 
 
+@router.get("/{id}", response_model=ProjectResponse)
+async def get_project(
+    id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Project).where(Project.id == id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
 @router.get("/{id}/use-cases", response_model=list[UseCaseListItem])
 async def list_project_use_cases(
     id: str,

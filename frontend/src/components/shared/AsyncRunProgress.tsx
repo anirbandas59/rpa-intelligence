@@ -12,7 +12,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Loader2, CheckCircle2, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { apiGet } from "@/lib/api"
-import type { ReadinessResponse, StageId } from "@/lib/types"
+import type { ReadinessResponse, ReadinessStatus, StageId, S3ReadinessDetail } from "@/lib/types"
+
+function getStageStatus(readiness: ReadinessResponse, stage: StageId): ReadinessStatus {
+  const val = readiness[stage]
+  if (stage === "s3") return (val as S3ReadinessDetail)?.phase_calculator ?? "not_ready"
+  return val as ReadinessStatus
+}
 
 interface AsyncRunProgressProps {
   useCaseId: string
@@ -41,7 +47,7 @@ export function AsyncRunProgress({
         const readiness = await apiGet<ReadinessResponse>(
           `/api/v1/use-cases/${useCaseId}/readiness`
         )
-        const stageStatus = readiness[stage]
+        const stageStatus = getStageStatus(readiness, stage)
 
         if (stageStatus === "complete") {
           setStatus("complete")

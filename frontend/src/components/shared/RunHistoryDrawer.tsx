@@ -35,14 +35,16 @@ export function RunHistoryDrawer({ runs, stage, stageName, trigger }: RunHistory
 
   return (
     <Sheet>
-      <SheetTrigger>
-        {trigger || (
-          <Button variant="outline" size="sm">
-            <History className="mr-2 h-4 w-4" />
-            Run History ({runs.length})
-          </Button>
-        )}
-      </SheetTrigger>
+      <SheetTrigger
+        render={
+          (trigger as React.ReactElement | undefined) ?? (
+            <Button variant="outline" size="sm">
+              <History className="mr-2 h-4 w-4" />
+              Run History ({runs.length})
+            </Button>
+          )
+        }
+      />
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>

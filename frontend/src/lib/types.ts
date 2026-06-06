@@ -233,10 +233,15 @@ export interface S4Result {
 // Readiness
 // ============================================================================
 
+export interface S3ReadinessDetail {
+  phase_calculator: ReadinessStatus
+  task_extraction: ReadinessStatus | string
+}
+
 export interface ReadinessResponse {
   s1: ReadinessStatus
   s2: ReadinessStatus
-  s3: ReadinessStatus
+  s3: S3ReadinessDetail
   s4: ReadinessStatus
 }
 
