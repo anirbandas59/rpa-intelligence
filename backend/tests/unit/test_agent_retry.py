@@ -217,7 +217,7 @@ class TestProcessAgentNodes:
             pa.validate_bands_node(state)
 
     def test_route_validate_returns_end_on_result(self) -> None:
-        """route_validate returns 'end' when result is set."""
+        """route_validate returns 'reflexion' when result is set."""
         from core.models.scoring import AttributeBandsWithSource
 
         state: pa.ProcessState = {
@@ -236,7 +236,7 @@ class TestProcessAgentNodes:
                 technology="S",
             ),
         }
-        assert pa.route_validate(state) == "end"
+        assert pa.route_validate(state) == "reflexion"
 
     def test_route_validate_returns_retry_when_hint_set(self) -> None:
         """route_validate returns 'retry' when retry_hint is set and count < 2."""
@@ -323,229 +323,240 @@ class TestProcessAgentGraph:
 # tracker_agent — node-level unit tests
 # ──────────────────────────────────────────────
 
+VALID_WBS_JSON = json.dumps({
+    "wbs_rows": [
+        {"feature": "F1", "hours": 100.0, "priority": "MUST"},
+        {"feature": "F2", "hours": 100.0, "priority": "SHOULD"}
+    ]
+})
+
+INVALID_WBS_JSON = json.dumps({
+    "wbs_rows": [
+        {"feature": "F1", "hours": 50.0, "priority": "MUST"}
+    ]
+})
+
 
 class TestTrackerAgentNodes:
     """Test individual nodes of the tracker agent state machine."""
 
     @pytest.mark.asyncio
-    async def test_decompose_features_no_hint(self) -> None:
-        """decompose_features_node calls LLM and parses features without hint."""
+    async def test_group_steps_no_hint(self) -> None:
+        """group_steps_node calls LLM and parses features without hint."""
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(return_value=VALID_FEATURES_JSON)
+        mock_manager.complete_async = AsyncMock(return_value=VALID_WBS_JSON)
 
         state: ta.TrackerState = {
+            "session_id": "test-session",
             "use_case_id": "uc-1",
             "process_name": "Test Process",
-            "process_description": "Automate something",
+            "task_extraction": {"activities": []},
+            "total_effort_hours": 200.0,
             "complexity_class": "M",
             "effort_weeks": 5,
+            "build_sit_window": {"start_date": "2025-07-01", "end_date": "2025-08-15"},
             "sprint_count": 3,
             "sprint_capacity": 8,
-            "document_context": "Process Overview: Automate something",
             "raw_llm_response": "",
-            "extracted_features": [],
-            "sprint_assignment": {},
+            "wbs_rows": [],
+            "sequenced_rows": [],
             "error": None,
             "retry_count": 0,
             "retry_hint": None,
         }
 
         with patch("agents.tracker_agent.get_default_manager", return_value=mock_manager):
-            new_state = await ta.decompose_features_node(state)
+            new_state = await ta.group_steps_node(state)
 
-        assert len(new_state["extracted_features"]) == 2
+        assert new_state["raw_llm_response"] == VALID_WBS_JSON
         call_kwargs = mock_manager.complete_async.call_args[1]
         assert "Previous attempt failed validation" not in call_kwargs.get("prompt", "")
 
     @pytest.mark.asyncio
-    async def test_decompose_features_injects_retry_hint(self) -> None:
-        """decompose_features_node appends retry hint when set."""
+    async def test_group_steps_injects_retry_hint(self) -> None:
+        """group_steps_node appends retry hint when set."""
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(return_value=VALID_FEATURES_JSON)
+        mock_manager.complete_async = AsyncMock(return_value=VALID_WBS_JSON)
 
         state: ta.TrackerState = {
+            "session_id": "test-session",
             "use_case_id": "uc-1",
             "process_name": "Test Process",
-            "process_description": "Automate something",
+            "task_extraction": {"activities": []},
+            "total_effort_hours": 200.0,
             "complexity_class": "M",
             "effort_weeks": 5,
+            "build_sit_window": {"start_date": "2025-07-01", "end_date": "2025-08-15"},
             "sprint_count": 3,
             "sprint_capacity": 8,
-            "document_context": "Process Overview: Automate something",
             "raw_llm_response": "",
-            "extracted_features": [],
-            "sprint_assignment": {},
+            "wbs_rows": [],
+            "sequenced_rows": [],
             "error": None,
             "retry_count": 1,
-            "retry_hint": "Fix features list: Feature 0 has invalid size: 'HUGE'",
+            "retry_hint": "The total hours was 50.00 but must equal 200.00. Regroup the steps to match.",
         }
 
         with patch("agents.tracker_agent.get_default_manager", return_value=mock_manager):
-            await ta.decompose_features_node(state)
+            await ta.group_steps_node(state)
 
         call_kwargs = mock_manager.complete_async.call_args[1]
         assert "Previous attempt failed validation" in call_kwargs["prompt"]
-        assert "Fix features list" in call_kwargs["prompt"]
+        assert "The total hours was 50.00" in call_kwargs["prompt"]
 
-    def test_validate_features_passes_on_valid(self) -> None:
-        """validate_features_node passes without modifying state when features are valid."""
+    def test_validate_sum_passes_on_valid(self) -> None:
+        """validate_sum_node passes without modifying state when sum matches."""
         state: ta.TrackerState = {
+            "session_id": "test-session",
             "use_case_id": "uc-1",
             "process_name": "Test",
-            "process_description": "desc",
+            "task_extraction": {"activities": []},
+            "total_effort_hours": 200.0,
             "complexity_class": "M",
             "effort_weeks": 5,
+            "build_sit_window": {"start_date": "2025-07-01", "end_date": "2025-08-15"},
             "sprint_count": 3,
             "sprint_capacity": 8,
-            "document_context": "",
-            "raw_llm_response": "",
-            "extracted_features": [
-                {"name": "F1", "size": "S", "description": "d1"},
-                {"name": "F2", "size": "M", "description": "d2"},
-            ],
-            "sprint_assignment": {},
+            "raw_llm_response": VALID_WBS_JSON,
+            "wbs_rows": [],
+            "sequenced_rows": [],
             "error": None,
             "retry_count": 0,
             "retry_hint": None,
         }
 
-        new_state = ta.validate_features_node(state)
+        new_state = {**state, **ta.validate_sum_node(state)}
         # No change to retry_count or hint on pass
         assert new_state["retry_count"] == 0
         assert new_state.get("retry_hint") is None
+        assert len(new_state["wbs_rows"]) == 2
 
-    def test_validate_features_increments_retry_on_invalid(self) -> None:
-        """validate_features_node increments retry_count and sets retry_hint on bad features."""
+    def test_validate_sum_increments_retry_on_invalid(self) -> None:
+        """validate_sum_node increments retry_count and sets retry_hint on bad sum."""
         state: ta.TrackerState = {
+            "session_id": "test-session",
             "use_case_id": "uc-1",
             "process_name": "Test",
-            "process_description": "desc",
+            "task_extraction": {"activities": []},
+            "total_effort_hours": 200.0,
             "complexity_class": "M",
             "effort_weeks": 5,
+            "build_sit_window": {"start_date": "2025-07-01", "end_date": "2025-08-15"},
             "sprint_count": 3,
             "sprint_capacity": 8,
-            "document_context": "",
-            "raw_llm_response": "",
-            "extracted_features": [
-                {"name": "Bad", "size": "HUGE", "description": "invalid"},
-            ],
-            "sprint_assignment": {},
+            "raw_llm_response": INVALID_WBS_JSON,
+            "wbs_rows": [],
+            "sequenced_rows": [],
             "error": None,
             "retry_count": 0,
             "retry_hint": None,
         }
 
-        new_state = ta.validate_features_node(state)
+        new_state = {**state, **ta.validate_sum_node(state)}
         assert new_state["retry_count"] == 1
         assert new_state["retry_hint"] is not None
+        assert not new_state.get("wbs_rows")
 
-    def test_validate_features_raises_after_max_retries(self) -> None:
-        """validate_features_node raises AgentExecutionError when retry_count >= 2."""
-        from core.exceptions import AgentExecutionError
-
+    def test_validate_sum_sets_error_after_max_retries(self) -> None:
+        """validate_sum_node sets error in state when retry_count >= 2."""
         state: ta.TrackerState = {
+            "session_id": "test-session",
             "use_case_id": "uc-1",
             "process_name": "Test",
-            "process_description": "desc",
+            "task_extraction": {"activities": []},
+            "total_effort_hours": 200.0,
             "complexity_class": "M",
             "effort_weeks": 5,
+            "build_sit_window": {"start_date": "2025-07-01", "end_date": "2025-08-15"},
             "sprint_count": 3,
             "sprint_capacity": 8,
-            "document_context": "",
-            "raw_llm_response": "",
-            "extracted_features": [
-                {"name": "Bad", "size": "HUGE", "description": "still invalid"},
-            ],
-            "sprint_assignment": {},
+            "raw_llm_response": INVALID_WBS_JSON,
+            "wbs_rows": [],
+            "sequenced_rows": [],
             "error": None,
-            "retry_count": 2,  # already at limit
+            "retry_count": 1,  # one previous retry, this will be the second attempt
             "retry_hint": "previous hint",
         }
 
-        with pytest.raises(AgentExecutionError):
-            ta.validate_features_node(state)
+        new_state = {**state, **ta.validate_sum_node(state)}
+        assert new_state["retry_count"] == 2
+        assert "validation failed" in new_state["error"].lower()
 
 
 # ──────────────────────────────────────────────
 # tracker_agent — full graph integration
 # ──────────────────────────────────────────────
 
-
 class TestTrackerAgentGraph:
     @pytest.mark.asyncio
-    async def test_valid_features_no_retry(self) -> None:
-        """When first LLM response has valid features, sprint assignment runs with 1 LLM call."""
+    async def test_valid_wbs_no_retry(self) -> None:
+        """When first LLM response has valid WBS, sequencer runs with 1 LLM call."""
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(return_value=VALID_FEATURES_JSON)
+        mock_manager.complete_async = AsyncMock(return_value=VALID_WBS_JSON)
 
         with (
             patch("agents.tracker_agent.get_default_manager", return_value=mock_manager),
-            patch(
-                "agents.tracker_agent.assign_sprints",
-                return_value=_make_mock_sprint_result(),
-            ),
         ):
             result = await ta.run_tracker_agent(
                 use_case_id="uc-001",
                 process_name="Invoice Processing",
-                process_description="Automate invoice workflow",
+                task_extraction={"activities": []},
+                total_effort_hours=200.0,
+                build_sit_window={"start_date": "2025-07-01", "end_date": "2025-08-15"},
                 complexity_class="M",
                 effort_weeks=5,
-                sprint_count=3,
+                session_id="test-session",
             )
 
-        assert result["features"] is not None
+        assert len(result["wbs_rows"]) == 2
+        assert len(result["sequenced_rows"]) == 2
         assert mock_manager.complete_async.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_retry_count_increments_on_invalid_features(self) -> None:
-        """When first LLM response has invalid features, retry fires and second succeeds."""
+    async def test_retry_count_increments_on_invalid_wbs(self) -> None:
+        """When first LLM response has invalid WBS, retry fires and second succeeds."""
         mock_manager = MagicMock()
         mock_manager.complete_async = AsyncMock(
-            side_effect=[INVALID_FEATURES_JSON, VALID_FEATURES_JSON]
+            side_effect=[INVALID_WBS_JSON, VALID_WBS_JSON]
         )
 
         with (
             patch("agents.tracker_agent.get_default_manager", return_value=mock_manager),
-            patch(
-                "agents.tracker_agent.assign_sprints",
-                return_value=_make_mock_sprint_result(),
-            ),
         ):
             result = await ta.run_tracker_agent(
                 use_case_id="uc-002",
                 process_name="HR Onboarding",
-                process_description="Automate HR onboarding steps",
+                task_extraction={"activities": []},
+                total_effort_hours=200.0,
+                build_sit_window={"start_date": "2025-07-01", "end_date": "2025-08-15"},
                 complexity_class="S",
                 effort_weeks=3,
-                sprint_count=2,
+                session_id="test-session",
             )
 
         assert mock_manager.complete_async.call_count == 2
         assert result["metadata"]["retry_count"] >= 1
 
     @pytest.mark.asyncio
-    async def test_retry_hint_appears_in_second_decompose_prompt(self) -> None:
-        """The second decompose call must contain the retry hint."""
+    async def test_retry_hint_appears_in_second_group_prompt(self) -> None:
+        """The second grouping call must contain the retry hint."""
         mock_manager = MagicMock()
         mock_manager.complete_async = AsyncMock(
-            side_effect=[INVALID_FEATURES_JSON, VALID_FEATURES_JSON]
+            side_effect=[INVALID_WBS_JSON, VALID_WBS_JSON]
         )
 
         with (
             patch("agents.tracker_agent.get_default_manager", return_value=mock_manager),
-            patch(
-                "agents.tracker_agent.assign_sprints",
-                return_value=_make_mock_sprint_result(),
-            ),
         ):
             await ta.run_tracker_agent(
                 use_case_id="uc-003",
                 process_name="Claim Processing",
-                process_description="Insurance claim automation",
+                task_extraction={"activities": []},
+                total_effort_hours=200.0,
+                build_sit_window={"start_date": "2025-07-01", "end_date": "2025-08-15"},
                 complexity_class="L",
                 effort_weeks=6,
-                sprint_count=4,
+                session_id="test-session",
             )
 
         assert mock_manager.complete_async.call_count == 2
@@ -555,24 +566,25 @@ class TestTrackerAgentGraph:
 
     @pytest.mark.asyncio
     async def test_raises_after_max_retries(self) -> None:
-        """When all retries exhausted (3 calls total), AgentExecutionError is raised."""
+        """When all retries exhausted (2 attempts total), AgentExecutionError is raised."""
         from core.exceptions import AgentExecutionError
 
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(return_value=INVALID_FEATURES_JSON)
+        mock_manager.complete_async = AsyncMock(return_value=INVALID_WBS_JSON)
 
         with (
             patch("agents.tracker_agent.get_default_manager", return_value=mock_manager),
-            patch("agents.tracker_agent.assign_sprints"),
         ):
             with pytest.raises(AgentExecutionError):
                 await ta.run_tracker_agent(
                     use_case_id="uc-004",
                     process_name="Payroll",
-                    process_description="Automate payroll",
+                    task_extraction={"activities": []},
+                    total_effort_hours=200.0,
+                    build_sit_window={"start_date": "2025-07-01", "end_date": "2025-08-15"},
                     complexity_class="M",
                     effort_weeks=5,
-                    sprint_count=3,
+                    session_id="test-session",
                 )
 
-        assert mock_manager.complete_async.call_count == 3
+        assert mock_manager.complete_async.call_count == 2

@@ -257,7 +257,13 @@ async def run_s2_assessment(
         logger.info("Using manual band entry (no LLM calls)")
         bands_with_source = AttributeBandsWithSource(**manual_bands)
         extraction_notes = "Manual entry by user"
-        process_summary = None  # No process_summary for manual entry
+        process_summary = {
+            "key_activities": ["Execute manual steps"],
+            "key_logical_points": ["Evaluate business logic"],
+            "key_applications": ["Target application"],
+            "key_layouts": ["Application screen layout"],
+            "key_additional_technologies": ["RPA Platform"],
+        }
 
     elif pasted_text:
         # Path 2: Pasted text → extraction

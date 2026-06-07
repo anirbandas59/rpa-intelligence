@@ -307,9 +307,10 @@ async def create_s3_run(
 
         async def run_synthesis_background():
             """Background task for synthesis."""
-            from db.session import get_session_maker
+            from db.session import get_session_factory
 
-            async with get_session_maker()() as session:
+            session_factory = get_session_factory()
+            async with session_factory() as session:
                 try:
                     synthesis_result = await synthesize_task_extraction(
                         use_case_id=use_case_id,
