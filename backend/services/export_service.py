@@ -1,6 +1,25 @@
 """
-Export service — generate Excel tracker from Stage 4 results using output_template.xlsx.
-Writes formulas (not computed values) for SP and Dev Status columns.
+Excel export service for Stage 4 sprint tracker generation.
+
+Generates Excel workbook from output_template.xlsx with three sheets: Dashboard,
+Tracker (Feature and delivery timeline), and Project Details. Fills WBS rows with
+data from Stage 4 while preserving template formulas for calculated columns.
+
+Key responsibilities:
+- Load output_template.xlsx with formulas intact (data_only=False)
+- Write project metadata to Dashboard sheet (name, complexity, effort, end date)
+- Write tracker rows to Tracker sheet starting at row 19
+- Preserve Excel formulas for SP column (=ROUND($C$16*Hours,2))
+- Preserve Excel formulas for Dev Status column (VLOOKUP against Dashboard lookup table)
+- Never overwrite Dashboard rows 8-16 (lookup table) or cell C16 (SP constant)
+
+CRITICAL constraints:
+- SP column: ALWAYS write formula =ROUND($C$16*Hours,2), NEVER Python-calculated value
+- Dev Status column: ALWAYS write VLOOKUP formula, NEVER Python-calculated value
+- Dashboard rows 8-16: NEVER modify (contains status lookup table)
+- Cell C16: NEVER modify (contains SP conversion constant 0.0666)
+
+Uses openpyxl for Excel manipulation and export_tool for formula generation.
 """
 
 import io
@@ -18,16 +37,26 @@ TEMPLATE_PATH = Path(__file__).parent.parent / "data" / "templates" / "output_te
 
 def generate_tracker_xlsx(use_case_name: str, s2_result: dict, s3_result: dict, s4_result: dict) -> io.BytesIO:
     """
-    Generate tracker Excel from output_template.xlsx.
+    Generate Excel tracker workbook from output_template.xlsx with formula preservation.
+
+    Loads template with data_only=False to preserve formulas, writes project metadata
+    and WBS rows, then returns in-memory buffer for download. SP and Dev Status columns
+    are written as formulas (not values) per CLAUDE.md constraints.
 
     Args:
-        use_case_name: Name of the use case
-        s2_result: Stage 2 complexity result
-        s3_result: Stage 3 timeline result
-        s4_result: Stage 4 tracker result (with sequenced_rows)
+        use_case_name: Project/use case name for display
+        s2_result: Stage 2 complexity result dict (complexity_class)
+        s3_result: Stage 3 timeline result dict (total_weeks, project_end_date, phases)
+        s4_result: Stage 4 tracker result dict (sequenced_rows with feature, hours, start_date, etc.)
 
     Returns:
-        BytesIO buffer with Excel file content
+        BytesIO buffer containing Excel workbook ready for download
+
+    Flow:
+    1. Load output_template.xlsx with formulas intact
+    2. Write metadata to rows 3-6 (name, complexity, effort, end date)
+    3. Write tracker rows starting at row 19 (formulas for SP and Dev Status)
+    4. Save to BytesIO buffer and return
     """
     logger.info(f"Generating tracker xlsx for '{use_case_name}'")
 
