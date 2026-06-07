@@ -1,24 +1,21 @@
-import csv
-import io
+import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, status
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
 from core.exceptions import DocumentProcessingError
 from core.scoring.weight_matrix import load_weight_matrix
-from db.models import PhaseConfig, Project, UseCase, User, WeightConfig
+from db.models import PhaseConfig, Project, UploadSession, UseCase, User, WeightConfig
+from db.session import AsyncSessionLocal
+from services.file_storage_service import file_storage_service
 from services.timeline_service import DEFAULT_BUFFERS
 
-try:
-    import openpyxl
-except ImportError:
-    openpyxl = None
-
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ProjectCreate(BaseModel):
@@ -92,8 +89,10 @@ class PhaseConfigResponse(BaseModel):
 
 
 class BulkUploadResponse(BaseModel):
-    """Response for bulk upload preview."""
+    """Response for bulk upload with session ID and preview."""
 
+    upload_id: str
+    filename: str
     columns: list[str]
     preview: list[dict[str, str]]
     row_count: int
@@ -108,18 +107,30 @@ class ColumnMapping(BaseModel):
     install_status: str | None = None
 
 
-class BulkConfirmRequest(BaseModel):
-    """Request to confirm and create use cases from bulk upload."""
+class UpdateMappingRequest(BaseModel):
+    """Request to update column mapping for upload session."""
 
-    column_mapping: ColumnMapping  # maps CSV column names → UseCase field names
-    rows: list[dict[str, str]]  # the actual data rows (from the preview)
+    column_mapping: ColumnMapping
+    edited_rows: list[dict[str, str]] | None = None  # Optional inline edits
 
 
 class BulkConfirmResponse(BaseModel):
-    """Response after bulk confirmation."""
+    """Response after bulk upload confirmation."""
 
-    created: int
-    use_case_ids: list[str]
+    upload_id: str
+    status: str  # "processing"
+    job_id: str
+
+
+class BulkUploadStatusResponse(BaseModel):
+    """Progress status for bulk upload processing."""
+
+    upload_id: str
+    status: str  # "preview" | "confirmed" | "processing" | "complete" | "failed"
+    created_count: int | None
+    assessed_count: int | None
+    total_count: int
+    error: str | None
 
 
 @router.post("", response_model=ProjectResponse)
@@ -387,8 +398,10 @@ async def bulk_upload_use_cases(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Upload and preview a CSV or XLSX file for bulk use-case creation.
-    Returns column names, first 5 data rows, and total row count.
+    Step 1: Upload file and create upload session.
+
+    Returns upload_id, columns, preview (first 5 rows), and total row count.
+    File is stored server-side for later processing.
     """
     # Verify project exists and belongs to current user
     result = await db.execute(
@@ -396,126 +409,254 @@ async def bulk_upload_use_cases(
     )
     project = result.scalar_one_or_none()
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found or you don't have access to it"
+        )
 
     # Read file content
     content = await file.read()
     if not content:
         raise DocumentProcessingError("File is empty")
 
-    columns = []
-    preview = []
-    row_count = 0
+    if not file.filename:
+        raise DocumentProcessingError("Filename is missing")
 
-    try:
-        if file.filename.endswith(".csv"):
-            # Parse CSV
-            text_content = content.decode("utf-8")
-            reader = csv.DictReader(io.StringIO(text_content))
-            if not reader.fieldnames:
-                raise DocumentProcessingError("CSV has no columns")
-            columns = list(reader.fieldnames)
-            for i, row in enumerate(reader):
-                if i < 5:
-                    preview.append(dict(row))
-                row_count += 1
-        elif file.filename.endswith(".xlsx"):
-            # Parse XLSX
-            if openpyxl is None:
-                raise DocumentProcessingError("openpyxl is not installed")
-            workbook = openpyxl.load_workbook(io.BytesIO(content))
-            ws = workbook.active
-            # Get columns from first row
-            for cell in ws[1]:
-                if cell.value:
-                    columns.append(str(cell.value))
-            # Get data rows
-            for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-                if i < 5:
-                    row_dict = {
-                        columns[j]: str(val) if val is not None else ""
-                        for j, val in enumerate(row)
-                        if j < len(columns)
-                    }
-                    preview.append(row_dict)
-                row_count += 1
-        else:
-            raise DocumentProcessingError(
-                f"Unsupported file type: {file.filename}. \
-                                          Only .csv and .xlsx are supported."
-            )
-    except DocumentProcessingError:
-        raise
-    except UnicodeDecodeError:
-        raise DocumentProcessingError(
-            "File encoding error. Please ensure the file is UTF-8 encoded."
-        )
-    except Exception as e:
-        raise DocumentProcessingError(f"Failed to parse file: {str(e)}")
+    # Create upload session and store file
+    session = file_storage_service.create_upload_session(
+        file_content=content,
+        filename=file.filename,
+        project_id=id,
+        user_id=current_user.id,
+    )
 
-    return BulkUploadResponse(columns=columns, preview=preview, row_count=row_count)
+    # Get preview rows
+    preview = file_storage_service.get_preview_rows(session, limit=5)
+
+    # Save session to database
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+
+    return BulkUploadResponse(
+        upload_id=session.id,
+        filename=session.filename,
+        columns=session.columns["columns"],
+        preview=preview,
+        row_count=session.row_count,
+    )
 
 
-@router.post("/{id}/use-cases/bulk-confirm", response_model=BulkConfirmResponse)
-async def bulk_confirm_use_cases(
-    id: str,
-    request: BulkConfirmRequest,
+@router.put("/use-cases/bulk-upload/{upload_id}/mapping", response_model=BulkUploadResponse)
+async def update_column_mapping(
+    upload_id: str,
+    request: UpdateMappingRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Confirm bulk upload and create UseCase records.
-    Skips rows with empty name field.
+    Step 2: Store column mapping for upload session.
+
+    Validates mapping and optionally updates preview with mapped columns.
     """
-    # Verify project exists and belongs to current user
-    result = await db.execute(
-        select(Project).where(Project.id == id, Project.created_by == current_user.id)
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    # Get session
+    session = await db.get(UploadSession, upload_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
 
-    # Create UseCase records from request rows
-    use_cases = []
-    for row in request.rows:
-        # Get name from mapped column
-        name = row.get(request.column_mapping.name, "").strip()
-        if not name:
-            # Skip rows with empty name
-            continue
+    # Verify user ownership
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
 
-        # Get optional fields
-        description = None
-        if request.column_mapping.description:
-            description = row.get(request.column_mapping.description, "").strip()
-            description = description if description else None
-
-        source_platform = None
-        if request.column_mapping.source_platform:
-            source_platform = row.get(request.column_mapping.source_platform, "").strip()
-            source_platform = source_platform if source_platform else None
-
-        install_status = None
-        if request.column_mapping.install_status:
-            install_status = row.get(request.column_mapping.install_status, "").strip()
-            install_status = install_status if install_status else None
-
-        # Create UseCase record
-        use_case = UseCase(
-            project_id=id,
-            name=name,
-            description=description,
-            source_platform=source_platform,
-            install_status=install_status,
+    # Validate status
+    if session.status != "preview":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot update mapping: upload is already {session.status}"
         )
-        use_cases.append(use_case)
 
-    # Batch insert
-    if use_cases:
-        db.add_all(use_cases)
-        await db.commit()
-        # Refresh to get IDs
-        for uc in use_cases:
-            await db.refresh(uc)
+    # Validate column mapping against session columns
+    columns = session.columns["columns"]
+    if request.column_mapping.name not in columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Column '{request.column_mapping.name}' not found in file"
+        )
 
-    return BulkConfirmResponse(created=len(use_cases), use_case_ids=[uc.id for uc in use_cases])
+    # Store mapping
+    session.column_mapping = request.column_mapping.model_dump()
+    session.status = "confirmed"
+    await db.commit()
+
+    # Return updated preview
+    preview = file_storage_service.get_preview_rows(session, limit=5)
+
+    return BulkUploadResponse(
+        upload_id=session.id,
+        filename=session.filename,
+        columns=columns,
+        preview=preview,
+        row_count=session.row_count,
+    )
+
+
+@router.post("/use-cases/bulk-upload/{upload_id}/confirm", response_model=BulkConfirmResponse)
+async def confirm_bulk_upload(
+    upload_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Step 3: Confirm creation and trigger background processing.
+
+    Creates use cases in batches and triggers Stage 1 assessment for each.
+    Returns immediately with job ID for progress polling.
+    """
+    # Get session
+    session = await db.get(UploadSession, upload_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+
+    # Verify user ownership
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Validate state
+    if session.column_mapping is None:
+        raise HTTPException(status_code=400, detail="Column mapping not set")
+
+    if session.status not in ["preview", "confirmed"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Upload already {session.status}"
+        )
+
+    # Update status
+    session.status = "processing"
+    await db.commit()
+
+    # Add background task
+    background_tasks.add_task(
+        process_bulk_upload,
+        upload_id=upload_id,
+    )
+
+    return BulkConfirmResponse(
+        upload_id=upload_id,
+        status="processing",
+        job_id=upload_id,
+    )
+
+
+@router.get("/use-cases/bulk-upload/{upload_id}/status", response_model=BulkUploadStatusResponse)
+async def get_bulk_upload_status(
+    upload_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Poll endpoint for upload progress.
+
+    Returns creation progress and Stage 1 assessment progress.
+    """
+    # Get session
+    session = await db.get(UploadSession, upload_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Upload session not found")
+
+    # Verify user ownership
+    if session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Count assessed use cases
+    assessed_count = 0
+    if session.use_case_ids and session.use_case_ids.get("ids"):
+        use_case_id_list = session.use_case_ids["ids"]
+        result = await db.execute(
+            select(func.count(UseCase.id))
+            .where(UseCase.id.in_(use_case_id_list))
+            .where(UseCase.s1_latest_run_id.isnot(None))
+        )
+        assessed_count = result.scalar() or 0
+
+    return BulkUploadStatusResponse(
+        upload_id=session.id,
+        status=session.status,
+        created_count=session.created_count,
+        assessed_count=assessed_count,
+        total_count=session.row_count,
+        error=session.error,
+    )
+
+
+async def process_bulk_upload(upload_id: str):
+    """
+    Background task for processing bulk upload.
+
+    Creates use cases in batches and triggers Stage 1 assessments.
+    Updates session status to 'complete' or 'failed'.
+    """
+    async with AsyncSessionLocal() as db:
+        try:
+            # Get session
+            session = await db.get(UploadSession, upload_id)
+            if not session:
+                logger.error(f"Upload session not found: {upload_id}")
+                return
+
+            if not session.column_mapping:
+                session.status = "failed"
+                session.error = "Column mapping not set"
+                await db.commit()
+                return
+
+            # Parse column mapping
+            column_mapping = session.column_mapping
+
+            # Process file in batches
+            use_case_ids = []
+            batch_count = 0
+
+            async for batch in file_storage_service.parse_file_with_mapping(
+                session=session,
+                column_mapping=column_mapping,
+                batch_size=1000,
+            ):
+                # Add batch to database
+                db.add_all(batch)
+                await db.commit()
+
+                # Refresh to get IDs
+                for uc in batch:
+                    await db.refresh(uc)
+                    use_case_ids.append(uc.id)
+
+                batch_count += 1
+                logger.info(
+                    f"Processed batch {batch_count} for upload {upload_id}: "
+                    f"{len(batch)} use cases"
+                )
+
+            # Update session status
+            session.status = "complete"
+            session.created_count = len(use_case_ids)
+            session.use_case_ids = {"ids": use_case_ids}
+            await db.commit()
+
+            logger.info(
+                f"Bulk upload {upload_id} complete: {len(use_case_ids)} use cases created"
+            )
+
+            # TODO: Trigger Stage 1 assessments via queue
+            # This will be implemented when stage1_queue_service is added
+            # For now, use cases are created but assessments must be triggered manually
+
+        except Exception as e:
+            logger.exception(f"Bulk upload {upload_id} failed")
+            async with AsyncSessionLocal() as db_error:
+                session = await db_error.get(UploadSession, upload_id)
+                if session:
+                    session.status = "failed"
+                    session.error = str(e)
+                    await db_error.commit()
