@@ -16,7 +16,7 @@ from langgraph.graph import END, StateGraph
 from core.exceptions import AgentExecutionError, LLMProviderError
 from llm.manager import get_default_manager
 from prompts.tracker_prompts import S4_GROUP_STEPS_SYSTEM, S4_GROUP_STEPS_USER
-from tools.output.tracker_sequencer import TrackerRow, SequencerInput, sequence_dates
+from tools.output.tracker_sequencer import SequencerInput, TrackerRow, sequence_dates
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ async def group_steps_node(state: TrackerState) -> dict:
 
     logger.info(
         "group_steps_node entered",
-        extra={"session_id": session_id, "node": "group_steps", "attempt": retry_count + 1}
+        extra={"session_id": session_id, "node": "group_steps", "attempt": retry_count + 1},
     )
 
     try:
@@ -61,9 +61,7 @@ async def group_steps_node(state: TrackerState) -> dict:
         # Convert task_extraction dict to JSON string for prompt
         task_extraction_json = json.dumps(state["task_extraction"], indent=2)
 
-        system_prompt = S4_GROUP_STEPS_SYSTEM.format(
-            total_effort_hours=state["total_effort_hours"]
-        )
+        system_prompt = S4_GROUP_STEPS_SYSTEM.format(total_effort_hours=state["total_effort_hours"])
 
         user_prompt = S4_GROUP_STEPS_USER.format(
             task_extraction_json=task_extraction_json,
@@ -77,8 +75,7 @@ async def group_steps_node(state: TrackerState) -> dict:
                 f"Please correct the hour grouping and retry."
             )
             logger.info(
-                f"Retrying with hint: {state['retry_hint']}",
-                extra={"session_id": session_id}
+                f"Retrying with hint: {state['retry_hint']}", extra={"session_id": session_id}
             )
 
         response = await llm.complete_async(
@@ -89,8 +86,7 @@ async def group_steps_node(state: TrackerState) -> dict:
         )
 
         logger.info(
-            f"Received LLM response ({len(response)} chars)",
-            extra={"session_id": session_id}
+            f"Received LLM response ({len(response)} chars)", extra={"session_id": session_id}
         )
 
         return {"raw_llm_response": response}
@@ -109,7 +105,9 @@ def validate_sum_node(state: TrackerState) -> dict:
     On failure without retries: sets error.
     """
     session_id = state["session_id"]
-    logger.info("validate_sum_node entered", extra={"session_id": session_id, "node": "validate_sum"})
+    logger.info(
+        "validate_sum_node entered", extra={"session_id": session_id, "node": "validate_sum"}
+    )
 
     try:
         # Parse JSON response
@@ -145,7 +143,7 @@ def validate_sum_node(state: TrackerState) -> dict:
             # Success
             logger.info(
                 f"Hour sum validation passed: {actual_sum:.2f}h / {budget:.2f}h",
-                extra={"session_id": session_id}
+                extra={"session_id": session_id},
             )
             return {"wbs_rows": wbs_rows, "error": None}
 
@@ -167,7 +165,7 @@ def validate_sum_node(state: TrackerState) -> dict:
                 )
                 logger.warning(
                     f"Retrying WBS grouping (attempt {attempts}/2)",
-                    extra={"session_id": session_id}
+                    extra={"session_id": session_id},
                 )
                 return {
                     "retry_count": attempts,
@@ -207,7 +205,9 @@ def sequence_dates_node(state: TrackerState) -> dict:
     Node 3: Assign sequential dates using deterministic sequencer.
     """
     session_id = state["session_id"]
-    logger.info("sequence_dates_node entered", extra={"session_id": session_id, "node": "sequence_dates"})
+    logger.info(
+        "sequence_dates_node entered", extra={"session_id": session_id, "node": "sequence_dates"}
+    )
 
     try:
         # Convert wbs_rows to TrackerRow objects
@@ -248,7 +248,7 @@ def sequence_dates_node(state: TrackerState) -> dict:
 
         logger.info(
             f"Date sequencing complete: {len(sequenced_rows)} rows",
-            extra={"session_id": session_id}
+            extra={"session_id": session_id},
         )
 
         return {"sequenced_rows": sequenced_rows}
@@ -264,10 +264,12 @@ def store_result_node(state: TrackerState) -> dict:
     Node 4: Result stored successfully (actual DB write happens in API handler).
     """
     session_id = state["session_id"]
-    logger.info("store_result_node entered", extra={"session_id": session_id, "node": "store_result"})
+    logger.info(
+        "store_result_node entered", extra={"session_id": session_id, "node": "store_result"}
+    )
     logger.info(
         f"Tracker agent complete for use case {state['use_case_id']}",
-        extra={"session_id": session_id}
+        extra={"session_id": session_id},
     )
     return {}
 
@@ -335,8 +337,7 @@ async def run_tracker_agent(
         dict with wbs_rows, sequenced_rows, and metadata
     """
     logger.info(
-        f"Starting tracker agent for use case {use_case_id}",
-        extra={"session_id": session_id}
+        f"Starting tracker agent for use case {use_case_id}", extra={"session_id": session_id}
     )
 
     initial_state: TrackerState = {
@@ -384,7 +385,7 @@ async def run_tracker_agent(
 
         logger.info(
             f"Tracker agent completed successfully for use case {use_case_id}",
-            extra={"session_id": session_id}
+            extra={"session_id": session_id},
         )
         return result
 

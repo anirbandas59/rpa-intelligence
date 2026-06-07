@@ -53,7 +53,7 @@ async def _execute_s1_background_task(
         try:
             service = AssessmentService(session, model=model)
             await service.run_assessment(use_case_id)
-        except Exception as e:
+        except Exception:
             logger.exception(f"Error in S1 assessment for use case {use_case_id}")
             raise
 
@@ -156,7 +156,9 @@ async def get_s1_run(
 ):
     """Get single S1 StageRun with full details."""
     result = await db.execute(
-        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1")
+        select(StageRun).where(
+            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1"
+        )
     )
     run = result.scalar_one_or_none()
 
@@ -218,6 +220,7 @@ async def override_s1_decision(
 
     # Auto-derive migration_decision from new total_score
     from core.assessment.decision_utils import derive_migration_decision
+
     result_data["migration_decision"] = derive_migration_decision(result_data["total_score"])
 
     # Add override metadata
@@ -321,7 +324,8 @@ async def backfill_from_s2(
         return {
             "status": "suggestions_generated",
             "suggestions": suggestions,
-            "note": "Review and manually apply these suggestions via the override endpoint if appropriate.",
+            "note": "Review and manually apply these suggestions via the"
+            " override endpoint if appropriate.",
         }
 
     except Exception as e:

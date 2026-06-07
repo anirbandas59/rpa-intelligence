@@ -22,6 +22,13 @@ class UseCaseResponse(BaseModel):
     id: str
     name: str
     description: str | None
+    project_id: str | None = None
+    source_platform: str | None = None
+    install_status: str | None = None
+    s1_latest_run_id: str | None = None
+    s2_latest_run_id: str | None = None
+    s3_latest_run_id: str | None = None
+    s4_latest_run_id: str | None = None
 
 
 @router.post("", response_model=UseCaseResponse)

@@ -1,57 +1,69 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AgentActivityFeed } from "@/components/shared/AgentActivityFeed"
-import { EmptyState } from "@/components/shared/EmptyState"
-import {
-  ArrowLeft,
-  Plus,
-  Loader2,
-  ChevronRight,
-  CheckCircle2,
-  Circle,
-  AlertCircle,
-  ArrowRight,
-  Users,
-} from "lucide-react"
-import { apiGet, isAuthenticated } from "@/lib/api"
-import type { Project, UseCase, ReadinessResponse, ReadinessStatus } from "@/lib/types"
+import React, { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Btn, SectionLabel } from "@/components/rpa";
+import { spacing } from "@/lib/design-tokens";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { ComplexityChip } from "@/components/shared/ComplexityChip";
+import { PriorityBadge, BAND_META } from "@/components/shared/PriorityBadge";
+import { MiniSpark } from "@/components/shared/MiniSpark";
+import { Icon } from "@/components/shared/icons";
+import { ArrowLeft, Plus, Loader2, Users } from "lucide-react";
+import { toast } from "sonner";
+import { apiGet, apiGetRuns, apiPost, isAuthenticated } from "@/lib/api";
+import type {
+  Project,
+  UseCase,
+  ReadinessResponse,
+  ReadinessStatus,
+  S3ReadinessDetail,
+  Band,
+  S1Result,
+  S2Result,
+  S3Result,
+} from "@/lib/types";
+
+function resolveStatus(
+  r: ReadinessResponse | undefined | null,
+  stageId: "s1" | "s2" | "s3" | "s4",
+): ReadinessStatus {
+  if (!r) return "not_ready";
+  const val = r[stageId];
+  if (stageId === "s3")
+    return (val as S3ReadinessDetail)?.phase_calculator ?? "not_ready";
+  return (val as ReadinessStatus) ?? "not_ready";
+}
 
 const STATUS_CONFIG: Record<
   ReadinessStatus,
-  { label: string; dotClass: string; textClass: string }
+  { label: string; dotClass: string; color: string }
 > = {
   not_ready: {
     label: "Not Ready",
     dotClass: "bg-muted-foreground/40",
-    textClass: "text-muted-foreground/60",
+    color: "var(--muted-foreground)",
   },
-  ready: {
-    label: "Ready",
-    dotClass: "bg-blue-400",
-    textClass: "text-blue-400",
-  },
+  ready: { label: "Ready", dotClass: "bg-blue-400", color: "var(--c-blue)" },
   running: {
     label: "Running",
     dotClass: "bg-primary animate-pulse",
-    textClass: "text-primary",
+    color: "var(--primary)",
   },
   complete: {
     label: "Complete",
     dotClass: "bg-green-500",
-    textClass: "text-green-400",
+    color: "var(--c-green)",
   },
-  stale: {
-    label: "Stale",
-    dotClass: "bg-amber-500",
-    textClass: "text-amber-400",
-  },
-}
+  stale: { label: "Stale", dotClass: "bg-amber-500", color: "var(--c-amber)" },
+};
 
 const STAGES = [
   {
@@ -72,81 +84,45 @@ const STAGES = [
     short: "S3",
     path: "stage3",
   },
-  {
-    id: "s4" as const,
-    label: "Sprint Tracker",
-    short: "S4",
-    path: "stage4",
-  },
-]
+  { id: "s4" as const, label: "Sprint Tracker", short: "S4", path: "stage4" },
+];
 
-interface StagePipelineNodeProps {
-  stage: (typeof STAGES)[number]
-  status: ReadinessStatus
-  isLast: boolean
-  href: string
-}
-
-function StagePipelineNode({ stage, status, isLast, href }: StagePipelineNodeProps) {
-  const config = STATUS_CONFIG[status]
-
-  return (
-    <div className="flex items-center gap-3 flex-1 min-w-0">
-      <div className="glass-card rounded-xl border border-border/50 hover:glow-primary hover:-translate-y-0.5 transition-all duration-200 p-4 flex-1 min-w-0">
-        {/* Top row: badge + status dot */}
-        <div className="flex items-center justify-between mb-3">
-          <Badge
-            variant="outline"
-            className="text-[10px] font-mono border-primary/30 text-primary bg-primary/10 px-1.5"
-          >
-            {stage.short}
-          </Badge>
-          <div className="flex items-center gap-1.5">
-            <div className={`h-2 w-2 rounded-full ${config.dotClass}`} />
-            <span className={`text-xs font-medium ${config.textClass}`}>{config.label}</span>
-          </div>
-        </div>
-
-        {/* Stage name */}
-        <div className="text-sm font-semibold mb-4 leading-tight">{stage.label}</div>
-
-        {/* Go button */}
-        <Link href={href}>
-          <Button
-            variant={status === "not_ready" ? "outline" : "default"}
-            size="sm"
-            className="w-full text-xs h-7"
-          >
-            {status === "running" ? "View Progress" : status === "not_ready" ? "Configure" : "Open"}
-            <ArrowRight className="ml-1.5 h-3 w-3" />
-          </Button>
-        </Link>
-      </div>
-
-      {!isLast && (
-        <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-      )}
-    </div>
-  )
+/* Cached stage results per UC */
+interface UCCache {
+  s1?: S1Result;
+  s2?: S2Result;
+  s3?: S3Result;
 }
 
 export default function ProjectDetailPage() {
-  const params = useParams()
-  const router = useRouter()
-  const projectId = params.id as string
+  const params = useParams();
+  const router = useRouter();
+  const projectId = params.id as string;
 
-  const [project, setProject] = useState<Project | null>(null)
-  const [useCases, setUseCases] = useState<UseCase[]>([])
-  const [readiness, setReadiness] = useState<Map<string, ReadinessResponse>>(new Map())
-  const [selectedUcId, setSelectedUcId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [orchestratorSession, setOrchestratorSession] = useState<string | null>(null)
+  const [project, setProject] = useState<Project | null>(null);
+  const [useCases, setUseCases] = useState<UseCase[]>([]);
+  const [readiness, setReadiness] = useState<Map<string, ReadinessResponse>>(
+    new Map(),
+  );
+  const [ucCache, setUcCache] = useState<Map<string, UCCache>>(new Map());
+  const [selectedUcId, setSelectedUcId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  // const [orchestratorSession, setOrchestratorSession] = useState<string | null>(
+  //   null,
+  // );
+  const [newUcOpen, setNewUcOpen] = useState(false);
+  const [newUcName, setNewUcName] = useState("");
+  const [newUcDesc, setNewUcDesc] = useState("");
+  const [creatingUc, setCreatingUc] = useState(false);
+  const [activeView, setActiveView] = useState<"pipeline" | "portfolio">(
+    "pipeline",
+  );
 
   useEffect(() => {
     if (!isAuthenticated()) {
-      router.push("/auth/login")
-      return
+      router.push("/auth/login");
+      return;
     }
 
     const fetchData = async () => {
@@ -154,49 +130,128 @@ export default function ProjectDetailPage() {
         const [projectData, useCasesData] = await Promise.all([
           apiGet<Project>(`/api/v1/projects/${projectId}`),
           apiGet<UseCase[]>(`/api/v1/projects/${projectId}/use-cases`),
-        ])
-        setProject(projectData)
-        setUseCases(useCasesData)
+        ]);
+        setProject(projectData);
+        setUseCases(useCasesData);
+        if (useCasesData.length > 0) setSelectedUcId(useCasesData[0].id);
 
-        if (useCasesData.length > 0) {
-          setSelectedUcId(useCasesData[0].id)
-        }
-
-        // Fetch readiness for each use case
-        const readinessMap = new Map<string, ReadinessResponse>()
+        const readinessMap = new Map<string, ReadinessResponse>();
         await Promise.all(
           useCasesData.map(async (uc) => {
             try {
-              const r = await apiGet<ReadinessResponse>(`/api/v1/use-cases/${uc.id}/readiness`)
-              readinessMap.set(uc.id, r)
+              const r = await apiGet<ReadinessResponse>(
+                `/api/v1/use-cases/${uc.id}/readiness`,
+              );
+              readinessMap.set(uc.id, r);
             } catch {
-              // skip
+              /* skip */
             }
-          })
-        )
-        setReadiness(readinessMap)
+          }),
+        );
+        setReadiness(readinessMap);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load project")
+        setError(err instanceof Error ? err.message : "Failed to load project");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [projectId, router])
+    fetchData();
+  }, [projectId, router]);
+
+  /* Lazily resolve stage results for hero stats */
+  useEffect(() => {
+    if (useCases.length === 0) return;
+
+    // Proper async handling with Promise.all instead of forEach
+    const loadCaches = async () => {
+      const cacheEntries = await Promise.all(
+        useCases.map(async (uc) => {
+          const cache: UCCache = {};
+          try {
+            if (uc.s1_latest_run_id) {
+              const runs = await apiGetRuns<{
+                id: string;
+                status: string;
+                result: unknown;
+              }>(`/api/v1/stage1/${uc.id}/s1/runs`);
+              const lr = runs.find(
+                (r) => r.id === uc.s1_latest_run_id && r.status === "complete",
+              );
+              if (lr) cache.s1 = lr.result as S1Result;
+            }
+            if (uc.s2_latest_run_id) {
+              const runs = await apiGetRuns<{
+                id: string;
+                status: string;
+                result: unknown;
+              }>(`/api/v1/stage2/${uc.id}/s2/runs`);
+              const lr = runs.find(
+                (r) => r.id === uc.s2_latest_run_id && r.status === "complete",
+              );
+              if (lr) cache.s2 = lr.result as S2Result;
+            }
+            if (uc.s3_latest_run_id) {
+              // S3 list returns summary only — fetch full result directly
+              const fullRun = await apiGet<{
+                id: string;
+                status: string;
+                result: S3Result;
+              }>(`/api/v1/stage3/${uc.id}/s3/runs/${uc.s3_latest_run_id}`);
+              if (fullRun.status === "complete") cache.s3 = fullRun.result;
+            }
+          } catch {
+            /* silent */
+          }
+          return [uc.id, cache] as const;
+        }),
+      );
+
+      setUcCache(new Map(cacheEntries));
+    };
+
+    loadCaches();
+  }, [useCases]);
+
+  const handleCreateUc = async () => {
+    if (!newUcName.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    setCreatingUc(true);
+    try {
+      await apiPost(`/api/v1/use-cases`, {
+        name: newUcName,
+        description: newUcDesc,
+        project_id: projectId,
+      });
+      toast.success("Use case created");
+      setNewUcOpen(false);
+      setNewUcName("");
+      setNewUcDesc("");
+      // Reload page to fetch updated data
+      window.location.reload();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to create use case",
+      );
+    } finally {
+      setCreatingUc(false);
+    }
+  };
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
-    )
+    );
   }
 
   if (error || !project) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="container py-8">
+        <div className="py-6 px-7">
           <Alert variant="destructive">
             <AlertDescription>{error || "Project not found"}</AlertDescription>
           </Alert>
@@ -205,19 +260,39 @@ export default function ProjectDetailPage() {
           </Link>
         </div>
       </div>
-    )
+    );
   }
 
-  const selectedUc = useCases.find((uc) => uc.id === selectedUcId)
-  const selectedReadiness = selectedUcId ? readiness.get(selectedUcId) : null
+  const selectedUc = useCases.find((uc) => uc.id === selectedUcId);
+  const selectedReadiness = selectedUcId ? readiness.get(selectedUcId) : null;
+
+  /* Hero stats */
+  const quickWins = useCases.filter((uc) => {
+    const c = ucCache.get(uc.id);
+    return c?.s1?.migration_decision === "QUICK_WIN";
+  }).length;
+  const totalBuildWeeks = useCases.reduce((sum, uc) => {
+    const phases = ucCache.get(uc.id)?.s3?.phases || [];
+    const buildPhase = phases.find((p) =>
+      p.name.toLowerCase().includes("build"),
+    );
+    return sum + (buildPhase?.weeks || 0);
+  }, 0);
+  const totalFeatures = useCases.reduce((sum, uc) => {
+    return sum + 0; // s4 features not cached — placeholder
+  }, 0);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* ── Header ── */}
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container flex h-14 items-center gap-3">
+        <div className="flex h-14 items-center gap-3 px-6">
           <Link href="/projects">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground -ml-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground -ml-2"
+            >
               <ArrowLeft className="mr-1.5 h-4 w-4" />
               Projects
             </Button>
@@ -227,84 +302,562 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <div className="gradient-hero border-b border-border/50">
-        <div className="container py-10">
-          <h2 className="text-3xl font-bold tracking-tight gradient-text mb-1">{project.name}</h2>
-          {project.description && (
-            <p className="text-muted-foreground text-sm">{project.description}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="container py-8 space-y-8">
-        {/* Use-case selector + action row */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Use case:</span>
-            {useCases.length > 0 ? (
-              <select
-                className="bg-card border border-border/50 text-foreground text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ring/50"
-                value={selectedUcId || ""}
-                onChange={(e) => setSelectedUcId(e.target.value)}
-              >
-                {useCases.map((uc) => (
-                  <option key={uc.id} value={uc.id}>
-                    {uc.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-sm text-muted-foreground">No use cases yet</span>
-            )}
-            <Badge variant="outline" className="text-xs text-muted-foreground border-border/50">
-              {useCases.length} total
-            </Badge>
+      <div
+        style={{
+          height: "calc(100vh - 3.5rem)",
+          overflow: "hidden",
+          padding: "26px 30px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 22,
+        }}
+      >
+        {/* ── Hero ── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <h1
+              className="rpa-gradient-text"
+              style={{
+                fontSize: 30,
+                fontWeight: 700,
+                letterSpacing: -0.6,
+                margin: 0,
+              }}
+            >
+              {project.name}
+            </h1>
+            <p
+              style={{
+                fontSize: 13.5,
+                color: "var(--muted-fg)",
+                margin: "6px 0 0",
+              }}
+            >
+              {project.description || "Four-stage delivery intelligence"} ·{" "}
+              {useCases.length} use case{useCases.length !== 1 ? "s" : ""} ·{" "}
+              {quickWins} quick win{quickWins !== 1 ? "s" : ""} identified
+            </p>
           </div>
-
-          <Button size="sm">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Use Case
-          </Button>
+          <div style={{ display: "flex", gap: 26 }}>
+            {[
+              { n: useCases.length, l: "use cases" },
+              { n: quickWins, l: "quick wins" },
+              { n: totalBuildWeeks || "—", l: "build weeks" },
+              { n: totalFeatures || "—", l: "features" },
+            ].map(({ n, l }) => (
+              <div key={l}>
+                <div
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 24,
+                    fontWeight: 700,
+                  }}
+                >
+                  {n}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--muted-fg)" }}>
+                  {l}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Pipeline visualization */}
-        {selectedUc ? (
-          <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
-              Assessment Pipeline — {selectedUc.name}
-            </h3>
+        {/* ── View toggle + actions ── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 1,
+              borderRadius: 9,
+              border: "1px solid var(--border)",
+              padding: 3,
+            }}
+          >
+            {(["pipeline", "portfolio"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setActiveView(v)}
+                style={{
+                  padding: "5px 14px",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background:
+                    activeView === v
+                      ? "color-mix(in oklab, var(--primary) 16%, transparent)"
+                      : "transparent",
+                  color:
+                    activeView === v ? "var(--primary)" : "var(--muted-fg)",
+                  border: "none",
+                  transition: "all 0.12s",
+                }}
+              >
+                {v === "pipeline" ? "Pipeline" : "Portfolio map"}
+              </button>
+            ))}
+          </div>
+          <Btn size="sm" onClick={() => setNewUcOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New use case
+          </Btn>
+        </div>
 
-            <div className="flex items-stretch gap-2">
-              {STAGES.map((stage, idx) => {
-                const status: ReadinessStatus = selectedReadiness?.[stage.id] || "not_ready"
-                return (
-                  <StagePipelineNode
-                    key={stage.id}
-                    stage={stage}
-                    status={status}
-                    isLast={idx === STAGES.length - 1}
-                    href={`/projects/${projectId}/${stage.path}/${selectedUc.id}`}
-                  />
-                )
-              })}
+        {/* ══ PIPELINE VIEW (HubRail pattern) ══════════════════════════ */}
+        {activeView === "pipeline" && selectedUc && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
+            <div>
+              <SectionLabel style={{ marginBottom: 12 }}>
+                Assessment pipeline · {selectedUc.name}
+              </SectionLabel>
+              <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
+                {STAGES.map((stage, idx) => {
+                  const status: ReadinessStatus = resolveStatus(
+                    selectedReadiness,
+                    stage.id,
+                  );
+                  const cfg = STATUS_CONFIG[status];
+                  const cache = ucCache.get(selectedUcId || "");
+                  const href = `/projects/${projectId}/${stage.path}/${selectedUc.id}`;
+                  const stageIcons: Record<
+                    string,
+                    "target" | "grid" | "calendar" | "layers"
+                  > = {
+                    s1: "target",
+                    s2: "grid",
+                    s3: "calendar",
+                    s4: "layers",
+                  };
+
+                  return (
+                    <React.Fragment key={stage.id}>
+                      <div
+                        className="rpa-card-hover"
+                        style={{
+                          flex: 1,
+                          borderRadius: 14,
+                          padding: 16,
+                          background: "var(--surface)",
+                          border: `1px solid ${status === "running" ? "color-mix(in oklab, var(--primary) 40%, transparent)" : "var(--border)"}`,
+                          position: "relative",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 14,
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontFamily: "var(--mono)",
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                color: "var(--primary)",
+                                border:
+                                  "1px solid color-mix(in oklab, var(--primary) 30%, transparent)",
+                                borderRadius: 5,
+                                padding: "2px 5px",
+                              }}
+                            >
+                              {stage.short}
+                            </span>
+                            <Icon
+                              name={stageIcons[stage.id]}
+                              size={15}
+                              style={{ color: "var(--muted-fg)" }}
+                            />
+                          </span>
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              fontSize: 11,
+                              color: cfg.color,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: 99,
+                                background: cfg.color,
+                                ...(status === "running"
+                                  ? {
+                                      animation:
+                                        "rpaPulse 1.6s ease-in-out infinite",
+                                    }
+                                  : {}),
+                              }}
+                            />
+                            {cfg.label}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                            marginBottom: 14,
+                            lineHeight: 1.25,
+                          }}
+                        >
+                          {stage.label}
+                        </div>
+
+                        {/* NodeViz - stage-specific mini visualization */}
+                        <div
+                          style={{
+                            minHeight: 38,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                          }}
+                        >
+                          {stage.id === "s1" && cache?.s1 ? (
+                            <>
+                              <div
+                                style={{
+                                  fontFamily: "var(--mono)",
+                                  fontSize: 26,
+                                  fontWeight: 700,
+                                  color:
+                                    BAND_META[cache.s1.migration_decision]
+                                      ?.color || "var(--primary)",
+                                }}
+                              >
+                                {cache.s1.total_score}
+                              </div>
+                              <PriorityBadge
+                                band={cache.s1.migration_decision}
+                              />
+                            </>
+                          ) : stage.id === "s2" && cache?.s2 ? (
+                            <>
+                              <ComplexityChip
+                                cls={cache.s2.complexity_class as Band}
+                                size={30}
+                              />
+                              <div
+                                style={{ fontSize: 12, color: "var(--fg-2)" }}
+                              >
+                                {cache.s2.effort_min_weeks ===
+                                cache.s2.effort_max_weeks
+                                  ? `${cache.s2.effort_min_weeks}w`
+                                  : `${cache.s2.effort_min_weeks}–${cache.s2.effort_max_weeks}w`}
+                              </div>
+                            </>
+                          ) : stage.id === "s3" && cache?.s3 ? (
+                            <>
+                              <MiniSpark
+                                values={cache.s3.phases.map((p) => p.weeks)}
+                                color="var(--primary)"
+                                w={70}
+                                h={22}
+                              />
+                              <span
+                                style={{ fontSize: 11.5, color: "var(--fg-2)" }}
+                              >
+                                ~
+                                {cache.s3.phases.reduce(
+                                  (s, p) => s + p.weeks,
+                                  0,
+                                )}{" "}
+                                wks
+                              </span>
+                            </>
+                          ) : stage.id === "s4" && status === "complete" ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              {/* Placeholder: sprint count visualization */}
+                              <span
+                                style={{ fontSize: 11.5, color: "var(--fg-2)" }}
+                              >
+                                Sprint plan ready
+                              </span>
+                            </div>
+                          ) : (
+                            <span
+                              style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                            >
+                              {status === "not_ready"
+                                ? "Not ready"
+                                : "No data yet"}
+                            </span>
+                          )}
+                        </div>
+
+                        <Link href={href}>
+                          <Btn
+                            variant={
+                              status === "not_ready" ? "outline" : "subtle"
+                            }
+                            size="sm"
+                            iconR="arrowR"
+                            style={{ width: "100%", marginTop: 14 }}
+                          >
+                            {status === "running" ? "View progress" : "Open"}
+                          </Btn>
+                        </Link>
+                      </div>
+                      {idx < STAGES.length - 1 && (
+                        <div
+                          style={{
+                            width: 28,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "var(--muted-fg)",
+                          }}
+                        >
+                          <Icon
+                            name="chevR"
+                            size={16}
+                            style={{ opacity: 0.5 }}
+                          />
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Orchestrator agent feed */}
-            {orchestratorSession && (
-              <AgentActivityFeed
-                useCaseId={selectedUc.id}
-                sessionId={orchestratorSession}
-              />
-            )}
+            {/* Portfolio table */}
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <SectionLabel style={{ marginBottom: 10 }}>
+                All use cases
+              </SectionLabel>
+              <div
+                style={{
+                  borderRadius: 13,
+                  border: "1px solid var(--border)",
+                  overflow: "hidden",
+                  background: "var(--surface)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr",
+                    gap: 0,
+                    padding: "9px 16px",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: 0.6,
+                    color: "var(--muted-fg)",
+                    textTransform: "uppercase",
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                >
+                  <span>Use case</span>
+                  <span>Priority</span>
+                  <span>Complexity</span>
+                  <span>Pipeline</span>
+                  <span style={{ textAlign: "right" }}>Progress</span>
+                </div>
+                {useCases.map((u, idx) => {
+                  const ucReadiness = readiness.get(u.id);
+                  const stages = STAGES.map((s) =>
+                    resolveStatus(ucReadiness, s.id),
+                  );
+                  const done = stages.filter((s) => s === "complete").length;
+                  const cache = ucCache.get(u.id);
+                  const isHighlighted = u.id === selectedUcId;
+
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => setSelectedUcId(u.id)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        display: "grid",
+                        gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr",
+                        gap: 0,
+                        padding: "12px 16px",
+                        alignItems: "center",
+                        borderBottom:
+                          idx < useCases.length - 1
+                            ? "1px solid var(--border)"
+                            : "none",
+                        background: isHighlighted
+                          ? "color-mix(in oklab, var(--primary) 6%, transparent)"
+                          : "transparent",
+                        border: "none",
+                        transition: "background 0.12s",
+                      }}
+                    >
+                      <div style={{ minWidth: 0, paddingRight: 12 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {u.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--muted-fg)",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {u.description || "No description"}
+                        </div>
+                      </div>
+                      <div>
+                        {cache?.s1 ? (
+                          <PriorityBadge band={cache.s1.migration_decision} />
+                        ) : (
+                          <span
+                            style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                          >
+                            —
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        {cache?.s2 ? (
+                          <ComplexityChip
+                            cls={cache.s2.complexity_class as Band}
+                            size={26}
+                          />
+                        ) : (
+                          <span
+                            style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                          >
+                            —
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                        }}
+                      >
+                        {STAGES.map((stage) => {
+                          const status: ReadinessStatus = resolveStatus(
+                            ucReadiness,
+                            stage.id,
+                          );
+                          const cfg = STATUS_CONFIG[status];
+                          return (
+                            <span
+                              key={stage.id}
+                              title={`${stage.short}: ${cfg.label}`}
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: 99,
+                                background: cfg.color,
+                                display: "inline-block",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                          gap: 8,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 52,
+                            height: 5,
+                            borderRadius: 99,
+                            background: "var(--track)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${(done / 4) * 100}%`,
+                              height: "100%",
+                              background: "var(--c-green)",
+                            }}
+                          />
+                        </div>
+                        <span
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 11,
+                            color: "var(--muted-fg)",
+                          }}
+                        >
+                          {done}/4
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        ) : (
+        )}
+
+        {!selectedUc && activeView === "pipeline" && (
           <EmptyState
             icon={<Users className="h-8 w-8" />}
             title="No use cases yet"
             description="Create your first use case to start the four-stage assessment pipeline."
             action={
-              <Button size="sm">
+              <Button size="sm" onClick={() => setNewUcOpen(true)}>
                 <Plus className="mr-1.5 h-4 w-4" />
                 Create Use Case
               </Button>
@@ -312,59 +865,384 @@ export default function ProjectDetailPage() {
           />
         )}
 
-        {/* All use cases summary list */}
-        {useCases.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
-              All Use Cases
-            </h3>
-            <div className="grid gap-2">
-              {useCases.map((uc) => {
-                const ucReadiness = readiness.get(uc.id)
-                const stages = STAGES.map((s) => ucReadiness?.[s.id] || "not_ready")
-                const completedCount = stages.filter((s) => s === "complete").length
-
-                return (
-                  <button
-                    key={uc.id}
-                    onClick={() => setSelectedUcId(uc.id)}
-                    className={`w-full text-left glass-card rounded-lg px-4 py-3 border transition-all ${
-                      selectedUcId === uc.id
-                        ? "border-primary/50 glow-primary"
-                        : "border-border/50 hover:border-border"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{uc.name}</div>
-                        {uc.description && (
-                          <div className="text-xs text-muted-foreground truncate">{uc.description}</div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {STAGES.map((stage) => {
-                          const status: ReadinessStatus = ucReadiness?.[stage.id] || "not_ready"
-                          const cfg = STATUS_CONFIG[status]
-                          return (
-                            <div
-                              key={stage.id}
-                              title={`${stage.short}: ${cfg.label}`}
-                              className={`h-2 w-2 rounded-full ${cfg.dotClass}`}
-                            />
-                          )
-                        })}
-                        <span className="text-xs text-muted-foreground ml-1">
-                          {completedCount}/4
-                        </span>
+        {/* ══ PORTFOLIO MAP (HubMatrix pattern) ══════════════════════ */}
+        {activeView === "portfolio" && (
+          <div
+            style={{
+              flex: 1,
+              display: "grid",
+              gridTemplateColumns: "1.55fr 1fr",
+              gap: 22,
+              minHeight: 0,
+            }}
+          >
+            {/* Matrix */}
+            <div
+              style={{
+                borderRadius: 14,
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                padding: "20px 22px 16px 50px",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  left: 14,
+                  top: "50%",
+                  transform: "rotate(-90deg) translateX(50%)",
+                  transformOrigin: "left center",
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  color: "var(--muted-fg)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                MIGRATION SCORE →
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  position: "relative",
+                  borderLeft: "1px solid var(--border)",
+                  borderBottom: "1px solid var(--border)",
+                  margin: "4px 4px 22px 4px",
+                }}
+              >
+                {/* Quick win zone tint */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    width: "45%",
+                    height: "42%",
+                    background:
+                      "color-mix(in oklab, var(--c-green) 8%, transparent)",
+                    borderRight: "1px dashed var(--border)",
+                    borderBottom: "1px dashed var(--border)",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 8,
+                    top: 8,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--c-green)",
+                    letterSpacing: 0.5,
+                    opacity: 0.8,
+                  }}
+                >
+                  QUICK WINS
+                </div>
+                {/* Gridlines */}
+                {[0.25, 0.5, 0.75].map((g) => (
+                  <div
+                    key={g}
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      top: `${g * 100}%`,
+                      borderTop:
+                        "1px dashed color-mix(in oklab, var(--border) 60%, transparent)",
+                    }}
+                  />
+                ))}
+                {/* Bubbles */}
+                {useCases.map((uc) => {
+                  const cache = ucCache.get(uc.id);
+                  if (!cache?.s1 || !cache.s2) return null;
+                  const complexityMap: Record<string, number> = {
+                    XS: 0,
+                    S: 1,
+                    M: 2,
+                    L: 3,
+                    XL: 4,
+                  };
+                  const x =
+                    (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4;
+                  const y = (1 - cache.s1.total_score / 100) * 86 + 2;
+                  const wk = cache.s2.effort_max_weeks || 5;
+                  const sz = 26 + wk * 3;
+                  const c =
+                    BAND_META[cache.s1.migration_decision]?.color ||
+                    "var(--primary)";
+                  return (
+                    <div
+                      key={uc.id}
+                      title={uc.name}
+                      style={{
+                        position: "absolute",
+                        left: `${x}%`,
+                        top: `${y}%`,
+                        transform: "translate(-50%,-50%)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: sz,
+                          height: sz,
+                          borderRadius: 99,
+                          background: `color-mix(in oklab, ${c} 24%, transparent)`,
+                          border: `1.5px solid ${c}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontFamily: "var(--mono)",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: c,
+                          boxShadow: `0 0 14px color-mix(in oklab, ${c} 30%, transparent)`,
+                        }}
+                      >
+                        {cache.s1.total_score}
                       </div>
                     </div>
-                  </button>
-                )
-              })}
+                  );
+                })}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingLeft: 4,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  color: "var(--muted-fg)",
+                }}
+              >
+                <span>COMPLEXITY →</span>
+                <span style={{ display: "flex", gap: 30 }}>
+                  {["XS", "S", "M", "L", "XL"].map((c) => (
+                    <span key={c}>{c}</span>
+                  ))}
+                </span>
+              </div>
+            </div>
+
+            {/* Ranked recommendations */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                minHeight: 0,
+              }}
+            >
+              <SectionLabel>Recommended sequence</SectionLabel>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 9,
+                  overflow: "auto",
+                }}
+              >
+                {[...useCases]
+                  .filter((u) => ucCache.get(u.id)?.s1)
+                  .sort((a, b) => {
+                    const aScore = ucCache.get(a.id)?.s1?.total_score || 0;
+                    const bScore = ucCache.get(b.id)?.s1?.total_score || 0;
+                    return bScore - aScore;
+                  })
+                  .map((u, i) => {
+                    const cache = ucCache.get(u.id);
+                    const ucReadiness = readiness.get(u.id);
+                    const stages = STAGES.map((s) =>
+                      resolveStatus(ucReadiness, s.id),
+                    );
+                    return (
+                      <div
+                        key={u.id}
+                        className="rpa-card-hover"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "11px 13px",
+                          borderRadius: 11,
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--mono)",
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "var(--muted-fg)",
+                            width: 20,
+                          }}
+                        >
+                          {i + 1}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {u.name}
+                          </div>
+                          <div
+                            style={{ display: "flex", gap: 6, marginTop: 4 }}
+                          >
+                            {cache?.s1 && (
+                              <PriorityBadge
+                                band={cache.s1.migration_decision}
+                              />
+                            )}
+                            {cache?.s2 && (
+                              <ComplexityChip
+                                cls={cache.s2.complexity_class as Band}
+                                size={20}
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          {STAGES.map((stage) => {
+                            const status: ReadinessStatus = resolveStatus(
+                              ucReadiness,
+                              stage.id,
+                            );
+                            const cfg = STATUS_CONFIG[status];
+                            return (
+                              <span
+                                key={stage.id}
+                                title={`${stage.short}: ${cfg.label}`}
+                                style={{
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: 99,
+                                  background: cfg.color,
+                                  display: "inline-block",
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           </div>
         )}
+
+        {/* ── All use cases list ── */}
+        {/* {useCases.length > 0 && ( */}
+
+        {/* )} */}
       </div>
+
+      {/* ── New Use Case Sheet ── */}
+      <Sheet open={newUcOpen} onOpenChange={setNewUcOpen}>
+        <SheetContent
+          className="w-110"
+          style={{ padding: spacing.cardDefault }}
+        >
+          <SheetHeader style={{ marginBottom: spacing.gapDefault }}>
+            <SectionLabel>New Use Case</SectionLabel>
+            <p
+              style={{
+                fontSize: 12.8,
+                color: "var(--muted-foreground)",
+                marginTop: 8,
+              }}
+            >
+              Add a use case to this project. You can run all four stages
+              independently after creation.
+            </p>
+          </SheetHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateUc();
+            }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: spacing.gapDefault,
+            }}
+          >
+            <div className="space-y-2">
+              <Label>
+                Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                placeholder="e.g., Invoice processing automation"
+                value={newUcName}
+                onChange={(e) => setNewUcName(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                placeholder="Brief description of the RPA use case…"
+                value={newUcDesc}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setNewUcDesc(e.target.value)
+                }
+                rows={3}
+              />
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: spacing.gapTight,
+                paddingTop: spacing.gapTight,
+              }}
+            >
+              <Btn
+                type="button"
+                variant="outline"
+                style={{ flex: 1 }}
+                onClick={() => setNewUcOpen(false)}
+              >
+                Cancel
+              </Btn>
+              <Btn
+                type="submit"
+                style={{ flex: 1 }}
+                disabled={creatingUc || !newUcName.trim()}
+              >
+                {creatingUc ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Creating
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create
+                  </>
+                )}
+              </Btn>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
-  )
+  );
 }

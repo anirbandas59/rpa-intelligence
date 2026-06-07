@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/sidebar"
 import { ChevronRight, Settings, LogOut, Cpu } from "lucide-react"
 import { apiGet, clearAuthToken } from "@/lib/api"
-import type { Project, ReadinessResponse, UseCase } from "@/lib/types"
+import type { Project, ReadinessResponse, ReadinessStatus, S3ReadinessDetail, UseCase } from "@/lib/types"
 
 // ─── Stage config ────────────────────────────────────────────────────────────
 
@@ -142,7 +142,10 @@ function ProjectItem({ project, pathname, onReadinessUpdate }: ProjectItemProps)
 
               const stageKey = stage.id as keyof ReadinessResponse
               const readinessForUc = firstUc ? project.readiness[firstUc.id] : undefined
-              const status = readinessForUc ? (readinessForUc[stageKey] ?? "not_ready") : "not_ready"
+              const rawStatus = readinessForUc ? (readinessForUc[stageKey] ?? "not_ready") : "not_ready"
+              const status: ReadinessStatus = stage.id === "s3"
+                ? ((rawStatus as S3ReadinessDetail)?.phase_calculator ?? "not_ready")
+                : (rawStatus as ReadinessStatus)
               const isActive = pathname.startsWith(`/projects/${project.id}/${stage.path}`)
 
               return (

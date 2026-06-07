@@ -2,10 +2,7 @@
 Tests for new Phase 3 tools: task extraction parser, tracker sequencer, export formulas.
 """
 
-import json
 from datetime import date, timedelta
-
-import pytest
 
 from tools.analysis.task_extraction_tool import (
     TaskExtractionResult,
@@ -14,7 +11,6 @@ from tools.analysis.task_extraction_tool import (
 )
 from tools.output.export_tool import FORMULA_SP, formula_dev_status
 from tools.output.tracker_sequencer import (
-    SequencedRow,
     SequencerInput,
     TrackerRow,
     sequence_dates,
@@ -147,7 +143,6 @@ class TestTrackerSequencer:
 
     def test_sequence_dates_proportional(self):
         """Test that rows get proportional allocation."""
-        from datetime import timedelta
 
         tracker_rows = [
             TrackerRow(feature="feature-1", hours=20.0, priority="MUST"),  # 50% of hours

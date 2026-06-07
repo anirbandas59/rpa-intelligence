@@ -8,7 +8,6 @@ import logging
 from pathlib import Path
 
 import openpyxl
-from openpyxl.utils import get_column_letter
 
 from tools.output.export_tool import FORMULA_SP, formula_dev_status
 
@@ -49,7 +48,7 @@ def generate_tracker_xlsx(use_case_name: str, s2_result: dict, s3_result: dict, 
     wb.save(buffer)
     buffer.seek(0)
 
-    logger.info(f"Generated tracker xlsx with sequenced rows")
+    logger.info("Generated tracker xlsx with sequenced rows")
     return buffer
 
 

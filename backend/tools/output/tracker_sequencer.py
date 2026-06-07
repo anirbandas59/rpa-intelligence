@@ -3,6 +3,7 @@
 import logging
 from datetime import date, timedelta
 from typing import Literal
+
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)

@@ -16,7 +16,6 @@ Ground Truth (from CLAUDE.md):
 This test MUST PASS before any phase is considered complete.
 """
 
-import pytest
 
 from core.constants import ComplexityTier
 from core.scoring.classifier import classify, get_confidence_score

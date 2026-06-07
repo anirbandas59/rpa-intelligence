@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RPA Intelligence — Stage Design Explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --bg:        oklch(0.105 0.015 270);
+    --surface:   oklch(0.155 0.016 270);
+    --surface-2: oklch(0.205 0.016 270);
+    --sidebar:   oklch(0.125 0.015 270);
+    --fg:        oklch(0.96 0.005 270);
+    --fg-2:      oklch(0.80 0.01 270);
+    --muted-fg:  oklch(0.62 0.015 270);
+    --primary:   oklch(0.66 0.20 264);
+    --border:    oklch(1 0 0 / 9%);
+    --track:     oklch(0.30 0.015 270);
+
+    --c-green:  oklch(0.74 0.17 150);
+    --c-teal:   oklch(0.74 0.13 195);
+    --c-blue:   oklch(0.70 0.16 245);
+    --c-violet: oklch(0.68 0.21 292);
+    --c-yellow: oklch(0.83 0.15 96);
+    --c-amber:  oklch(0.78 0.15 66);
+    --c-red:    oklch(0.68 0.20 25);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--sans); background: #f0eee9; }
+
+  .rpa-gradient-text {
+    background: linear-gradient(100deg, oklch(0.86 0.12 264), oklch(0.74 0.20 292));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .rpa-card-hover { transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+  .rpa-card-hover:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--primary) 45%, transparent) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35), 0 0 0 1px color-mix(in oklab, var(--primary) 20%, transparent);
+  }
+  @keyframes rpaPulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+  /* keep scrollbars hidden inside the dark artboards */
+  .rpa-screen *::-webkit-scrollbar { display: none; }
+  .rpa-screen * { scrollbar-width: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#16151f"/>
+    <g transform="translate(30 30)" fill="none" stroke="#8b7bf0" stroke-width="3" stroke-linecap="round">
+      <circle cx="20" cy="20" r="19" stroke="#2a2838"/>
+      <path d="M20 1 a19 19 0 0 1 16 28" />
+    </g>
+    <text x="50" y="56" font-family="monospace" font-size="13" fill="#cdc8ff" text-anchor="middle" font-weight="700">81</text>
+  </svg>
+</template>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="data.js"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="shell.jsx"></script>
+<script type="text/babel" src="hub.jsx"></script>
+<script type="text/babel" src="stage1.jsx"></script>
+<script type="text/babel" src="stage2.jsx"></script>
+<script type="text/babel" src="stage3.jsx"></script>
+<script type="text/babel" src="stage4.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState } = React;
+
+// wrap each screen so the dark theme + fixed frame are consistent
+function Screen({ children }) {
+  return <div className="rpa-screen" style={{ width: "100%", height: "100%", background: "var(--bg)" }}>{children}</div>;
+}
+
+// ── design rationale intro card ───────────────────────────────
+function Rationale() {
+  const legend = [
+    ["var(--c-green)", "Quick Win / XS"],
+    ["var(--c-blue)", "Strategic / S"],
+    ["var(--c-yellow)", "M"],
+    ["var(--c-amber)", "Hold / L"],
+    ["var(--c-red)", "Do Not Migrate / XL"],
+  ];
+  return (
+    <div className="rpa-screen" style={{ width: "100%", height: "100%", background: "var(--bg)", color: "var(--fg)",
+      fontFamily: "var(--sans)", padding: "40px 46px", display: "flex", flexDirection: "column", gap: 22, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span style={{ width: 38, height: 38, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center",
+          background: "color-mix(in oklab, var(--primary) 18%, transparent)", color: "var(--primary)" }}><Icon name="cpu" size={22} /></span>
+        <div>
+          <div className="rpa-gradient-text" style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>Stage Design Explorations</div>
+          <div style={{ fontSize: 13, color: "var(--muted-fg)" }}>RPA Migration &amp; Delivery Intelligence · the four unbuilt stage screens + a rethought hub</div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 1fr", gap: 18, flex: 1, minHeight: 0 }}>
+        <div style={{ borderRadius: 13, border: "1px solid var(--border)", background: "var(--surface)", padding: 18 }}>
+          <SectionLabel style={{ marginBottom: 10 }}>What I'm designing</SectionLabel>
+          <p style={{ fontSize: 12.8, lineHeight: 1.6, color: "var(--fg-2)", margin: 0 }}>
+            Your codebase ships a polished dark glass UI with the hub, sidebar, auth and shared
+            components built — but <b style={{ color: "var(--fg)" }}>Stages 1–4 are stubs</b>. These
+            explorations fill that gap: 2–3 layout directions per screen, built on your existing tokens
+            (Geist, the blue-violet primary, the status color language) and pushed harder on
+            <b style={{ color: "var(--fg)" }}> data viz and the agent layer</b>, as you asked.
+          </p>
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 7 }}>
+            {["Stages are independent state machines — never gate each other", "Cross-stage data is an editable copy, not a live link", "Every run is an immutable, versioned StageRun", "Human stays in control; AI is a clearly-labelled assist"].map((t) => (
+              <div key={t} style={{ display: "flex", gap: 8, fontSize: 12, color: "var(--fg-2)" }}>
+                <Icon name="check" size={14} style={{ color: "var(--c-green)", marginTop: 1 }} />{t}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ borderRadius: 13, border: "1px solid var(--border)", background: "var(--surface)", padding: 18 }}>
+          <SectionLabel style={{ marginBottom: 10 }}>System &amp; legend</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ fontSize: 11.5, color: "var(--muted-fg)" }}>Priority bands &amp; complexity classes share one scale:</div>
+            {legend.map(([c, l]) => (
+              <div key={l} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ width: 14, height: 14, borderRadius: 4, background: c, boxShadow: `0 0 8px color-mix(in oklab, ${c} 50%, transparent)` }} />
+                <span style={{ fontSize: 12.5, color: "var(--fg-2)" }}>{l}</span>
+              </div>
+            ))}
+            <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: "var(--fg-2)" }}>
+              {["ready", "running", "complete", "stale"].map((s) => (
+                <span key={s} style={{ display: "flex", alignItems: "center", gap: 6 }}><StatusDot status={s} size={8} /> {window.RPA_STATUS[s].label}</span>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+              {["ai_extracted", "manual", "corrected", "from_s2"].map((s) => <SourceBadge key={s} source={s} />)}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ borderRadius: 13, border: "1px solid var(--border)", background: "var(--surface)", padding: 18 }}>
+          <SectionLabel style={{ marginBottom: 10 }}>How to read this canvas</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+            {[["Pan / zoom", "Scroll to pan, pinch or ⌘-scroll to zoom"], ["Focus a screen", "Click any title or the ⤢ icon — then ← / → to compare"], ["Rearrange", "Drag the grip; delete via the ⋯ menu"]].map(([h, b]) => (
+              <div key={h}>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{h}</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted-fg)" }}>{b}</div>
+              </div>
+            ))}
+            <div style={{ height: 1, background: "var(--border)", margin: "2px 0" }} />
+            <div style={{ fontSize: 11.5, color: "var(--muted-fg)", lineHeight: 1.55 }}>
+              Sample data is a fictional 6-bot portfolio. The Stage 2 band picker is
+              <b style={{ color: "var(--fg)" }}> live</b> — click cells to watch the score recompute.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="intro" title="Start here" subtitle="Assumptions, design system, and how to navigate">
+        <DCArtboard id="rationale" label="Design rationale" width={1360} height={520}><Rationale /></DCArtboard>
+      </DCSection>
+
+      <DCSection id="hub" title="Project Hub" subtitle="Rethinking the pipeline / portfolio view — 3 directions">
+        <DCArtboard id="hub-rail" label="A · Pipeline rail + portfolio table" width={1360} height={900}><Screen><HubRail /></Screen></DCArtboard>
+        <DCArtboard id="hub-matrix" label="B · Portfolio value/effort map" width={1360} height={900}><Screen><HubMatrix /></Screen></DCArtboard>
+        <DCArtboard id="hub-command" label="C · Command center + agent" width={1360} height={900}><Screen><HubCommand /></Screen></DCArtboard>
+      </DCSection>
+
+      <DCSection id="s1" title="Stage 1 · Migration Assessment" subtitle="Score, dimensions, confidence, follow-ups, backfill — 3 directions">
+        <DCArtboard id="s1-a" label="A · Scorecard" width={1360} height={900}><Screen><S1Scorecard /></Screen></DCArtboard>
+        <DCArtboard id="s1-b" label="B · Dimension breakdown + override" width={1360} height={900}><Screen><S1Dimensions /></Screen></DCArtboard>
+        <DCArtboard id="s1-c" label="C · Portfolio parallel scoring" width={1360} height={900}><Screen><S1Portfolio /></Screen></DCArtboard>
+      </DCSection>
+
+      <DCSection id="s2" title="Stage 2 · Complexity" subtitle="Live band picker, document→AI review, weight matrix + run compare — 3 directions">
+        <DCArtboard id="s2-a" label="A · Live band picker" width={1360} height={900}><Screen><S2BandPicker /></Screen></DCArtboard>
+        <DCArtboard id="s2-b" label="B · Document → AI review" width={1360} height={900}><Screen><S2DocReview /></Screen></DCArtboard>
+        <DCArtboard id="s2-c" label="C · Weight matrix + run compare" width={1360} height={900}><Screen><S2Matrix /></Screen></DCArtboard>
+      </DCSection>
+
+      <DCSection id="s3" title="Stage 3 · Delivery Timeline" subtitle="Gantt hero + phase cards, with delta edits — 3 directions">
+        <DCArtboard id="s3-a" label="A · Gantt hero + phase cards" width={1360} height={900}><Screen><S3Gantt /></Screen></DCArtboard>
+        <DCArtboard id="s3-b" label="B · Phase stepper" width={1360} height={900}><Screen><S3Stepper /></Screen></DCArtboard>
+        <DCArtboard id="s3-c" label="C · Calendar + narrative" width={1360} height={900}><Screen><S3Calendar /></Screen></DCArtboard>
+      </DCSection>
+
+      <DCSection id="s4" title="Stage 4 · Sprint Tracker" subtitle="Feature decomposition, sprint swimlanes, export — 3 directions">
+        <DCArtboard id="s4-a" label="A · Sprint swimlanes" width={1360} height={900}><Screen><S4Swimlanes /></Screen></DCArtboard>
+        <DCArtboard id="s4-b" label="B · Decomposition + AI" width={1360} height={900}><Screen><S4Decompose /></Screen></DCArtboard>
+        <DCArtboard id="s4-c" label="C · Tracker export preview" width={1360} height={900}><Screen><S4Export /></Screen></DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

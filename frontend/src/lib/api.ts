@@ -71,6 +71,18 @@ export function apiGet<T>(path: string): Promise<T> {
 }
 
 /**
+ * Fetch a runs list, normalising both response shapes:
+ *   - plain array  → returned as-is
+ *   - { runs: [...] } → unwraps to the inner array
+ */
+export async function apiGetRuns<T>(path: string): Promise<T[]> {
+  const data = await apiFetch<T[] | { runs: T[] }>(path, { method: "GET" })
+  if (Array.isArray(data)) return data
+  if (data && typeof data === "object" && "runs" in data) return (data as { runs: T[] }).runs
+  return []
+}
+
+/**
  * Helper for POST requests with JSON body
  */
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {

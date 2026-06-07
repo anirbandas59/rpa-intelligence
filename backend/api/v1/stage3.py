@@ -104,7 +104,7 @@ async def run_task_extraction_background(
     async with session_factory() as db:
         try:
             # Read document text from file
-            with open(document_path, 'r', encoding='utf-8') as f:
+            with open(document_path, encoding='utf-8') as f:
                 doc_text = f.read()
 
             # Run task extraction agent

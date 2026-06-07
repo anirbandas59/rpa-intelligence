@@ -2,7 +2,9 @@
 
 import json
 import logging
+
 from pydantic import BaseModel, Field
+
 from core.exceptions import ScoringValidationError
 
 logger = logging.getLogger(__name__)
