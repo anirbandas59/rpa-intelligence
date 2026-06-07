@@ -9,6 +9,12 @@ import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Btn, SectionLabel } from "@/components/rpa";
 import { spacing } from "@/lib/design-tokens";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -16,9 +22,10 @@ import { ComplexityChip } from "@/components/shared/ComplexityChip";
 import { PriorityBadge, BAND_META } from "@/components/shared/PriorityBadge";
 import { MiniSpark } from "@/components/shared/MiniSpark";
 import { Icon } from "@/components/shared/icons";
-import { ArrowLeft, Plus, Loader2, Users } from "lucide-react";
+import { ArrowLeft, Plus, Loader2, Users, ChevronDown, Upload, Edit3 } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiGetRuns, apiPost, isAuthenticated } from "@/lib/api";
+import { BulkUploadModal } from "@/components/BulkUploadModal";
 import type {
   Project,
   UseCase,
@@ -115,6 +122,7 @@ export default function ProjectDetailPage() {
   const [newUcName, setNewUcName] = useState("");
   const [newUcDesc, setNewUcDesc] = useState("");
   const [creatingUc, setCreatingUc] = useState(false);
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [activeView, setActiveView] = useState<"pipeline" | "portfolio">(
     "pipeline",
   );
@@ -410,10 +418,25 @@ export default function ProjectDetailPage() {
               </button>
             ))}
           </div>
-          <Btn size="sm" onClick={() => setNewUcOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            New use case
-          </Btn>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Btn size="sm">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Use Cases
+                <ChevronDown className="ml-1.5 h-3 w-3" />
+              </Btn>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setNewUcOpen(true)}>
+                <Edit3 className="mr-2 h-4 w-4" />
+                Single Entry
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setBulkUploadOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Bulk Upload (CSV/XLSX)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* ══ PIPELINE VIEW (HubRail pattern) ══════════════════════════ */}
@@ -674,12 +697,17 @@ export default function ProjectDetailPage() {
                 style={{
                   borderRadius: 13,
                   border: "1px solid var(--border)",
-                  overflow: "hidden",
+                  overflow: "auto",
                   background: "var(--surface)",
+                  flex: 1,
+                  position: "relative",
                 }}
               >
                 <div
                   style={{
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 10,
                     display: "grid",
                     gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr",
                     gap: 0,
@@ -690,6 +718,7 @@ export default function ProjectDetailPage() {
                     color: "var(--muted-fg)",
                     textTransform: "uppercase",
                     borderBottom: "1px solid var(--border)",
+                    background: "var(--surface)",
                   }}
                 >
                   <span>Use case</span>
@@ -1243,6 +1272,13 @@ export default function ProjectDetailPage() {
           </form>
         </SheetContent>
       </Sheet>
+
+      {/* Bulk Upload Modal */}
+      <BulkUploadModal
+        projectId={projectId}
+        open={bulkUploadOpen}
+        onOpenChange={setBulkUploadOpen}
+      />
     </div>
   );
 }
