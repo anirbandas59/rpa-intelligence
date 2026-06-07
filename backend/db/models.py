@@ -319,3 +319,42 @@ class AgentSession(Base):
     )  # Question for user
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class UploadSession(Base):
+    """
+    Stateful bulk upload session tracking file → preview → mapping → processing.
+
+    Manages server-side upload lifecycle for bulk use-case import. File uploaded
+    once and stored in temp directory, parsed in chunks for memory efficiency.
+    Status progression: preview → confirmed → processing → complete | failed.
+    Sessions expire after 24h and are auto-deleted via cleanup job.
+    """
+
+    __tablename__ = "upload_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    project_id: Mapped[str] = mapped_column(String, ForeignKey("projects.id", ondelete="CASCADE"))
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
+    filename: Mapped[str] = mapped_column(String)  # Original filename (e.g., "cases.csv")
+    file_path: Mapped[str] = mapped_column(String)  # Stored path in temp directory
+    file_size: Mapped[int] = mapped_column(Integer)  # Size in bytes
+    columns: Mapped[dict] = mapped_column(JSON)  # Column names as JSON array
+    row_count: Mapped[int] = mapped_column(Integer)  # Total rows in file
+    status: Mapped[str] = mapped_column(
+        String, default="preview"
+    )  # preview | confirmed | processing | complete | failed
+    column_mapping: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True
+    )  # {name, description, source_platform, install_status}
+    created_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Use cases created
+    use_case_ids: Mapped[dict] = mapped_column(
+        JSON, default=dict
+    )  # Created use case IDs as JSON array
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)  # Error message if failed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime
+    )  # Auto-delete after 24h (set in service)

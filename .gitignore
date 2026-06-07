@@ -20,6 +20,7 @@ dist/
 # Uploads and outputs
 backend/uploads/
 backend/assessments/
+backend/data/temp/
 backend/docs/output_*.xlsx
 backend/docs/samples/output_*.xlsx
 backend/docs/comparison_report.xlsx
