@@ -1,6 +1,24 @@
 """
-Stage 2 (Complexity) API routes.
-Document upload → AI extraction → deterministic scoring.
+Stage 2 (Complexity Assessment) API routes for RPA Intelligence Platform.
+
+Provides endpoints for managing complexity assessment workflow through three input paths:
+document upload (PDF/DOCX), pasted text, or manual band entry. AI extraction uses Haiku
+for band-level classification, then deterministic scoring maps bands to complexity class.
+
+Key endpoints:
+- POST /{id}/s2/documents: Upload PDF/DOCX for AI extraction
+- POST /{id}/s2/text: Save pasted text for AI extraction
+- PATCH /{id}/s2/inputs: Update manual band values or correct AI extractions
+- POST /{id}/s2/runs: Create assessment run (async, auto-selects latest input)
+- GET /{id}/s2/runs: List all runs
+- GET /{id}/s2/runs/{run_id}: Get single run with full details
+
+Complexity flow:
+1. User provides input via document upload, pasted text, or manual bands
+2. User triggers run via POST /runs (timestamp-aware selection picks latest input)
+3. Backend runs document_agent (Haiku) → process_agent (extraction + reflexion) → complexity_agent (deterministic scoring)
+4. Result includes: band assignments, total_score (7-28), complexity_class (XS/S/M/L/XL), effort range
+5. User can edit extracted bands via PATCH /inputs and re-run
 """
 
 import logging
@@ -75,9 +93,25 @@ async def _execute_s2_background_task(
     db_factory,
 ):
     """
-    Background task to execute S2 assessment.
-    Updates StageRun on completion or failure.
-    db_factory is injected via Depends(get_session_maker) so tests can override it.
+    Execute Stage 2 complexity assessment in background with independent database session.
+
+    Runs orchestrator workflow: document_agent (if document/text) → process_agent
+    (extraction + reflexion) → complexity_agent (deterministic scoring). Updates
+    StageRun status to "complete" or "failed" based on outcome.
+
+    Args:
+        run_id: StageRun ID to update
+        use_case_id: UseCase ID being assessed
+        document_path: Path to uploaded document (mutually exclusive with others)
+        pasted_text: Pasted process description (mutually exclusive with others)
+        manual_bands: Manual band dict (mutually exclusive with others)
+        model: LLM model name for extraction (if document/text provided)
+        db_factory: Async session factory for independent database session
+
+    Flow:
+    - Calls run_s2_assessment from orchestrator
+    - On success: calls finalize_s2_run (sets status="complete")
+    - On error: calls fail_s2_run (sets status="failed" with error message)
     """
     async with db_factory() as session:
         try:
@@ -108,12 +142,24 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Upload a document for S2 processing.
-    Saves file to uploads/ and records UploadedFile.
+    Upload PDF or DOCX document for Stage 2 complexity extraction.
+
+    Saves file to uploads/ directory and creates UploadedFile database record.
+    File is ready for processing when user creates S2 run. Only .pdf and .docx
+    formats are supported.
+
+    Args:
+        id: UseCase ID to upload document for
+        file: Uploaded file from multipart form data
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
 
     Returns:
-        file_id: ID of created UploadedFile record
-        stored_path: Path where file was stored
+        Dict with file_id, stored_path, original_filename, size_bytes
+
+    Raises:
+        HTTPException: 404 if use case not found, 400 if unsupported file type,
+                      500 if file save fails
     """
     # Verify use case exists
     result = await db.execute(select(UseCase).where(UseCase.id == id))
@@ -121,18 +167,18 @@ async def upload_document(
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
 
-    # Validate file type
+    # Validate file type (only PDF and DOCX supported by document_agent)
     filename = file.filename or "document"
     suffix = Path(filename).suffix.lower()
     if suffix not in [".docx", ".pdf"]:
         raise HTTPException(status_code=400, detail="Only .docx and .pdf files are supported")
 
-    # Generate unique filename
+    # Generate unique filename to avoid collisions
     file_id = str(uuid.uuid4())
     stored_filename = f"{file_id}{suffix}"
     stored_path = UPLOAD_DIR / stored_filename
 
-    # Save file
+    # Save file to disk
     try:
         content = await file.read()
         with open(stored_path, "wb") as f:
@@ -175,10 +221,22 @@ async def save_pasted_text(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Save pasted text to s2_inputs.
+    Save pasted process description to s2_inputs for AI extraction.
+
+    Alternative to document upload when user has process description as text.
+    Text is processed by document_agent → process_agent workflow same as uploaded files.
+
+    Args:
+        id: UseCase ID to save text for
+        request: Must contain pasted_text field
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
 
     Returns:
-        Updated s2_inputs
+        Updated s2_inputs dict with pasted_text, source tag, and timestamp
+
+    Raises:
+        HTTPException: 404 if use case not found, 400 if pasted_text missing
     """
     result = await db.execute(select(UseCase).where(UseCase.id == id))
     use_case = result.scalar_one_or_none()
@@ -210,18 +268,30 @@ async def update_s2_inputs(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update band values and source tags on s2_inputs.
-    Used for manual band entry or correcting AI-extracted values.
+    Update attribute band values and source tags on s2_inputs (manual or corrected).
+
+    Used for manual band entry when user knows bands upfront, or for correcting
+    AI-extracted bands after reviewing extraction results. Source tags are automatically
+    set to "manual" unless explicitly provided.
+
+    Args:
+        id: UseCase ID to update bands for
+        request: Partial update with any of 5 band fields and optional source tags
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
 
     Returns:
-        Updated s2_inputs
+        Updated s2_inputs dict with new bands and manual_bands_updated_at timestamp
+
+    Raises:
+        HTTPException: 404 if use case not found
     """
     result = await db.execute(select(UseCase).where(UseCase.id == id))
     use_case = result.scalar_one_or_none()
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
 
-    # Update only provided fields
+    # Update only provided fields (partial update pattern)
     updates = {}
     if request.activities is not None:
         updates["activities"] = request.activities
@@ -241,7 +311,7 @@ async def update_s2_inputs(
     if request.pasted_text is not None:
         updates["pasted_text"] = request.pasted_text
 
-    # Add timestamp when any manual band is updated
+    # Add timestamp when any manual band is updated (used for input selection priority)
     if any([
         request.activities,
         request.business_rules,
@@ -270,13 +340,30 @@ async def create_s2_run(
     db_factory=Depends(get_session_maker),
 ):
     """
-    Create S2 run. Returns immediately with run_id and status='running'.
-    Processing happens in background.
+    Create Stage 2 complexity assessment run with timestamp-aware input selection.
+
+    Returns immediately with run_id and status="running". Processing happens in background.
+    Automatically selects latest input based on timestamps (most recent wins):
+    document (created_at) vs pasted_text (updated_at) vs manual_bands (updated_at).
 
     Three input paths:
-    1. Document upload: reads latest UploadedFile for s2
-    2. Pasted text: reads s2_inputs.pasted_text
-    3. Manual bands: reads s2_inputs.activities/business_rules/etc
+    1. Document upload: Uses latest UploadedFile.stored_path (requires document_agent + process_agent)
+    2. Pasted text: Uses s2_inputs.pasted_text (requires document_agent + process_agent)
+    3. Manual bands: Uses all 5 bands from s2_inputs (skips extraction, runs complexity_agent only)
+
+    Args:
+        id: UseCase ID to assess
+        request: Model selection for AI extraction (default: claude-haiku-4-5)
+        background_tasks: FastAPI background task scheduler (injected)
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+        db_factory: Session factory for background task's independent session (injected)
+
+    Returns:
+        S2RunResponse with run_id and status="running"
+
+    Raises:
+        HTTPException: 404 if use case not found, 400 if no valid input provided
     """
     result = await db.execute(select(UseCase).where(UseCase.id == id))
     use_case = result.scalar_one_or_none()
@@ -319,7 +406,7 @@ async def create_s2_run(
         }
         manual_bands_updated_at = s2_inputs.get("manual_bands_updated_at")
 
-    # Use timestamp-aware selection to pick the most recent input
+    # Use timestamp-aware selection to pick the most recent input (orchestrator helper)
     from agents.orchestrator import _select_latest_input
 
     try:
@@ -332,7 +419,7 @@ async def create_s2_run(
             manual_bands_updated_at,
         )
 
-        # Map to background task params (only one will be non-None)
+        # Map selected input to background task params (only one will be non-None)
         if source_type == "document":
             document_path = input_data
             pasted_text = None
@@ -352,7 +439,7 @@ async def create_s2_run(
             detail=f"No valid input provided: {str(e)}",
         )
 
-    # Create StageRun record — use s2_inputs as snapshot so staleness hash matches readiness check
+    # Create StageRun record with inputs snapshot (hash used for staleness detection)
     inputs_snapshot = dict(use_case.s2_inputs or {})
     stage_run = await _orchestrator_create_s2_run(id, inputs_snapshot, db)
 
@@ -382,10 +469,18 @@ async def list_s2_runs(
     current_user: User = Depends(get_current_user),
 ):
     """
-    List all S2 StageRuns for a use case.
+    List all Stage 2 complexity assessment runs for a use case (most recent first).
+
+    Returns summary view including status, timestamps, complexity class, and error messages.
+    Useful for version history and comparing results across runs.
+
+    Args:
+        id: UseCase ID to list runs for
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
 
     Returns:
-        List of StageRun records
+        Dict with "runs" list containing run summaries
     """
     result = await db.execute(
         select(StageRun)
@@ -418,10 +513,23 @@ async def get_s2_run(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get single S2 StageRun with full inputs_snapshot + result.
+    Get single Stage 2 run with full details (inputs snapshot, result, hash).
+
+    Returns complete run record for detailed inspection, version comparison, or debugging.
+    Includes inputs_hash for staleness detection and full result with band assignments,
+    complexity class, total score, and effort estimates.
+
+    Args:
+        id: UseCase ID owning the run
+        run_id: StageRun ID to retrieve
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
 
     Returns:
-        StageRun record
+        Full StageRun record with all fields
+
+    Raises:
+        HTTPException: 404 if run not found or doesn't belong to this use case
     """
     result = await db.execute(
         select(StageRun).where(
