@@ -444,7 +444,7 @@ export default function Stage1Page() {
                       maxWidth: 420,
                     }}
                   >
-                    Haiku evaluates this use case across four dimensions —
+                    AI evaluates this use case across four dimensions —
                     technical feasibility, migration effort, platform
                     suitability, and risk — and recommends a migration band.
                   </div>
@@ -582,7 +582,7 @@ export default function Stage1Page() {
                         icon="link"
                         style={{ width: "100%" }}
                       >
-                        Backfill from Stage 2 (Sonnet)
+                        Backfill from Stage 2
                       </Btn>
                     </div>
                   </Card>
@@ -615,7 +615,7 @@ export default function Stage1Page() {
                           fontFamily: "var(--mono)",
                         }}
                       >
-                        weighted · Haiku 4.5
+                        weighted · AI-powered
                       </span>
                     </div>
                     <div
@@ -804,7 +804,7 @@ export default function Stage1Page() {
                     margin: "4px 0 0",
                   }}
                 >
-                  Haiku scores every use case concurrently across the four
+                  AI scores every use case concurrently across the four
                   dimensions.
                 </p>
               </div>
@@ -814,7 +814,7 @@ export default function Stage1Page() {
                 disabled={scoringAll || portfolioLoading}
               >
                 <Icon name="zap" size={13} style={{ marginRight: 6 }} />
-                {scoringAll ? "Scoring…" : "Score all (Haiku)"}
+                {scoringAll ? "Scoring…" : "Score all"}
               </Button>
             </div>
 

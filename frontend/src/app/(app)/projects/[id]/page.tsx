@@ -391,13 +391,11 @@ export default function ProjectDetailPage() {
             </div>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-destructive"
+                <button
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-destructive h-9 px-3 text-muted-foreground"
                 >
                   <Trash2 className="h-4 w-4" />
-                </Button>
+                </button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -949,14 +947,12 @@ export default function ProjectDetailPage() {
                       </button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          <button
+                            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent opacity-0 group-hover:opacity-100 h-9 px-3"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                          </Button>
+                          </button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
@@ -1091,7 +1087,7 @@ export default function ProjectDetailPage() {
                 {/* Bubbles */}
                 {useCases.filter((uc) => {
                   const cache = ucCache.get(uc.id);
-                  return cache?.s1 && cache.s2;
+                  return cache?.s1; // Only S1 required, S2 optional
                 }).length === 0 && (
                   <div
                     style={{
@@ -1105,16 +1101,18 @@ export default function ProjectDetailPage() {
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                      Run assessments to populate map
+                      Run Stage 1 assessments to populate map
                     </div>
                     <div style={{ fontSize: 11.5 }}>
-                      Complete both Stage 1 (Migration Assessment) and Stage 2 (Complexity Analysis) for use cases to see them plotted here.
+                      Complete Stage 1 (Migration Assessment) for use cases to see them plotted. Stage 2 (Complexity) provides better positioning but is optional.
                     </div>
                   </div>
                 )}
                 {useCases.map((uc) => {
                   const cache = ucCache.get(uc.id);
-                  if (!cache?.s1 || !cache.s2) return null;
+                  if (!cache?.s1) return null; // Only S1 required
+
+                  // S2 provides better X-axis positioning, fallback to center if missing
                   const complexityMap: Record<string, number> = {
                     XS: 0,
                     S: 1,
@@ -1122,10 +1120,12 @@ export default function ProjectDetailPage() {
                     L: 3,
                     XL: 4,
                   };
-                  const x =
-                    (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4;
+                  const hasS2 = !!cache.s2;
+                  const x = hasS2 && cache.s2
+                    ? (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4
+                    : 50; // Center if no S2
                   const y = (1 - cache.s1.total_score / 100) * 86 + 2;
-                  const wk = cache.s2.effort_max_weeks || 5;
+                  const wk = cache.s2?.effort_max_weeks || 5; // Default 5 weeks
                   const sz = 26 + wk * 3;
                   const c =
                     BAND_META[cache.s1.migration_decision]?.color ||

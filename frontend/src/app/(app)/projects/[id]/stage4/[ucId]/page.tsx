@@ -290,8 +290,8 @@ export default function Stage4Page() {
                 </h2>
                 <p style={{ fontSize: 12.5, color: "var(--muted-fg)", margin: "4px 0 0" }}>
                   {activeTab === "board"
-                    ? `${latestResult.features.length} features · ${sprintNumbers.length} sprints × ${sprintLength} weeks · bin-packed by size after Sonnet decomposition`
-                    : "Sonnet read the S2 documents and split the process into deliverables."}
+                    ? `${latestResult.features.length} features · ${sprintNumbers.length} sprints × ${sprintLength} weeks · bin-packed by size after AI decomposition`
+                    : "AI read the S2 documents and split the process into deliverables."}
                 </p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

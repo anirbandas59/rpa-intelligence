@@ -235,7 +235,7 @@ export default function Stage2Page() {
                     {uploadingFile ? "Uploading…" : "Upload Process Document (PDF / DOCX)"}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--muted-foreground)", opacity: 0.6, marginTop: 2 }}>
-                    Haiku extracts band values automatically
+                    AI extracts band values automatically
                   </div>
                 </div>
                 <Input
