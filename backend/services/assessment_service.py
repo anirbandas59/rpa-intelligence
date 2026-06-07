@@ -1,3 +1,28 @@
+"""
+Stage 1 (Migration Assessment) service layer for business logic orchestration.
+
+Provides AssessmentService class that orchestrates migration assessment workflow:
+LLM-based scoring, memory integration, result persistence, and StageRun management.
+Delegates LLM calls to LLMManager and uses episodic memory for few-shot learning.
+
+Key responsibilities:
+- Parse JSON responses from LLM with fence stripping and validation
+- Apply safe defaults for missing fields in LLM output
+- Build memory context from past similar assessments (few-shot learning)
+- Execute complete assessment pipeline: memory → LLM → parse → validate → persist
+- Create and update StageRun records with status tracking
+
+Flow:
+1. run_assessment(use_case_id) retrieves UseCase from database
+2. Builds memory context from similar past assessments (optional)
+3. Formats prompt with use case name and description
+4. Calls LLM via LLMManager with scoring prompts
+5. Parses JSON response with fence stripping
+6. Applies safe defaults and derives migration decision
+7. Creates StageRun record with result and inputs_hash
+8. Stores assessment in episodic memory for future few-shot learning
+"""
+
 import asyncio
 import hashlib
 import json
@@ -15,21 +40,51 @@ logger = logging.getLogger(__name__)
 
 
 class AssessmentService:
+    """
+    Service layer for Stage 1 migration assessment orchestration.
+
+    Handles LLM-based scoring with memory integration, result parsing, and
+    StageRun persistence. Provides business logic layer between API routes
+    and LLM/database operations.
+    """
+
     def __init__(self, db: AsyncSession, model: str = "claude-haiku-4-5"):
+        """
+        Initialize assessment service with database session and LLM model.
+
+        Args:
+            db: Async database session for queries and commits
+            model: LLM model name (default: claude-haiku-4-5 for cost efficiency)
+        """
         self.db = db
         self.model = model
-        # Initialize manager with specified model
+        # Initialize LLM manager with Anthropic provider and specified model
         self.llm = LLMManager(provider_name="anthropic", model_name=model)
 
     def _parse_json_response(self, raw: str) -> dict:
-        """Port Project 1's JSON parsing pipeline: strip fences, trim pre/postamble."""
-        # Strip markdown fences
+        """
+        Parse JSON response from LLM with markdown fence stripping and validation.
+
+        Handles common LLM output formats: strips markdown code fences (```json),
+        extracts JSON object from surrounding text, and validates JSON structure.
+        Ported from Project 1's proven parsing pipeline.
+
+        Args:
+            raw: Raw LLM response string (may contain markdown, prose, etc.)
+
+        Returns:
+            Parsed JSON object as dict
+
+        Raises:
+            LLMProviderError: If no valid JSON object found or JSON parsing fails
+        """
+        # Strip markdown code fences that LLMs often add
         if "```json" in raw:
             raw = raw.split("```json", 1)[1]
         if "```" in raw:
             raw = raw.split("```", 1)[0]
 
-        # Find first '{' and last '}'
+        # Find first '{' and last '}' to extract JSON object
         start = raw.find("{")
         end = raw.rfind("}")
 
@@ -44,7 +99,19 @@ class AssessmentService:
             raise LLMProviderError(f"Failed to parse JSON: {e}")
 
     def _safe_defaults(self, parsed: dict) -> dict:
-        """Apply safe defaults for missing fields."""
+        """
+        Apply safe defaults for missing LLM output fields and derive migration decision.
+
+        Ensures robustness when LLM output is incomplete. Extracts four scoring dimensions,
+        calculates total score, and auto-derives migration decision if not provided.
+
+        Args:
+            parsed: Parsed JSON dict from LLM (may have missing fields)
+
+        Returns:
+            Complete result dict with all required fields and calculated total score
+        """
+        # Extract four scoring dimensions with 0 default for missing values
         scores = {
             "technical_feasibility": parsed.get("technical_feasibility", 0),
             "migration_effort": parsed.get("migration_effort", 0),
@@ -52,6 +119,7 @@ class AssessmentService:
             "risk": parsed.get("risk", 0),
         }
 
+        # Calculate total score from four dimensions
         total = (
             scores["technical_feasibility"]
             + scores["migration_effort"]
@@ -59,7 +127,7 @@ class AssessmentService:
             + scores["risk"]
         )
 
-        # Derive decision from total if missing
+        # Auto-derive migration decision from total score if LLM didn't provide it
         from core.assessment.decision_utils import derive_migration_decision
 
         if "migration_decision" not in parsed:
@@ -78,7 +146,19 @@ class AssessmentService:
         }
 
     async def _build_memory_context(self, name: str) -> str:
-        """Retrieve similar past assessments and format as few-shot context for the system prompt."""
+        """
+        Build few-shot learning context from similar past assessments in episodic memory.
+
+        Retrieves up to 3 past assessments with similar keywords and formats them
+        as reference examples for the LLM. Improves consistency and accuracy by
+        showing the LLM how similar use cases were scored previously.
+
+        Args:
+            name: Use case name to extract keywords from (uses first 4 words > 3 chars)
+
+        Returns:
+            Formatted few-shot context string, or empty string if no memories found
+        """
         try:
             from memory.episodic_memory import EpisodicMemory
             keywords = [w for w in name.lower().split() if len(w) > 3][:4]
