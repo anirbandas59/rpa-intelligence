@@ -269,6 +269,40 @@ export interface PhaseConfig {
   created_at: string
 }
 
+// ============================================================================
+// Bulk Upload
+// ============================================================================
+
+export interface ColumnMapping {
+  name: string | null
+  description?: string | null
+  source_platform?: string | null
+  install_status?: string | null
+}
+
+export interface BulkUploadResponse {
+  upload_id: string
+  filename: string
+  columns: string[]
+  preview: Record<string, string>[]
+  row_count: number
+}
+
+export interface BulkUploadStatusResponse {
+  upload_id: string
+  status: "preview" | "confirmed" | "processing" | "complete" | "failed"
+  created_count: number | null
+  assessed_count: number | null
+  total_count: number
+  error: string | null
+}
+
+export interface BulkConfirmResponse {
+  upload_id: string
+  status: string
+  job_id: string
+}
+
 export interface LLMConfig {
   id: string
   stage: string
