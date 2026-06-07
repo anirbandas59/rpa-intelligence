@@ -390,13 +390,13 @@ export default function ProjectDetailPage() {
               </p>
             </div>
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-destructive h-9 px-3 text-muted-foreground"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </AlertDialogTrigger>
+              <AlertDialogTrigger
+                render={
+                  <button className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-destructive h-9 px-3 text-muted-foreground">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                }
+              />
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete project?</AlertDialogTitle>
@@ -946,14 +946,16 @@ export default function ProjectDetailPage() {
                         </div>
                       </button>
                       <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <button
-                            className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent opacity-0 group-hover:opacity-100 h-9 px-3"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                          </button>
-                        </AlertDialogTrigger>
+                        <AlertDialogTrigger
+                          render={
+                            <button
+                              className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent opacity-0 group-hover:opacity-100 h-9 px-3"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                            </button>
+                          }
+                        />
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete use case?</AlertDialogTitle>
