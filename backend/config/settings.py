@@ -1,9 +1,31 @@
 """
-Configuration management for RPA Intelligence App.
+Configuration management for RPA Intelligence Platform using Pydantic Settings.
 
-Uses pydantic-settings to load all configuration from environment
-variables and .env file. Settings are validated with model validators
-to ensure consistency.
+Provides type-safe configuration loading from environment variables and .env file
+with validation. All settings are loaded via Settings class which extends BaseSettings.
+Singleton pattern via @lru_cache ensures configuration is loaded once and reused.
+
+Key features:
+- Environment variable loading with .env fallback
+- Type validation and conversion (str, int, bool, Literal)
+- Model validators for production guards and provider key validation
+- Case-insensitive environment variable names
+- Field descriptions for IDE hints and documentation
+- LRU cache for singleton behavior
+
+Configuration groups:
+- LLM: Provider selection, model names, API keys (Anthropic, OpenAI, WatsonX, Ollama)
+- Database: Connection URL (SQLite dev, PostgreSQL prod)
+- Security: JWT secret, token expiry, API secret key
+- Paths: Output directory, temp directory, log level
+- Deployment: Environment (dev/prod), frontend URL, CORS
+- Agent: Feature flags for LangGraph vs legacy pipelines
+- Redis: Session storage URL
+
+Usage:
+    from config.settings import get_settings
+    settings = get_settings()
+    llm_model = settings.default_llm_model
 """
 
 from functools import lru_cache
@@ -133,17 +155,42 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_guards(self) -> "Settings":
-        """Enforce required settings for production deployments."""
+        """
+        Enforce security requirements for production deployments.
+
+        Validates that critical security settings (API secret key) are configured
+        when running in production mode. Prevents accidental deployment with
+        development defaults.
+
+        Returns:
+            Self for method chaining
+
+        Raises:
+            ValueError: If production guards fail (e.g., missing API_SECRET_KEY in production)
+        """
         if self.environment == "production" and not self.api_secret_key:
             raise ValueError("API_SECRET_KEY must be set when ENVIRONMENT=production")
         return self
 
     @model_validator(mode="after")
     def validate_provider_keys(self) -> "Settings":
-        """Validate that required API keys are set for the chosen provider.
+        """
+        Validate that required API keys are set for the selected LLM provider.
 
-        Skips validation in development mode to allow running without LLM provider
-        for testing API endpoints that don't require LLM calls.
+        Checks that the chosen default_llm_provider has corresponding API credentials.
+        Skips validation in development mode to allow testing endpoints without LLM access.
+
+        Returns:
+            Self for method chaining
+
+        Raises:
+            ValueError: If provider-specific API key is missing in production mode
+
+        Validation rules:
+        - anthropic: Requires ANTHROPIC_API_KEY
+        - openai: Requires OPENAI_API_KEY
+        - watsonx: Requires WATSONX_API_KEY and WATSONX_URL
+        - ollama: No key required (local)
         """
         # Skip LLM key validation in development mode
         if self.environment == "development":
