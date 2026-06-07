@@ -1,6 +1,26 @@
 """
-Stage 3 timeline service — pure Python, zero LLM.
-Calculates delivery phases from effort_weeks + start_date + complexity_class.
+Stage 3 (Delivery Timeline) service for deterministic phase calculation.
+
+Pure Python implementation (zero LLM calls) that calculates six delivery phases
+from effort estimate, start date, and complexity class. Applies complexity-adjusted
+buffers for Design and UAT phases, and supports user-defined phase adjustments.
+
+Key features:
+- Deterministic calculation: same inputs → same output (no AI variability)
+- Six-phase SDLC model: Define → Design → Build → SIT → UAT → Deploy
+- Complexity-adjusted buffers: Design and UAT scale with complexity class
+- User adjustments: phase_deltas allow manual tweaks to individual phases
+- Business week calculations: uses 7-day weeks for calendar accuracy
+
+Phase structure:
+- Define: Fixed 1 week (requirements gathering)
+- Design: Complexity-adjusted (S/M: 1wk, L/XL: 2wk)
+- Build: User-provided effort_weeks (includes unit testing)
+- SIT: Fixed 1 week (system integration testing)
+- UAT: Complexity-adjusted (S/M: 1wk, L/XL: 2wk)
+- Deploy: Fixed 1 week (production deployment)
+
+Default buffers are defined in DEFAULT_BUFFERS constant.
 """
 
 from dataclasses import dataclass
@@ -19,17 +39,29 @@ DEFAULT_BUFFERS = {
 
 @dataclass
 class Phase:
+    """
+    Internal representation of a single delivery phase.
+
+    Used during timeline calculation before converting to dict for API response.
+    """
+
     name: str
     start_date: date
     end_date: date
     weeks: int
-    is_delta: bool = False
+    is_delta: bool = False  # True if this phase has user adjustment applied
 
 
 class TimelineResult(BaseModel):
-    phases: list[dict]
-    total_weeks: int
-    project_end_date: str
+    """
+    Timeline calculation result with six phases and project end date.
+
+    Returned by calculate_timeline() and stored in StageRun.result for Stage 3.
+    """
+
+    phases: list[dict] = []  # List of phase dicts with name, start_date, end_date, weeks, is_delta
+    total_weeks: int  # Sum of all phase weeks
+    project_end_date: str  # ISO format date string (last phase end_date)
 
 
 def calculate_timeline(
@@ -39,30 +71,54 @@ def calculate_timeline(
     buffers: dict | None = None,
     phase_deltas: dict | None = None,
 ) -> TimelineResult:
-    """Pure Python. Zero LLM. Returns phases list.
+    """
+    Calculate six-phase delivery timeline using pure Python (no LLM calls).
+
+    Deterministic calculation that produces consistent results for same inputs.
+    Applies complexity-adjusted buffers to Design and UAT phases, and supports
+    user-defined adjustments via phase_deltas.
 
     Args:
-        build_weeks: Effort weeks for Build + Unit Testing phase
-        start_date: Project start date
-        complexity_class: XS|S|M|L|XL — affects Design and UAT buffers
-        buffers: Override default buffer configuration
-        phase_deltas: User adjustments per phase (phase_name: delta_weeks)
+        build_weeks: Effort estimate for Build phase (includes unit testing)
+        start_date: Project start date (Define phase begins here)
+        complexity_class: Complexity classification (XS/S/M/L/XL) affecting Design/UAT buffers
+        buffers: Optional override for default buffer configuration
+        phase_deltas: Optional user adjustments per phase (e.g., {"build": 2, "sit": -1})
+
+    Returns:
+        TimelineResult with phases list, total_weeks, and project_end_date
+
+    Phase sequence:
+        Define (1wk) → Design (1-2wk) → Build (user input) → SIT (1wk) → UAT (1-2wk) → Deploy (1wk)
     """
     b = buffers or {}
     deltas = phase_deltas or {}
 
     def buf(phase_name: str) -> int:
-        """Get buffer weeks for a phase, applying complexity and user deltas."""
+        """
+        Get buffer weeks for a phase with complexity adjustment and user deltas.
+
+        Fixed phases (define, sit, deploy) use static buffer values. Complexity-adjusted
+        phases (design, uat) scale buffer based on complexity class. User deltas are
+        applied after base buffer, with minimum of 1 week enforced.
+
+        Args:
+            phase_name: Phase name (define, design, sit, uat, deploy)
+
+        Returns:
+            Buffer weeks with complexity adjustment and user deltas applied
+        """
         if phase_name in ("define", "sit", "deploy"):
+            # Fixed buffer phases
             base = b.get(phase_name, DEFAULT_BUFFERS[phase_name]["weeks"])
         else:
-            # complexity-adjusted phases (design, uat)
+            # Complexity-adjusted phases (design, uat)
             default_map = DEFAULT_BUFFERS[phase_name]
             base = b.get(phase_name, default_map.get(complexity_class, 1))
 
-        # Apply user delta
+        # Apply user delta from phase adjustments
         delta = deltas.get(phase_name.lower(), 0)
-        return max(1, base + delta)  # minimum 1 week
+        return max(1, base + delta)  # Minimum 1 week enforced
 
     phases = []
     cursor = start_date
