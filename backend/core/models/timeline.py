@@ -24,12 +24,8 @@ class DeliveryFeature(BaseModel):
     hours: float = Field(..., description="Estimated development hours")
     developer: str = Field(..., description="Assigned developer name")
     priority: str = Field(default="MUST", description="Priority level")
-    completion_pct: float = Field(
-        default=0.0, description="Completion percentage (0.0-1.0)"
-    )
-    development_status: str = Field(
-        default="NOT STARTED", description="Current development status"
-    )
+    completion_pct: float = Field(default=0.0, description="Completion percentage (0.0-1.0)")
+    development_status: str = Field(default="NOT STARTED", description="Current development status")
     remarks: str | None = Field(default=None, description="Optional notes")
 
     @field_validator("hours")
@@ -109,9 +105,7 @@ class DeliveryTimeline(BaseModel):
     squad: str = Field(..., description="Team/squad name")
     business_analyst: str = Field(..., description="BA name")
     developer: str = Field(..., description="Developer name")
-    features: list[DeliveryFeature] = Field(
-        default_factory=list, description="All tasks/features"
-    )
+    features: list[DeliveryFeature] = Field(default_factory=list, description="All tasks/features")
 
     @computed_field  # type: ignore[misc]
     @property
@@ -163,9 +157,7 @@ class DeliveryTimeline(BaseModel):
         Returns:
             Number of completed features
         """
-        return sum(
-            1 for feature in self.features if feature.development_status == "COMPLETED"
-        )
+        return sum(1 for feature in self.features if feature.development_status == "COMPLETED")
 
     def in_progress_count(self) -> int:
         """Count features with development_status == "IN PROGRESS".
@@ -173,8 +165,4 @@ class DeliveryTimeline(BaseModel):
         Returns:
             Number of in-progress features
         """
-        return sum(
-            1
-            for feature in self.features
-            if feature.development_status == "IN PROGRESS"
-        )
+        return sum(1 for feature in self.features if feature.development_status == "IN PROGRESS")

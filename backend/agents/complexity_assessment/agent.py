@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from config.logging_config import get_logger
 from core.constants import RPATool
@@ -115,8 +116,7 @@ def score_attributes(state: ComplexityAssessmentState) -> dict[str, Any]:
             attribute_scores.append(score)
 
         logger.info(
-            f"[{session_id}] Attributes scored. "
-            f"Weights: {[s.weight for s in attribute_scores]}"
+            f"[{session_id}] Attributes scored. Weights: {[s.weight for s in attribute_scores]}"
         )
 
         return {"attribute_scores": attribute_scores}
@@ -214,7 +214,9 @@ def classify_complexity(state: ComplexityAssessmentState) -> dict[str, Any]:
 # ==================== GRAPH CONSTRUCTION ====================
 
 
-def _build_graph() -> StateGraph:
+def _build_graph() -> CompiledStateGraph[
+    ComplexityAssessmentState, None, ComplexityAssessmentState, ComplexityAssessmentState
+]:
     """Build the LangGraph state machine.
 
     Returns:

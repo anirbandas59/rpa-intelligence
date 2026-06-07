@@ -1,6 +1,5 @@
 """Anthropic provider implementation using the anthropic SDK."""
 
-
 import anthropic
 from pydantic import BaseModel
 

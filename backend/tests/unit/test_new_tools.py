@@ -79,7 +79,11 @@ class TestTaskExtractionTool:
                     "steps": [
                         {"description": "Step 1", "weight_hours": 10.0, "reusability": "none"},
                         {"description": "Step 2", "weight_hours": 5.0, "reusability": "partial"},
-                        {"description": "Step 3", "weight_hours": 3.0, "reusability": "full"},  # Excluded
+                        {
+                            "description": "Step 3",
+                            "weight_hours": 3.0,
+                            "reusability": "full",
+                        },  # Excluded
                     ],
                 }
             ],

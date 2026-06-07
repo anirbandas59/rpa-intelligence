@@ -3,6 +3,7 @@ Shared pytest fixtures for all tests.
 """
 
 import os
+
 os.environ["SECRET_KEY"] = "test_secret_key_for_unit_tests"
 
 import asyncio
@@ -50,7 +51,9 @@ async def test_db_engine():
 @pytest.fixture
 async def test_db_session(test_db_engine):
     """Create test database session."""
-    session_factory = async_sessionmaker(test_db_engine, expire_on_commit=False, class_=AsyncSession)
+    session_factory = async_sessionmaker(
+        test_db_engine, expire_on_commit=False, class_=AsyncSession
+    )
 
     async with session_factory() as session:
         yield session
@@ -123,7 +126,9 @@ async def async_client(test_db_engine):
 
     # Override get_db dependency to use test database
     async def override_get_db():
-        session_factory = async_sessionmaker(test_db_engine, expire_on_commit=False, class_=AsyncSession)
+        session_factory = async_sessionmaker(
+            test_db_engine, expire_on_commit=False, class_=AsyncSession
+        )
         async with session_factory() as session:
             yield session
 

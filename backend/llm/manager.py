@@ -18,7 +18,9 @@
 #         )
 #         return message.content[0].text
 
-#     async def complete_async(self, model: str, system: str, user: str, max_tokens: int = 1000, temperature: float = 0.3) -> str:
+#     async def complete_async(
+#         self, model: str, system: str, user: str, max_tokens: int = 1000, temperature: float = 0.3
+#     ) -> str:
 #         """Async completion using httpx-based async client."""
 #         async_client = anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key)
 #         message = await async_client.messages.create(
@@ -44,6 +46,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -54,6 +57,8 @@ from llm.providers.anthropic_provider import AnthropicProvider
 from llm.providers.ollama_provider import OllamaProvider
 from llm.providers.openai_provider import OpenAIProvider
 from llm.providers.watsonx_provider import WatsonxProvider
+
+T = TypeVar("T", bound=BaseModel)
 
 _LLM_SEMAPHORE: asyncio.Semaphore | None = None
 
@@ -331,11 +336,11 @@ class LLMManager:
     def complete_structured(
         self,
         prompt: str,
-        response_schema: type[BaseModel],
+        response_schema: type[T],
         system: str = "",
         max_tokens: int = 1000,
         session_id: str = "",
-    ) -> BaseModel:
+    ) -> T:
         """
         Execute a structured completion request that returns a Pydantic model.
 

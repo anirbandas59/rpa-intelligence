@@ -7,6 +7,7 @@ LangGraph StateGraph implementing the ReAct pattern:
 The orchestrator uses the tool registry to invoke stage tools and Sonnet
 for planning and evaluation. It supports both autonomous and supervised modes.
 """
+
 import asyncio
 import json
 import logging
@@ -34,16 +35,16 @@ class OrchestratorState(TypedDict):
     use_case_name: str
     use_case_description: str
     goal: str
-    mode: str                         # autonomous | supervised
-    plan: list[dict]                  # [{step, tool, reasoning, required_inputs}]
+    mode: str  # autonomous | supervised
+    plan: list[dict]  # [{step, tool, reasoning, required_inputs}]
     current_step_index: int
-    completed_steps: list[dict]       # [{step, tool, result, status}]
-    stage_states: dict[str, str]      # {s1: complete|running|not_run, ...}
+    completed_steps: list[dict]  # [{step, tool, result, status}]
+    stage_states: dict[str, str]  # {s1: complete|running|not_run, ...}
     pending_clarification: str | None
-    final_status: str                 # running | complete | needs_input | failed
+    final_status: str  # running | complete | needs_input | failed
     retry_count: int
-    db: Any                           # AsyncSession (passed through state)
-    stream_events: list[dict]         # accumulated events for SSE / checkpointer
+    db: Any  # AsyncSession (passed through state)
+    stream_events: list[dict]  # accumulated events for SSE / checkpointer
 
 
 def _emit_event(state: OrchestratorState, event_type: str, content: str) -> None:
@@ -71,7 +72,7 @@ def _extract_json(text: str) -> str:
     cleaned = text.strip()
     for fence in ("```json", "```"):
         if cleaned.startswith(fence):
-            cleaned = cleaned[len(fence):]
+            cleaned = cleaned[len(fence) :]
             break
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3]
@@ -122,16 +123,12 @@ async def execute_node(state: OrchestratorState) -> OrchestratorState:
     """Execute the current step from the plan using the tool registry."""
     idx = state["current_step_index"]
     if idx >= len(state["plan"]):
-        logger.info(
-            f"[orchestrator] No more steps to execute, session={state['session_id']}"
-        )
+        logger.info(f"[orchestrator] No more steps to execute, session={state['session_id']}")
         return {**state, "final_status": "complete"}
 
     step = state["plan"][idx]
     tool_name = step.get("tool", "")
-    logger.info(
-        f"[orchestrator] execute_node step={idx + 1}/{len(state['plan'])} tool={tool_name}"
-    )
+    logger.info(f"[orchestrator] execute_node step={idx + 1}/{len(state['plan'])} tool={tool_name}")
     _emit_event(state, "tool_call", f"Executing: {tool_name} (step {idx + 1})")
 
     try:
@@ -180,9 +177,7 @@ async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
     last_step = state["completed_steps"][-1]
     remaining = len(state["plan"]) - state["current_step_index"] - 1
 
-    logger.info(
-        f"[orchestrator] evaluate_node last={last_step['tool']} remaining={remaining}"
-    )
+    logger.info(f"[orchestrator] evaluate_node last={last_step['tool']} remaining={remaining}")
 
     # If last step failed and we've retried 2+ times → trigger revise_plan routing
     if last_step["status"] == "failed" and state["retry_count"] >= 2:
@@ -210,9 +205,7 @@ async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
         reasoning = eval_data.get("reasoning", "")
         clarification = eval_data.get("clarification_question")
 
-        logger.info(
-            f"[orchestrator] evaluate decision={decision} reason={reasoning[:80]}"
-        )
+        logger.info(f"[orchestrator] evaluate decision={decision} reason={reasoning[:80]}")
         _emit_event(state, "decision", f"{decision}: {reasoning[:80]}")
 
         if decision == "done":

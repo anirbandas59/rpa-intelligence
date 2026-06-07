@@ -4,6 +4,7 @@ Tool registrations — registers all agentic tools with the ToolRegistry.
 Call register_all_tools() once at application startup (in lifespan).
 All execute functions are async and accept keyword arguments matching the input schema.
 """
+
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,8 +50,10 @@ def register_all_tools() -> None:
 
 def _register_run_s1_assessment():
     """Register Stage 1 migration assessment tool."""
+
     async def execute(use_case_id: str, db: AsyncSession) -> S1AssessmentOutput:
         from services.assessment_service import AssessmentService
+
         svc = AssessmentService(db=db)
         stage_run = await svc.run_assessment(use_case_id)
         return S1AssessmentOutput(
@@ -73,6 +76,7 @@ def _register_run_s1_assessment():
 
 def _register_run_s2_extraction():
     """Register Stage 2 complexity extraction and scoring tool."""
+
     async def execute(
         use_case_id: str,
         db: AsyncSession,
@@ -81,6 +85,7 @@ def _register_run_s2_extraction():
         manual_bands: dict[str, str] | None = None,
     ) -> S2ExtractionOutput:
         from agents.orchestrator import run_s2_assessment
+
         result = await run_s2_assessment(
             use_case_id=use_case_id,
             document_path=document_path,
@@ -108,6 +113,7 @@ def _register_run_s2_extraction():
 
 def _register_run_s3_timeline():
     """Register Stage 3 timeline calculation tool."""
+
     async def execute(
         use_case_id: str,
         db: AsyncSession,
@@ -118,6 +124,7 @@ def _register_run_s3_timeline():
         from datetime import date
 
         from services.timeline_service import calculate_timeline
+
         start = date.fromisoformat(start_date)
         result = calculate_timeline(
             build_weeks=effort_weeks,
@@ -144,6 +151,7 @@ def _register_run_s3_timeline():
 
 def _register_run_s4_tracker():
     """Register Stage 4 sprint tracker tool."""
+
     async def execute(
         use_case_id: str,
         db: AsyncSession,
@@ -162,20 +170,22 @@ def _register_run_s4_tracker():
 
         s4_inputs = use_case.s4_inputs or {}
         graph = create_tracker_graph()
-        state = await graph.ainvoke({
-            "use_case_id": use_case_id,
-            "process_name": use_case.name,
-            "process_description": use_case.description or "",
-            "complexity_class": s4_inputs.get("complexity_class", "M"),
-            "effort_weeks": s4_inputs.get("effort_weeks", 5),
-            "sprint_count": sprint_count,
-            "sprint_capacity": sprint_capacity,
-            "document_context": s4_inputs.get("document_context", ""),
-            "raw_llm_response": "",
-            "extracted_features": [],
-            "sprint_assignment": {},
-            "error": None,
-        })
+        state = await graph.ainvoke(
+            {
+                "use_case_id": use_case_id,
+                "process_name": use_case.name,
+                "process_description": use_case.description or "",
+                "complexity_class": s4_inputs.get("complexity_class", "M"),
+                "effort_weeks": s4_inputs.get("effort_weeks", 5),
+                "sprint_count": sprint_count,
+                "sprint_capacity": sprint_capacity,
+                "document_context": s4_inputs.get("document_context", ""),
+                "raw_llm_response": "",
+                "extracted_features": [],
+                "sprint_assignment": {},
+                "error": None,
+            }
+        )
         features = state.get("extracted_features", [])
         return S4TrackerOutput(
             run_id=use_case_id,
@@ -197,10 +207,12 @@ def _register_run_s4_tracker():
 
 def _register_get_stage_result():
     """Register tool to retrieve latest stage run result."""
+
     async def execute(use_case_id: str, db: AsyncSession, stage: str) -> GetStageResultOutput:
         from sqlalchemy import select
 
         from db.models import StageRun
+
         result = await db.execute(
             select(StageRun)
             .where(StageRun.use_case_id == use_case_id, StageRun.stage == stage)
@@ -229,10 +241,14 @@ def _register_get_stage_result():
 
 def _register_update_stage_inputs():
     """Register tool to update stage inputs on a use-case."""
-    async def execute(use_case_id: str, db: AsyncSession, stage: str, inputs: dict) -> UpdateStageInputsOutput:
+
+    async def execute(
+        use_case_id: str, db: AsyncSession, stage: str, inputs: dict
+    ) -> UpdateStageInputsOutput:
         from sqlalchemy import select
 
         from db.models import UseCase
+
         result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
         use_case = result.scalar_one_or_none()
         if not use_case:
@@ -261,12 +277,9 @@ def _register_update_stage_inputs():
 
 def _register_calculate_complexity():
     """Register deterministic complexity scoring tool."""
+
     async def execute(
-        activities: str,
-        business_rules: str,
-        layouts: str,
-        interfaces: str,
-        technology: str
+        activities: str, business_rules: str, layouts: str, interfaces: str, technology: str
     ) -> CalculateComplexityOutput:
         from core.scoring.classifier import classify
         from core.scoring.effort_table import get_effort
@@ -302,10 +315,12 @@ def _register_calculate_complexity():
 
 def _register_check_run_status():
     """Register tool to check stage run status."""
+
     async def execute(run_id: str, db: AsyncSession) -> CheckRunStatusOutput:
         from sqlalchemy import select
 
         from db.models import StageRun
+
         result = await db.execute(select(StageRun).where(StageRun.id == run_id))
         run = result.scalar_one_or_none()
         if not run:
@@ -325,6 +340,7 @@ def _register_check_run_status():
 
 def _register_query_similar_use_cases():
     """Register tool to find similar use-cases by keyword matching."""
+
     async def execute(keywords: list[str], db: AsyncSession, limit: int = 3) -> QuerySimilarOutput:
         from sqlalchemy import or_, select
 
@@ -335,19 +351,21 @@ def _register_query_similar_use_cases():
 
         conditions = []
         for kw in keywords[:5]:  # limit to 5 keywords
-            conditions.extend([
-                UseCase.name.ilike(f"%{kw}%"),
-                UseCase.description.ilike(f"%{kw}%"),
-            ])
+            conditions.extend(
+                [
+                    UseCase.name.ilike(f"%{kw}%"),
+                    UseCase.description.ilike(f"%{kw}%"),
+                ]
+            )
 
-        result = await db.execute(
-            select(UseCase).where(or_(*conditions)).limit(limit)
-        )
+        result = await db.execute(select(UseCase).where(or_(*conditions)).limit(limit))
         use_cases = result.scalars().all()
-        return QuerySimilarOutput(results=[
-            {"use_case_id": uc.id, "name": uc.name, "description": uc.description or ""}
-            for uc in use_cases
-        ])
+        return QuerySimilarOutput(
+            results=[
+                {"use_case_id": uc.id, "name": uc.name, "description": uc.description or ""}
+                for uc in use_cases
+            ]
+        )
 
     ToolRegistry.register(
         ToolDefinition(

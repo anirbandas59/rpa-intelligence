@@ -5,12 +5,12 @@ Defines all domain enums including complexity tiers, RPA tools,
 assessment phases, step weights, and reusability tags.
 """
 
-from enum import Enum
+from enum import Enum, StrEnum
 
 from core.exceptions import ScoringValidationError
 
 
-class ComplexityTier(str, Enum):
+class ComplexityTier(StrEnum):
     """Complexity classification tiers."""
 
     XS = "XS"
@@ -58,7 +58,7 @@ class ComplexityTier(str, Enum):
         return scores[self.value]
 
 
-class RPATool(str, Enum):
+class RPATool(StrEnum):
     """Supported RPA tools."""
 
     BLUE_PRISM = "BLUE_PRISM"
@@ -120,7 +120,7 @@ class RPATool(str, Enum):
         return cls.UNKNOWN
 
 
-class AssessmentPhase(str, Enum):
+class AssessmentPhase(StrEnum):
     """Phases of RPA assessment and delivery."""
 
     DEFINE = "DEFINE"
@@ -192,7 +192,7 @@ class StepWeight(float, Enum):
         )
 
 
-class ReusabilityTag(str, Enum):
+class ReusabilityTag(StrEnum):
     """Tags indicating step reusability level."""
 
     FULL = "FULL"

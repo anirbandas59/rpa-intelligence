@@ -87,8 +87,7 @@ class ToolRegistry:
         tool = cls._tools.get(name)
         if tool is None:
             raise ToolNotFoundError(
-                f"Tool '{name}' not found in registry. "
-                f"Available: {list(cls._tools.keys())}"
+                f"Tool '{name}' not found in registry. Available: {list(cls._tools.keys())}"
             )
         return tool
 
@@ -99,10 +98,7 @@ class ToolRegistry:
     @classmethod
     def list_descriptions(cls) -> list[dict[str, str]]:
         """Returns [{name, description}] for inclusion in orchestrator system prompts."""
-        return [
-            {"name": t.name, "description": t.description}
-            for t in cls._tools.values()
-        ]
+        return [{"name": t.name, "description": t.description} for t in cls._tools.values()]
 
     @classmethod
     def is_registered(cls, name: str) -> bool:

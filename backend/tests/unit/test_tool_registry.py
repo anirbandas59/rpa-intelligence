@@ -20,6 +20,7 @@ from tools.registry import RegisteredTool, ToolDefinition, ToolNotFoundError, To
 # Minimal Pydantic schemas for test tools
 # ---------------------------------------------------------------------------
 
+
 class _DummyInput(BaseModel):
     value: str
 
@@ -31,6 +32,7 @@ class _DummyOutput(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_definition(name: str, description: str = "A test tool") -> ToolDefinition:
     return ToolDefinition(
@@ -49,6 +51,7 @@ async def _dummy_execute(value: str) -> _DummyOutput:
 # Fixtures — isolate registry state between tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def clear_registry():
     """Reset the ToolRegistry._tools dict before and after every test."""
@@ -60,6 +63,7 @@ def clear_registry():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestToolRegistryRegisterAndGet:
     def test_register_adds_tool(self):
@@ -112,6 +116,7 @@ class TestToolRegistryNotFound:
 
     def test_tool_not_found_error_is_rpa_base_error(self):
         from core.exceptions import RPABaseError
+
         with pytest.raises(RPABaseError):
             ToolRegistry.get("anything")
 

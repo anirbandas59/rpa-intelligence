@@ -62,9 +62,7 @@ class ExtractedSection(BaseModel):
     page_number: int | None = Field(
         default=None, description="Page where section starts (None if unknown)"
     )
-    confidence_score: float = Field(
-        ..., description="Confidence 0.0-1.0 of extraction accuracy"
-    )
+    confidence_score: float = Field(..., description="Confidence 0.0-1.0 of extraction accuracy")
     section_type: str = Field(
         ...,
         description='Type of section: "process_overview", "process_steps", '

@@ -35,7 +35,9 @@ logger = logging.getLogger(__name__)
 TEMPLATE_PATH = Path(__file__).parent.parent / "data" / "templates" / "output_template.xlsx"
 
 
-def generate_tracker_xlsx(use_case_name: str, s2_result: dict, s3_result: dict, s4_result: dict) -> io.BytesIO:
+def generate_tracker_xlsx(
+    use_case_name: str, s2_result: dict, s3_result: dict, s4_result: dict
+) -> io.BytesIO:
     """
     Generate Excel tracker workbook from output_template.xlsx with formula preservation.
 

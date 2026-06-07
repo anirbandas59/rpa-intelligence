@@ -49,21 +49,29 @@ class S3InputsUpdate(BaseModel):
 
     effort_weeks: int | None = Field(None, ge=1, description="Build effort in weeks")
     start_date: str | None = Field(None, description="Project start date (ISO format YYYY-MM-DD)")
-    complexity_class: str | None = Field(None, pattern="^(XS|S|M|L|XL)$", description="Complexity class from S2")
-    buffers: dict | None = Field(None, description="Custom buffer configuration (overrides defaults)")
+    complexity_class: str | None = Field(
+        None, pattern="^(XS|S|M|L|XL)$", description="Complexity class from S2"
+    )
+    buffers: dict | None = Field(
+        None, description="Custom buffer configuration (overrides defaults)"
+    )
 
 
 class PhaseAdjustment(BaseModel):
     """Request model for adjusting individual phase durations."""
 
-    phase_name: str = Field(..., description="Phase name (lowercase): define, design, build, sit, uat, deploy")
+    phase_name: str = Field(
+        ..., description="Phase name (lowercase): define, design, build, sit, uat, deploy"
+    )
     delta_weeks: int = Field(..., description="Adjustment in weeks (can be negative)")
 
 
 class LoadFromS2Request(BaseModel):
     """Request model for loading Stage 2 complexity data into Stage 3 inputs."""
 
-    prefer_max: bool = Field(True, description="Use max_weeks if true, else min_weeks from S2 effort range")
+    prefer_max: bool = Field(
+        True, description="Use max_weeks if true, else min_weeks from S2 effort range"
+    )
 
 
 def compute_inputs_hash(inputs: dict) -> str:
@@ -97,7 +105,12 @@ async def generate_narrative_background(
     async with session_factory() as db:
         try:
             llm = LLMManager()
-            phase_list = "\n".join([f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)" for p in phases])
+            phase_list = "\n".join(
+                [
+                    f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)"
+                    for p in phases
+                ]
+            )
 
             user_prompt = S3_NARRATIVE_USER.format(
                 use_case_name=use_case_name,
@@ -159,7 +172,7 @@ async def run_task_extraction_background(
     async with session_factory() as db:
         try:
             # Read document text from file
-            with open(document_path, encoding='utf-8') as f:
+            with open(document_path, encoding="utf-8") as f:
                 doc_text = f.read()
 
             # Run task extraction agent
@@ -320,7 +333,9 @@ async def create_s3_run(
 
     # Compute run number
     count_result = await db.execute(
-        select(func.count(StageRun.id)).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s3")
+        select(func.count(StageRun.id)).where(
+            StageRun.use_case_id == use_case_id, StageRun.stage == "s3"
+        )
     )
     run_number = count_result.scalar() + 1
 
@@ -348,7 +363,10 @@ async def create_s3_run(
     if not use_case.s2_latest_run_id:
         raise HTTPException(
             status_code=400,
-            detail="Stage 2 must be complete before running Stage 3. S2 provides complexity and process summary required for task extraction.",
+            detail=(
+                "Stage 2 must be complete before running Stage 3. "
+                "S2 provides complexity and process summary required for task extraction."
+            ),
         )
 
     s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
@@ -412,7 +430,9 @@ async def create_s3_run(
                     )
 
                     # Update s3_inputs with synthesis result
-                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
+                    uc_result = await session.execute(
+                        select(UseCase).where(UseCase.id == use_case_id)
+                    )
                     uc = uc_result.scalar_one_or_none()
                     if uc:
                         uc.s3_inputs["task_extraction"] = synthesis_result
@@ -424,7 +444,9 @@ async def create_s3_run(
                 except Exception as e:
                     logger.error(f"Task synthesis failed for use case {use_case_id}: {e}")
                     # Update status to failed
-                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
+                    uc_result = await session.execute(
+                        select(UseCase).where(UseCase.id == use_case_id)
+                    )
                     uc = uc_result.scalar_one_or_none()
                     if uc and "task_extraction" in uc.s3_inputs:
                         uc.s3_inputs["task_extraction"]["extraction_status"] = "failed"
@@ -506,7 +528,9 @@ async def get_s3_run(
 ):
     """Get single Stage 3 run with full details."""
     result = await db.execute(
-        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s3")
+        select(StageRun).where(
+            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s3"
+        )
     )
     run = result.scalar_one_or_none()
     if not run:
@@ -538,7 +562,9 @@ async def adjust_phase(
 
     valid_phases = {"define", "design", "build", "sit", "uat", "deploy"}
     if adjustment.phase_name.lower() not in valid_phases:
-        raise HTTPException(status_code=400, detail=f"Invalid phase name. Must be one of: {valid_phases}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid phase name. Must be one of: {valid_phases}"
+        )
 
     inputs = use_case.s3_inputs or {}
     phase_deltas = inputs.get("phase_deltas", {})

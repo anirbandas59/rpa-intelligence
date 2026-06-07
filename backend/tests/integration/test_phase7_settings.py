@@ -141,7 +141,12 @@ async def test_update_llm_config(async_client, test_superuser_token):
     headers = {"Authorization": f"Bearer {test_superuser_token}"}
 
     # Update s1_scoring to use Sonnet
-    update_payload = {"stage": "s1_scoring", "model": "claude-sonnet-4-5", "temperature": 0.4, "max_tokens": 1200}
+    update_payload = {
+        "stage": "s1_scoring",
+        "model": "claude-sonnet-4-5",
+        "temperature": 0.4,
+        "max_tokens": 1200,
+    }
 
     response = await async_client.put("/api/v1/settings/llm", json=update_payload, headers=headers)
     assert response.status_code == 200
@@ -174,14 +179,18 @@ async def test_create_prompt_variant(async_client, test_superuser_token):
         },
     }
 
-    response = await async_client.post("/api/v1/settings/prompts", json=create_payload, headers=headers)
+    response = await async_client.post(
+        "/api/v1/settings/prompts", json=create_payload, headers=headers
+    )
     assert response.status_code == 201
     data = response.json()
     variant_id = data["id"]
     assert data["is_active"] is False  # New variants start inactive
 
     # Activate the variant
-    activate_response = await async_client.put(f"/api/v1/settings/prompts/{variant_id}/activate", headers=headers)
+    activate_response = await async_client.put(
+        f"/api/v1/settings/prompts/{variant_id}/activate", headers=headers
+    )
     assert activate_response.status_code == 200
     activate_data = activate_response.json()
     assert activate_data["is_active"] is True
@@ -199,7 +208,9 @@ async def test_invite_user(async_client, test_superuser_token, test_db_session):
 
     # Mock hash_password to avoid bcrypt issues in tests
     with patch("api.v1.settings.hash_password", return_value="$2b$12$mocked_hash"):
-        response = await async_client.post("/api/v1/settings/users/invite", json=invite_payload, headers=headers)
+        response = await async_client.post(
+            "/api/v1/settings/users/invite", json=invite_payload, headers=headers
+        )
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "newuser@example.com"
@@ -223,7 +234,9 @@ async def test_update_user_role(async_client, test_superuser_token, test_user):
     # Promote user to superuser
     update_payload = {"role": "superuser"}
 
-    response = await async_client.patch(f"/api/v1/settings/users/{test_user.id}", json=update_payload, headers=headers)
+    response = await async_client.patch(
+        f"/api/v1/settings/users/{test_user.id}", json=update_payload, headers=headers
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["role"] == "superuser"

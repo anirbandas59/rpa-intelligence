@@ -23,7 +23,9 @@ from pydantic import BaseModel, Field
 # Type aliases for band-based scoring domain
 Band = Literal["XS", "S", "M", "L", "XL"]
 ComplexityClass = Literal["XS", "S", "M", "L", "XL"]
-InputSource = Literal["ai_extracted", "manual", "corrected", "from_s1", "from_s2", "from_s3", "imported"]
+InputSource = Literal[
+    "ai_extracted", "manual", "corrected", "from_s1", "from_s2", "from_s3", "imported"
+]
 
 
 class AttributeBands(BaseModel):
@@ -51,15 +53,25 @@ class AttributeBandsWithSource(BaseModel):
     """
 
     activities: Band = Field(..., description="Process activities count band")
-    activities_source: InputSource = Field(default="manual", description="Source of activities band value")
+    activities_source: InputSource = Field(
+        default="manual", description="Source of activities band value"
+    )
     business_rules: Band = Field(..., description="Business rules complexity band")
-    business_rules_source: InputSource = Field(default="manual", description="Source of business_rules band value")
+    business_rules_source: InputSource = Field(
+        default="manual", description="Source of business_rules band value"
+    )
     layouts: Band = Field(..., description="Digital layouts/templates count band")
-    layouts_source: InputSource = Field(default="manual", description="Source of layouts band value")
+    layouts_source: InputSource = Field(
+        default="manual", description="Source of layouts band value"
+    )
     interfaces: Band = Field(..., description="Target system interfaces count band")
-    interfaces_source: InputSource = Field(default="manual", description="Source of interfaces band value")
+    interfaces_source: InputSource = Field(
+        default="manual", description="Source of interfaces band value"
+    )
     technology: Band = Field(..., description="Technology complexity band")
-    technology_source: InputSource = Field(default="manual", description="Source of technology band value")
+    technology_source: InputSource = Field(
+        default="manual", description="Source of technology band value"
+    )
 
 
 class ScoringResult(BaseModel):
@@ -75,7 +87,8 @@ class ScoringResult(BaseModel):
     effort_min_weeks: int = Field(..., description="Minimum effort estimate in weeks")
     effort_max_weeks: int = Field(..., description="Maximum effort estimate in weeks")
     attribute_weights: dict[str, int] = Field(
-        ..., description="Individual weights by attribute (activities, business_rules, layouts, interfaces, technology)"
+        ...,
+        description="Individual weights by attribute (activities, business_rules, layouts, interfaces, technology)",
     )
 
 
@@ -95,7 +108,9 @@ class WeightMatrix(BaseModel):
     """
 
     activities: dict[Band, int] = Field(..., description="Activities band-to-weight mapping")
-    business_rules: dict[Band, int] = Field(..., description="Business rules band-to-weight mapping")
+    business_rules: dict[Band, int] = Field(
+        ..., description="Business rules band-to-weight mapping"
+    )
     layouts: dict[Band, int] = Field(..., description="Layouts band-to-weight mapping")
     interfaces: dict[Band, int] = Field(..., description="Interfaces band-to-weight mapping")
     technology: dict[Band, int] = Field(..., description="Technology band-to-weight mapping")

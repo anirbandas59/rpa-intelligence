@@ -10,6 +10,7 @@ import logging
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from core.exceptions import AgentExecutionError
 from llm.manager import get_default_manager
@@ -47,7 +48,11 @@ async def extract_tasks_node(state: TaskExtractionState) -> dict:
 
     logger.info(
         "extract_tasks_node entered",
-        extra={"session_id": session_id, "node": "extract_tasks", "attempt": validation_attempts + 1}
+        extra={
+            "session_id": session_id,
+            "node": "extract_tasks",
+            "attempt": validation_attempts + 1,
+        },
     )
 
     try:
@@ -69,8 +74,7 @@ async def extract_tasks_node(state: TaskExtractionState) -> dict:
                 f"Please rebalance the weights and retry."
             )
             logger.info(
-                f"Retrying with hint: {state['retry_hint']}",
-                extra={"session_id": session_id}
+                f"Retrying with hint: {state['retry_hint']}", extra={"session_id": session_id}
             )
 
         response = await llm.complete_async(
@@ -81,8 +85,7 @@ async def extract_tasks_node(state: TaskExtractionState) -> dict:
         )
 
         logger.info(
-            f"Received LLM response ({len(response)} chars)",
-            extra={"session_id": session_id}
+            f"Received LLM response ({len(response)} chars)", extra={"session_id": session_id}
         )
 
         return {"raw_llm_response": response}
@@ -101,7 +104,9 @@ def validate_sum_node(state: TaskExtractionState) -> dict:
     On failure without retries: sets error.
     """
     session_id = state["session_id"]
-    logger.info("validate_sum_node entered", extra={"session_id": session_id, "node": "validate_sum"})
+    logger.info(
+        "validate_sum_node entered", extra={"session_id": session_id, "node": "validate_sum"}
+    )
 
     try:
         # Parse the response
@@ -135,7 +140,7 @@ def validate_sum_node(state: TaskExtractionState) -> dict:
 
             logger.info(
                 f"Hour sum validation passed: {result.total_net_hours:.2f}h / {budget:.2f}h",
-                extra={"session_id": session_id}
+                extra={"session_id": session_id},
             )
 
             return {"task_extraction": task_extraction_dict, "error": None}
@@ -158,7 +163,7 @@ def validate_sum_node(state: TaskExtractionState) -> dict:
                 )
                 logger.warning(
                     f"Retrying task extraction (attempt {attempts}/2)",
-                    extra={"session_id": session_id}
+                    extra={"session_id": session_id},
                 )
                 return {
                     "validation_attempts": attempts,
@@ -194,15 +199,19 @@ def store_result_node(state: TaskExtractionState) -> dict:
     Node 3: Result stored successfully (actual DB write happens in API background task).
     """
     session_id = state["session_id"]
-    logger.info("store_result_node entered", extra={"session_id": session_id, "node": "store_result"})
+    logger.info(
+        "store_result_node entered", extra={"session_id": session_id, "node": "store_result"}
+    )
     logger.info(
         f"Task extraction complete for use case {state['use_case_id']}",
-        extra={"session_id": session_id}
+        extra={"session_id": session_id},
     )
     return {}
 
 
-def build_task_extraction_graph() -> StateGraph:
+def build_task_extraction_graph() -> CompiledStateGraph[
+    TaskExtractionState, None, TaskExtractionState, TaskExtractionState
+]:
     """Build and compile the task extraction StateGraph."""
     workflow = StateGraph(TaskExtractionState)
 
@@ -242,7 +251,7 @@ async def run_task_extraction_agent(
     """
     logger.info(
         f"Starting task extraction agent for use case {use_case_id}",
-        extra={"session_id": session_id}
+        extra={"session_id": session_id},
     )
 
     graph = build_task_extraction_graph()

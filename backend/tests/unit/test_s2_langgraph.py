@@ -5,8 +5,9 @@ Tests the v2 (LangGraph) path in isolation and compares output
 with v1 (legacy) path to ensure equivalence.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 from agents.orchestrator import _run_scoring_v1, _run_scoring_v2, assessment_to_scoring_result
 from core.constants import ComplexityTier
@@ -23,7 +24,7 @@ def mock_llm_manager():
             reasoning="Mocked reasoning narrative for complexity classification.",
             key_drivers=["Driver 1", "Driver 2"],
             simplification_opportunities=["Opportunity 1"],
-            tech_lead_note="Mocked tech lead note."
+            tech_lead_note="Mocked tech lead note.",
         )
         mock_instance.complete_structured.return_value = mock_response
         yield mock_instance
@@ -60,7 +61,9 @@ def test_langgraph_ground_truth():
     assert result.total_score == 21, f"Expected total 21, got {result.total_score}"
 
     # Verify complexity tier
-    assert result.complexity_tier == ComplexityTier.L, f"Expected L tier, got {result.complexity_tier}"
+    assert result.complexity_tier == ComplexityTier.L, (
+        f"Expected L tier, got {result.complexity_tier}"
+    )
 
     # Verify attribute scores
     assert len(result.attribute_scores) == 5, "Should have 5 attribute scores"

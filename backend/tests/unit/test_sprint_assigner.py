@@ -25,7 +25,9 @@ def test_topological_sort_no_dependencies():
 def test_topological_sort_with_dependencies():
     """Test sorting features with dependency chains."""
     features = [
-        Feature(name="feature-c", description="C", size="M", dependencies=["feature-a", "feature-b"]),
+        Feature(
+            name="feature-c", description="C", size="M", dependencies=["feature-a", "feature-b"]
+        ),
         Feature(name="feature-b", description="B", size="S", dependencies=["feature-a"]),
         Feature(name="feature-a", description="A", size="S", dependencies=[]),
     ]

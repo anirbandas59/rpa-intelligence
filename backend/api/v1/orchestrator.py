@@ -1,4 +1,5 @@
 """Orchestrator API routes — start and monitor autonomous agent sessions."""
+
 import logging
 from datetime import datetime
 
@@ -22,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 class OrchestrateRequest(BaseModel):
-    goal: str = "full_assessment"   # full_assessment | run_stage:s1 | etc.
-    mode: str = "autonomous"        # autonomous | supervised
+    goal: str = "full_assessment"  # full_assessment | run_stage:s1 | etc.
+    mode: str = "autonomous"  # autonomous | supervised
 
 
 class OrchestrateResponse(BaseModel):

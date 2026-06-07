@@ -19,12 +19,8 @@ class ProcessStep(BaseModel):
     step_number: int = Field(..., description="Sequential step number (1-based)")
     description: str = Field(..., description="Human-readable step description")
     weight: StepWeight = Field(..., description="Development effort weight")
-    reusability_tag: ReusabilityTag = Field(
-        ..., description="Reusability classification"
-    )
-    branch_name: str = Field(
-        ..., description="Business rule branch this step belongs to"
-    )
+    reusability_tag: ReusabilityTag = Field(..., description="Reusability classification")
+    branch_name: str = Field(..., description="Business rule branch this step belongs to")
     reusability_comment: str = Field(
         ..., description="Explanation of why this reusability was assigned"
     )
@@ -54,9 +50,7 @@ class BusinessRule(BaseModel):
     model_config = ConfigDict(frozen=False)
 
     description: str = Field(..., description="What the rule checks or decides")
-    creates_new_flow: bool = Field(
-        ..., description="True if rule spawns additional process flow"
-    )
+    creates_new_flow: bool = Field(..., description="True if rule spawns additional process flow")
     branch_activity_count: int = Field(
         ..., description="Estimated activities in the resulting branch"
     )
@@ -81,9 +75,7 @@ class BusinessRule(BaseModel):
         """
         # Check if creates_new_flow is in the data being validated
         if info.data.get("creates_new_flow") is True and v <= 2:
-            raise ValueError(
-                "Flow-creating rules must have more than 2 branch activities"
-            )
+            raise ValueError("Flow-creating rules must have more than 2 branch activities")
         return v
 
 

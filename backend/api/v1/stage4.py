@@ -216,7 +216,10 @@ async def create_s4_run(
         current_status = task_extraction.get("extraction_status") if task_extraction else "missing"
         raise HTTPException(
             status_code=400,
-            detail=f"Stage 3 task extraction must have status in {valid_statuses} before running Stage 4. Current status: {current_status}",
+            detail=(
+                f"Stage 3 task extraction must have status in {valid_statuses} "
+                f"before running Stage 4. Current status: {current_status}"
+            ),
         )
 
     sprint_count = inputs["sprint_count"]
@@ -229,7 +232,9 @@ async def create_s4_run(
 
     # Get build+SIT window from S3
     if not use_case.s3_latest_run_id:
-        raise HTTPException(status_code=400, detail="Stage 3 must be complete before running Stage 4")
+        raise HTTPException(
+            status_code=400, detail="Stage 3 must be complete before running Stage 4"
+        )
 
     s3_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s3_latest_run_id))
     s3_run = s3_result.scalar_one_or_none()
@@ -242,7 +247,9 @@ async def create_s4_run(
     sit_phase = next((p for p in s3_phases if p["name"].lower() == "sit"), None)
 
     if not build_phase or not sit_phase:
-        raise HTTPException(status_code=400, detail="Build and SIT phases not found in Stage 3 result")
+        raise HTTPException(
+            status_code=400, detail="Build and SIT phases not found in Stage 3 result"
+        )
 
     build_sit_window = {
         "start_date": build_phase["start_date"],
@@ -251,7 +258,9 @@ async def create_s4_run(
 
     # Compute run number
     count_result = await db.execute(
-        select(func.count(StageRun.id)).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
+        select(func.count(StageRun.id)).where(
+            StageRun.use_case_id == use_case_id, StageRun.stage == "s4"
+        )
     )
     run_number = count_result.scalar() + 1
 
@@ -336,7 +345,9 @@ async def get_s4_run(
 ):
     """Get single Stage 4 run with full details."""
     result = await db.execute(
-        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
+        select(StageRun).where(
+            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4"
+        )
     )
     run = result.scalar_one_or_none()
     if not run:
@@ -388,7 +399,9 @@ async def export_s4_run(
 
     # Get S4 run
     s4_result = await db.execute(
-        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
+        select(StageRun).where(
+            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4"
+        )
     )
     s4_run = s4_result.scalar_one_or_none()
     if not s4_run:

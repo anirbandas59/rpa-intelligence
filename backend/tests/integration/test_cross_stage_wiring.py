@@ -41,7 +41,9 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
     use_case_id = use_case["id"]
 
     # ========== Step 2: Check Initial Readiness ==========
-    readiness = await async_client.get(f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers)
+    readiness = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers
+    )
     assert readiness.status_code == 200
     status = readiness.json()
     assert status["s1"] == "ready"  # Has name + description
@@ -68,21 +70,28 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
         "technology_source": "manual",
     }
 
-    update_s2 = await async_client.patch(f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers)
+    update_s2 = await async_client.patch(
+        f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers
+    )
     assert update_s2.status_code == 200
 
     # Run S2 (manual bands → no LLM)
     s2_run_response = await async_client.post(
-        f"/api/v1/use-cases/{use_case_id}/s2/runs", json={"model": "claude-haiku-4-5"}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s2/runs",
+        json={"model": "claude-haiku-4-5"},
+        headers=headers,
     )
     assert s2_run_response.status_code in [200, 202]
     s2_run_id = s2_run_response.json()["run_id"]
 
     # Poll until S2 background task completes (202 response has no result yet)
     import asyncio
+
     s2_run_detail = None
     for _ in range(30):
-        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        detail = await async_client.get(
+            f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers
+        )
         if detail.status_code == 200 and detail.json().get("status") == "complete":
             s2_run_detail = detail
             break
@@ -102,7 +111,9 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
 
     # ========== Step 5: Load S2 data into S3 ==========
     load_s3 = await async_client.post(
-        f"/api/v1/use-cases/{use_case_id}/s3/load-from-s2", json={"prefer_max": True}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s3/load-from-s2",
+        json={"prefer_max": True},
+        headers=headers,
     )
     assert load_s3.status_code == 200
     s3_loaded = load_s3.json()
@@ -115,12 +126,16 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
 
     # Add start_date to S3 inputs
     s3_update = await async_client.patch(
-        f"/api/v1/use-cases/{use_case_id}/s3/inputs", json={"start_date": "2026-07-01"}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s3/inputs",
+        json={"start_date": "2026-07-01"},
+        headers=headers,
     )
     assert s3_update.status_code == 200
 
     # Run S3
-    s3_run_response = await async_client.post(f"/api/v1/use-cases/{use_case_id}/s3/runs", headers=headers)
+    s3_run_response = await async_client.post(
+        f"/api/v1/use-cases/{use_case_id}/s3/runs", headers=headers
+    )
     assert s3_run_response.status_code == 200
     s3_run = s3_run_response.json()
     s3_run_id = s3_run["run_id"]
@@ -131,7 +146,9 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
     assert "total_weeks" in s3_result
 
     # Get S3 run for later comparison
-    s3_run_detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s3/runs/{s3_run_id}", headers=headers)
+    s3_run_detail = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/s3/runs/{s3_run_id}", headers=headers
+    )
     assert s3_run_detail.status_code == 200
     s3_original_snapshot = s3_run_detail.json()["inputs_snapshot"]
     s3_original_hash = s3_run_detail.json()["inputs_hash"]
@@ -159,13 +176,17 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
 
     # ========== Step 7: Edit S4 inputs ==========
     s4_edit = await async_client.patch(
-        f"/api/v1/use-cases/{use_case_id}/s4/inputs", json={"sprint_count": 10, "sprint_capacity": 13}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s4/inputs",
+        json={"sprint_count": 10, "sprint_capacity": 13},
+        headers=headers,
     )
     assert s4_edit.status_code == 200
 
     # ========== Step 8: Verify S2 and S3 records unchanged ==========
     # Re-fetch S2 run
-    s2_after = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+    s2_after = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers
+    )
     assert s2_after.status_code == 200
     s2_after_data = s2_after.json()
 
@@ -174,7 +195,9 @@ async def test_full_cross_stage_flow(async_client, test_user_token, test_project
     assert s2_after_data["inputs_hash"] == s2_original_hash
 
     # Re-fetch S3 run
-    s3_after = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s3/runs/{s3_run_id}", headers=headers)
+    s3_after = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/s3/runs/{s3_run_id}", headers=headers
+    )
     assert s3_after.status_code == 200
     s3_after_data = s3_after.json()
 
@@ -212,11 +235,15 @@ async def test_staleness_detection(async_client, test_user_token, test_project):
         "interfaces": "M",
         "technology": "M",
     }
-    await async_client.patch(f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers)
+    await async_client.patch(
+        f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers
+    )
 
     # Run S2
     s2_run = await async_client.post(
-        f"/api/v1/use-cases/{use_case_id}/s2/runs", json={"model": "claude-haiku-4-5"}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s2/runs",
+        json={"model": "claude-haiku-4-5"},
+        headers=headers,
     )
     if s2_run.status_code != 202:
         print(f"S2 run error: {s2_run.json()}")
@@ -225,14 +252,19 @@ async def test_staleness_detection(async_client, test_user_token, test_project):
 
     # Poll until S2 background task completes
     import asyncio
+
     for _ in range(30):
-        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        detail = await async_client.get(
+            f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers
+        )
         if detail.status_code == 200 and detail.json().get("status") == "complete":
             break
         await asyncio.sleep(0.1)
 
     # Check readiness — should be complete
-    readiness_1 = await async_client.get(f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers)
+    readiness_1 = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers
+    )
     status_1 = readiness_1.json()
     assert status_1["s2"] == "complete"
 
@@ -244,26 +276,34 @@ async def test_staleness_detection(async_client, test_user_token, test_project):
     )
 
     # Check readiness — should be stale
-    readiness_2 = await async_client.get(f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers)
+    readiness_2 = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers
+    )
     status_2 = readiness_2.json()
     assert status_2["s2"] == "stale"
 
     # Re-run S2
     s2_rerun = await async_client.post(
-        f"/api/v1/use-cases/{use_case_id}/s2/runs", json={"model": "claude-haiku-4-5"}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s2/runs",
+        json={"model": "claude-haiku-4-5"},
+        headers=headers,
     )
     assert s2_rerun.status_code in [200, 202]
     s2_rerun_id = s2_rerun.json()["run_id"]
 
     # Poll until re-run completes
     for _ in range(30):
-        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_rerun_id}", headers=headers)
+        detail = await async_client.get(
+            f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_rerun_id}", headers=headers
+        )
         if detail.status_code == 200 and detail.json().get("status") == "complete":
             break
         await asyncio.sleep(0.1)
 
     # Check readiness — should be complete again
-    readiness_3 = await async_client.get(f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers)
+    readiness_3 = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/readiness", headers=headers
+    )
     status_3 = readiness_3.json()
     assert status_3["s2"] == "complete"
 
@@ -297,19 +337,26 @@ async def test_load_from_independent_copy(async_client, test_user_token, test_pr
         "interfaces": "S",
         "technology": "S",
     }
-    await async_client.patch(f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers)
+    await async_client.patch(
+        f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers
+    )
 
     s2_run = await async_client.post(
-        f"/api/v1/use-cases/{use_case_id}/s2/runs", json={"model": "claude-haiku-4-5"}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s2/runs",
+        json={"model": "claude-haiku-4-5"},
+        headers=headers,
     )
     assert s2_run.status_code in [200, 202]
     s2_run_id = s2_run.json()["run_id"]
 
     # Poll until S2 background task completes
     import asyncio
+
     s2_detail = None
     for _ in range(30):
-        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        detail = await async_client.get(
+            f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers
+        )
         if detail.status_code == 200 and detail.json().get("status") == "complete":
             s2_detail = detail
             break
@@ -319,7 +366,9 @@ async def test_load_from_independent_copy(async_client, test_user_token, test_pr
 
     # Load into S3
     load_s3 = await async_client.post(
-        f"/api/v1/use-cases/{use_case_id}/s3/load-from-s2", json={"prefer_max": True}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s3/load-from-s2",
+        json={"prefer_max": True},
+        headers=headers,
     )
     s3_inputs_before = load_s3.json()["s3_inputs"]
     s3_complexity_before = s3_inputs_before["complexity_class"]
@@ -335,7 +384,9 @@ async def test_load_from_independent_copy(async_client, test_user_token, test_pr
     )
 
     # Re-fetch S2 run
-    s2_after = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+    s2_after = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers
+    )
     s2_complexity_after = s2_after.json()["result"]["scoring"]["complexity_class"]
 
     # Verify S2 result unchanged
@@ -355,7 +406,11 @@ async def test_run_history_all_stages(async_client, test_user_token, test_projec
     # Create use case
     uc_response = await async_client.post(
         "/api/v1/use-cases",
-        json={"project_id": test_project["id"], "name": "History Test", "description": "Testing run history"},
+        json={
+            "project_id": test_project["id"],
+            "name": "History Test",
+            "description": "Testing run history",
+        },
         headers=headers,
     )
     use_case_id = uc_response.json()["id"]
@@ -368,24 +423,33 @@ async def test_run_history_all_stages(async_client, test_user_token, test_projec
         "interfaces": "M",
         "technology": "M",
     }
-    await async_client.patch(f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers)
+    await async_client.patch(
+        f"/api/v1/use-cases/{use_case_id}/s2/inputs", json=s2_inputs, headers=headers
+    )
 
     s2_run = await async_client.post(
-        f"/api/v1/use-cases/{use_case_id}/s2/runs", json={"model": "claude-haiku-4-5"}, headers=headers
+        f"/api/v1/use-cases/{use_case_id}/s2/runs",
+        json={"model": "claude-haiku-4-5"},
+        headers=headers,
     )
     assert s2_run.status_code in [200, 202]
     s2_run_id = s2_run.json()["run_id"]
 
     # Poll until S2 background task completes before checking history
     import asyncio
+
     for _ in range(30):
-        detail = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+        detail = await async_client.get(
+            f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers
+        )
         if detail.status_code == 200 and detail.json().get("status") == "complete":
             break
         await asyncio.sleep(0.1)
 
     # Get run history via GET /{run_id}
-    s2_history = await async_client.get(f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers)
+    s2_history = await async_client.get(
+        f"/api/v1/use-cases/{use_case_id}/s2/runs/{s2_run_id}", headers=headers
+    )
     assert s2_history.status_code == 200
     s2_data = s2_history.json()
 

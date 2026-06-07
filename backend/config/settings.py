@@ -150,7 +150,10 @@ class Settings(BaseSettings):
     # Agent Architecture
     use_langgraph_complexity_agent: bool = Field(
         default=False,
-        description="Use LangGraph StateGraph agent for Stage 2 complexity assessment (default: False for legacy pipeline)",
+        description=(
+            "Use LangGraph StateGraph agent for Stage 2 complexity assessment "
+            "(default: False for legacy pipeline)"
+        ),
     )
 
     @model_validator(mode="after")

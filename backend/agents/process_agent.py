@@ -170,14 +170,14 @@ def validate_bands_node(state: ProcessState) -> ProcessState:
     Raises:
         AgentExecutionError: If validation fails after 2 retry attempts
     """
-    logger.info(
-        f"[process_agent] validate_bands_node retry_count={state.get('retry_count', 0)}"
-    )
+    logger.info(f"[process_agent] validate_bands_node retry_count={state.get('retry_count', 0)}")
 
     report = QualityEvaluator().evaluate_s2(state.get("bands") or {})
 
     if report.passed:
-        data = state["bands"]
+        data = state.get("bands")
+        if not data:
+            raise AgentExecutionError("Bands data is None after extraction")
         try:
             bands = AttributeBandsWithSource(
                 activities=data["activities"],
@@ -201,9 +201,7 @@ def validate_bands_node(state: ProcessState) -> ProcessState:
     retry_count = state.get("retry_count", 0)
     if retry_count >= 2:
         issues_str = "; ".join(report.issues)
-        logger.error(
-            f"[process_agent] Validation failed after {retry_count} retries: {issues_str}"
-        )
+        logger.error(f"[process_agent] Validation failed after {retry_count} retries: {issues_str}")
         raise AgentExecutionError(
             f"Band extraction failed after {retry_count} retries. Issues: {issues_str}"
         )
@@ -268,6 +266,8 @@ def validate_justification_node(state: ProcessState) -> ProcessState:
 
     for band_key, array_key in checks:
         band_value = bands.get(band_key)
+        if not band_value:
+            continue
         array_items = process_summary.get(array_key, [])
         array_count = len(array_items)
 
@@ -361,9 +361,7 @@ async def reflexion_correct_node(state: ProcessState) -> ProcessState:
     process_summary = state["process_summary"]
 
     # Build validation error details
-    validation_errors = "\n".join(
-        f"- {error}" for error in state.get("reflexion_errors", [])
-    )
+    validation_errors = "\n".join(f"- {error}" for error in state.get("reflexion_errors", []))
 
     # Build expected ranges for each band
     band_details = {}
@@ -375,6 +373,8 @@ async def reflexion_correct_node(state: ProcessState) -> ProcessState:
         ("technology", "key_additional_technologies"),
     ]:
         band_value = bands.get(band_key)
+        if not band_value:
+            continue
         array_count = len(process_summary.get(array_key, []))
         expected_range = BAND_RANGES.get(band_key, {}).get(band_value, "unknown")
 
@@ -484,9 +484,7 @@ async def extract_bands_from_text(
         LLMProviderError: If LLM call fails
         AgentExecutionError: If response cannot be parsed or validation fails after retries
     """
-    logger.info(
-        f"[process_agent] Starting extraction: {len(document_text)} chars, model={model}"
-    )
+    logger.info(f"[process_agent] Starting extraction: {len(document_text)} chars, model={model}")
 
     graph = _build_process_graph()
     initial_state: ProcessState = {

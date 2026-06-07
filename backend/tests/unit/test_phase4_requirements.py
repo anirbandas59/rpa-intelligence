@@ -42,7 +42,9 @@ def test_phase4_exit_condition():
     print(f"   Total: {result.total_weeks} weeks")
     print(f"   End date: {result.project_end_date}")
     for phase in result.phases:
-        print(f"   - {phase['name']}: {phase['weeks']}w ({phase['start_date']} to {phase['end_date']})")
+        print(
+            f"   - {phase['name']}: {phase['weeks']}w ({phase['start_date']} to {phase['end_date']})"
+        )
 
 
 if __name__ == "__main__":

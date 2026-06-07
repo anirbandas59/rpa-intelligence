@@ -5,7 +5,6 @@ library is available in the mamba environment but not in the project venv.
 This stub raises NotImplementedError to indicate the provider is not configured.
 """
 
-
 from pydantic import BaseModel
 
 from . import BaseLLMProvider, LLMResponse

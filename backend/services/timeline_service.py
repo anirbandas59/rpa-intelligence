@@ -137,7 +137,13 @@ def calculate_timeline(
             weeks = 1
         end = cursor + timedelta(weeks=weeks) - timedelta(days=1)
         phases.append(
-            Phase(name=name.capitalize(), start_date=cursor, end_date=end, weeks=weeks, is_delta=name in deltas)
+            Phase(
+                name=name.capitalize(),
+                start_date=cursor,
+                end_date=end,
+                weeks=weeks,
+                is_delta=name in deltas,
+            )
         )
         cursor = end + timedelta(days=1)
 

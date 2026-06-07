@@ -16,8 +16,10 @@ Key endpoints:
 Complexity flow:
 1. User provides input via document upload, pasted text, or manual bands
 2. User triggers run via POST /runs (timestamp-aware selection picks latest input)
-3. Backend runs document_agent (Haiku) → process_agent (extraction + reflexion) → complexity_agent (deterministic scoring)
-4. Result includes: band assignments, total_score (7-28), complexity_class (XS/S/M/L/XL), effort range
+3. Backend runs document_agent (Haiku) → process_agent (extraction + reflexion)
+   → complexity_agent (deterministic scoring)
+4. Result includes: band assignments, total_score (7-28),
+   complexity_class (XS/S/M/L/XL), effort range
 5. User can edit extracted bands via PATCH /inputs and re-run
 """
 
@@ -312,13 +314,15 @@ async def update_s2_inputs(
         updates["pasted_text"] = request.pasted_text
 
     # Add timestamp when any manual band is updated (used for input selection priority)
-    if any([
-        request.activities,
-        request.business_rules,
-        request.layouts,
-        request.interfaces,
-        request.technology,
-    ]):
+    if any(
+        [
+            request.activities,
+            request.business_rules,
+            request.layouts,
+            request.interfaces,
+            request.technology,
+        ]
+    ):
         updates["manual_bands_updated_at"] = datetime.utcnow().isoformat()
 
     use_case.s2_inputs = {**use_case.s2_inputs, **updates}

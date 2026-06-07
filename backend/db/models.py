@@ -43,6 +43,7 @@ class User(Base):
     LLM config, prompt variants, and user accounts). In dev mode (empty
     SECRET_KEY), authentication is bypassed and dev@localhost is auto-created.
     """
+
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -61,6 +62,7 @@ class Project(Base):
     Can override default weight matrix and phase configuration at project level.
     Cascade deletes all child use cases, stage runs, and configurations when deleted.
     """
+
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -85,6 +87,7 @@ class UseCase(Base):
     Staleness detection: hash(sN_inputs) != latest_run.inputs_hash triggers UI re-run prompt.
     Stages are independent - editing S2 inputs doesn't auto-trigger S1/S3/S4 re-runs.
     """
+
     __tablename__ = "use_cases"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -128,6 +131,7 @@ class StageRun(Base):
     at execution time. Lifecycle: running → complete/failed (S1/S2/S4 async via background
     tasks; S3 synchronous). Quality scores (0.0-1.0) measure LLM output validation pass rate.
     """
+
     __tablename__ = "stage_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -142,10 +146,16 @@ class StageRun(Base):
     prompt_variant_snapshot: Mapped[str | None] = mapped_column(String)  # Prompt version used
     triggered_by: Mapped[str | None] = mapped_column(String)  # User ID or "system"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    status: Mapped[str] = mapped_column(String, default="complete")  # "running" | "complete" | "failed"
+    status: Mapped[str] = mapped_column(
+        String, default="complete"
+    )  # "running" | "complete" | "failed"
     error_message: Mapped[str | None] = mapped_column(Text)  # Stack trace or error detail
-    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0.0-1.0 LLM validation score
-    retry_count: Mapped[int] = mapped_column(Integer, default=0)  # LLM retry attempts during execution
+    quality_score: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )  # 0.0-1.0 LLM validation score
+    retry_count: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # LLM retry attempts during execution
 
     # Relationships
     use_case: Mapped["UseCase"] = relationship(back_populates="stage_runs")
@@ -160,11 +170,14 @@ class WeightConfig(Base):
     S1 priority cutoff (QUICK_WIN≥75, STRATEGIC≥50, HOLD≥25). Only one active
     config per project; changing triggers re-scoring of affected use cases.
     """
+
     __tablename__ = "weight_configs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
     project_id: Mapped[str] = mapped_column(String, ForeignKey("projects.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(String, default="default")  # e.g., "Conservative", "Aggressive"
+    name: Mapped[str] = mapped_column(
+        String, default="default"
+    )  # e.g., "Conservative", "Aggressive"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # Only one active per project
     config: Mapped[dict] = mapped_column(JSON)  # Full 5×5 weight matrix override
     yes_threshold: Mapped[int] = mapped_column(Integer, default=50)  # S1 priority cutoff
@@ -180,6 +193,7 @@ class PhaseConfig(Base):
     SIT, UAT, Deploy) and sprint length for timeline calculations. One active
     config per project. Default sprint length is 2 weeks.
     """
+
     __tablename__ = "phase_configs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -198,10 +212,13 @@ class LLMConfig(Base):
     s4_decompose. Default: Haiku (fast) for S1/S2, Sonnet (quality) for S3/S4.
     Temperature default 0.3 for consistency. One active config per stage.
     """
+
     __tablename__ = "llm_configs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
-    stage: Mapped[str] = mapped_column(String)  # s1_scoring | s1_followup | s2_extract | s3_narrative | s4_decompose
+    stage: Mapped[str] = mapped_column(
+        String
+    )  # s1_scoring | s1_followup | s2_extract | s3_narrative | s4_decompose
     model: Mapped[str] = mapped_column(String)  # e.g., "claude-sonnet-4-5"
     temperature: Mapped[float] = mapped_column(Float, default=0.3)  # 0.0-1.0
     max_tokens: Mapped[int] = mapped_column(Integer, default=1000)  # Output limit
@@ -218,6 +235,7 @@ class PromptVariant(Base):
     One active variant per stage; when inactive, uses prompts/ files. Enables
     non-developer prompt refinement with version history and attribution.
     """
+
     __tablename__ = "prompt_variants"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -237,6 +255,7 @@ class UploadedFile(Base):
     re-extraction, audit trail, and cleanup. File types: pdf, docx, txt.
     Actual file content stored on disk, only metadata in database.
     """
+
     __tablename__ = "uploaded_files"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -259,12 +278,15 @@ class AgentMemory(Base):
     (intermediate results), correction (user feedback). Keywords enable
     similarity search to retrieve relevant context for future runs.
     """
+
     __tablename__ = "agent_memories"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
     use_case_id: Mapped[str] = mapped_column(String, ForeignKey("use_cases.id", ondelete="CASCADE"))
     project_id: Mapped[str] = mapped_column(String, ForeignKey("projects.id", ondelete="CASCADE"))
-    memory_type: Mapped[str] = mapped_column(String)  # assessment_result | extraction_outcome | correction
+    memory_type: Mapped[str] = mapped_column(
+        String
+    )  # assessment_result | extraction_outcome | correction
     stage: Mapped[str] = mapped_column(String)  # s1 | s2 | s3 | s4
     content: Mapped[dict] = mapped_column(JSON)  # Structured memory content
     keywords: Mapped[str] = mapped_column(String, default="")  # Space-separated for search
@@ -279,6 +301,7 @@ class AgentSession(Base):
     with checkpoints. Modes: autonomous (no stops) | supervised (review
     each stage). Status: running | needs_input | complete | failed.
     """
+
     __tablename__ = "agent_sessions"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
@@ -286,9 +309,13 @@ class AgentSession(Base):
     goal: Mapped[str] = mapped_column(String)  # e.g., "Complete full assessment"
     mode: Mapped[str] = mapped_column(String, default="autonomous")  # autonomous | supervised
     plan: Mapped[dict] = mapped_column(JSON, default=dict)  # Execution roadmap
-    status: Mapped[str] = mapped_column(String, default="running")  # running | complete | needs_input | failed
+    status: Mapped[str] = mapped_column(
+        String, default="running"
+    )  # running | complete | needs_input | failed
     current_step: Mapped[int] = mapped_column(Integer, default=0)  # Step index in plan
     completed_stages: Mapped[dict] = mapped_column(JSON, default=dict)  # Progress tracking
-    pending_clarification: Mapped[str | None] = mapped_column(Text, nullable=True)  # Question for user
+    pending_clarification: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # Question for user
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

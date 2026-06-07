@@ -1,6 +1,5 @@
 """Ollama provider implementation using HTTP (no SDK)."""
 
-
 import httpx
 from pydantic import BaseModel
 

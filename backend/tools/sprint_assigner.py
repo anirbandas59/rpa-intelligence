@@ -51,7 +51,9 @@ def topological_sort(features: list[Feature]) -> list[Feature]:
     for feature in features:
         for dep in feature.dependencies:
             if dep not in feature_map:
-                raise ScoringValidationError(f"Feature '{feature.name}' depends on unknown feature '{dep}'")
+                raise ScoringValidationError(
+                    f"Feature '{feature.name}' depends on unknown feature '{dep}'"
+                )
             adj_list[dep].append(feature.name)
             in_degree[feature.name] += 1
 
@@ -74,7 +76,9 @@ def topological_sort(features: list[Feature]) -> list[Feature]:
     return [feature_map[name] for name in sorted_names]
 
 
-def assign_sprints(features: list[Feature], sprint_count: int, sprint_capacity: int = 8) -> SprintAssignmentResult:
+def assign_sprints(
+    features: list[Feature], sprint_count: int, sprint_capacity: int = 8
+) -> SprintAssignmentResult:
     """
     Deterministic bin-packing with dependency ordering.
 
@@ -168,5 +172,8 @@ def assign_sprints(features: list[Feature], sprint_count: int, sprint_capacity: 
     )
 
     return SprintAssignmentResult(
-        sprint_plans=sprint_plans, sprint_summaries=sprint_summaries, total_points=total_points, warnings=warnings
+        sprint_plans=sprint_plans,
+        sprint_summaries=sprint_summaries,
+        total_points=total_points,
+        warnings=warnings,
     )

@@ -83,14 +83,13 @@ async def get_current_user(
     # DEV MODE: Bypass auth if in development and no SECRET_KEY configured
     if settings.environment == "development" and not settings.secret_key:
         # Look up or create default dev user for local development
-        result = await db.execute(
-            select(User).where(User.email == "dev@localhost")
-        )
+        result = await db.execute(select(User).where(User.email == "dev@localhost"))
         dev_user = result.scalar_one_or_none()
 
         if not dev_user:
             # Auto-create dev user with superuser role for full access
             from auth import hash_password
+
             dev_user = User(
                 email="dev@localhost",
                 hashed_password=hash_password("dev"),
@@ -150,8 +149,5 @@ async def require_superuser(user: User = Depends(get_current_user)) -> User:
         HTTPException: 403 if user is not a superuser
     """
     if user.role != "superuser":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superuser required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superuser required")
     return user

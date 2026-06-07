@@ -60,7 +60,11 @@ async def test_load_from_creates_independent_copy(test_db_session, test_user, te
     This tests the core requirement: editing target does not modify source.
     """
     # Create use case
-    use_case = UseCase(project_id=test_project["id"], name="Independence Test", description="Testing copy semantics")
+    use_case = UseCase(
+        project_id=test_project["id"],
+        name="Independence Test",
+        description="Testing copy semantics",
+    )
     test_db_session.add(use_case)
     await test_db_session.commit()
     await test_db_session.refresh(use_case)
@@ -140,7 +144,9 @@ async def test_inputs_snapshot_immutability(test_db_session, test_user, test_pro
     Verify that StageRun.inputs_snapshot remains immutable after creation.
     """
     use_case = UseCase(
-        project_id=test_project["id"], name="Immutability Test", description="Testing snapshot immutability"
+        project_id=test_project["id"],
+        name="Immutability Test",
+        description="Testing snapshot immutability",
     )
     test_db_session.add(use_case)
     await test_db_session.commit()
@@ -195,7 +201,9 @@ async def test_source_tags_preserved(test_db_session, test_user, test_project):
     Verify that _source tags are correctly preserved during load-from operations.
     """
     use_case = UseCase(
-        project_id=test_project["id"], name="Source Tag Test", description="Testing source tag preservation"
+        project_id=test_project["id"],
+        name="Source Tag Test",
+        description="Testing source tag preservation",
     )
     test_db_session.add(use_case)
     await test_db_session.commit()

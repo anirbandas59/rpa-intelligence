@@ -185,11 +185,8 @@ def validate_attribute_score(score: AttributeScore) -> None:
 
     if not isinstance(score.selected_tier, ComplexityTier):
         raise ScoringValidationError(
-            f"Invalid selected_tier in score: {score.selected_tier}. "
-            f"Must be a ComplexityTier.",
+            f"Invalid selected_tier in score: {score.selected_tier}. Must be a ComplexityTier.",
             context={"attribute_id": score.attribute_id, "tier": score.selected_tier},
         )
 
-    logger.info(
-        f"Validated AttributeScore #{score.attribute_id} ({score.attribute_name})"
-    )
+    logger.info(f"Validated AttributeScore #{score.attribute_id} ({score.attribute_name})")

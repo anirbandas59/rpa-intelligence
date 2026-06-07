@@ -39,15 +39,11 @@ class ReasoningResponse(BaseModel):
     """Response from the LLM containing reasoning narrative."""
 
     reasoning: str = Field(..., description="Professional explanation of tier")
-    key_drivers: list[str] = Field(
-        default_factory=list, description="Main complexity drivers"
-    )
+    key_drivers: list[str] = Field(default_factory=list, description="Main complexity drivers")
     simplification_opportunities: list[str] = Field(
         default_factory=list, description="Ways to reduce complexity"
     )
-    tech_lead_note: str = Field(
-        default="", description="Note for Tech Lead review if needed"
-    )
+    tech_lead_note: str = Field(default="", description="Note for Tech Lead review if needed")
 
     @field_validator("reasoning")
     @classmethod
@@ -244,9 +240,7 @@ def generate_reasoning(
             logger.info(f"[{session_id}] Fallback reasoning succeeded")
             return fallback_result
         except LLMProviderError as fallback_error:
-            logger.warning(
-                f"[{session_id}] Fallback LLM attempt also failed: {fallback_error}"
-            )
+            logger.warning(f"[{session_id}] Fallback LLM attempt also failed: {fallback_error}")
 
             # Step 6: Return hardcoded fallback
             return ReasoningResponse(
@@ -305,9 +299,7 @@ def classify_and_explain(
     confidence = get_confidence_score(total_score, tier)
 
     # Step 4: Check Tech Lead review
-    requires_review = _check_requires_tech_lead_review(
-        attribute_scores, tier, total_score
-    )
+    requires_review = _check_requires_tech_lead_review(attribute_scores, tier, total_score)
 
     # Step 5: Generate reasoning narrative
     reasoning_response = generate_reasoning(
@@ -324,9 +316,7 @@ def classify_and_explain(
     # Step 6: Append Tech Lead note if present
     full_reasoning = reasoning_response.reasoning
     if reasoning_response.tech_lead_note:
-        full_reasoning = (
-            f"{full_reasoning}\n\nTech Lead Note: {reasoning_response.tech_lead_note}"
-        )
+        full_reasoning = f"{full_reasoning}\n\nTech Lead Note: {reasoning_response.tech_lead_note}"
 
     # Step 7: Build and return AssessmentResult
     result = AssessmentResult(

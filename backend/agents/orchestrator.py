@@ -197,7 +197,9 @@ def _select_latest_input(
         candidates.append(("manual", ts, None, manual_bands))
 
     if not candidates:
-        raise AgentExecutionError("No input provided: must supply document, pasted text, or manual bands")
+        raise AgentExecutionError(
+            "No input provided: must supply document, pasted text, or manual bands"
+        )
 
     # Sort by timestamp descending, take most recent
     candidates.sort(key=lambda x: x[1], reverse=True)
@@ -284,7 +286,9 @@ async def run_s2_assessment(
         process_summary = getattr(bands_with_source, "_process_summary", None)
 
     else:
-        raise AgentExecutionError("No input provided: must supply document_path, pasted_text, or manual_bands")
+        raise AgentExecutionError(
+            "No input provided: must supply document_path, pasted_text, or manual_bands"
+        )
 
     # Convert to AttributeBands for scoring (drop source tags)
     bands = AttributeBands(
@@ -305,16 +309,48 @@ async def run_s2_assessment(
 
         # Map bands to raw_attributes (band → midpoint of range)
         band_to_raw_map = {
-            "XS": {"activities": 5, "business_rules": 0, "layouts": 0, "interfaces": 1, "technology": 0},
-            "S": {"activities": 5, "business_rules": 1, "layouts": 1, "interfaces": 2, "technology": 0},
-            "M": {"activities": 15, "business_rules": 2, "layouts": 2, "interfaces": 3, "technology": 1},
-            "L": {"activities": 30, "business_rules": 3, "layouts": 5, "interfaces": 5, "technology": 2},
-            "XL": {"activities": 45, "business_rules": 5, "layouts": 7, "interfaces": 7, "technology": 4},
+            "XS": {
+                "activities": 5,
+                "business_rules": 0,
+                "layouts": 0,
+                "interfaces": 1,
+                "technology": 0,
+            },
+            "S": {
+                "activities": 5,
+                "business_rules": 1,
+                "layouts": 1,
+                "interfaces": 2,
+                "technology": 0,
+            },
+            "M": {
+                "activities": 15,
+                "business_rules": 2,
+                "layouts": 2,
+                "interfaces": 3,
+                "technology": 1,
+            },
+            "L": {
+                "activities": 30,
+                "business_rules": 3,
+                "layouts": 5,
+                "interfaces": 5,
+                "technology": 2,
+            },
+            "XL": {
+                "activities": 45,
+                "business_rules": 5,
+                "layouts": 7,
+                "interfaces": 7,
+                "technology": 4,
+            },
         }
 
         raw_attributes = {
             "activities": band_to_raw_map.get(bands.activities, {}).get("activities", 0),
-            "business_rules": band_to_raw_map.get(bands.business_rules, {}).get("business_rules", 0),
+            "business_rules": band_to_raw_map.get(bands.business_rules, {}).get(
+                "business_rules", 0
+            ),
             "layouts": band_to_raw_map.get(bands.layouts, {}).get("layouts", 0),
             "interfaces": band_to_raw_map.get(bands.interfaces, {}).get("interfaces", 0),
             "technology": band_to_raw_map.get(bands.technology, {}).get("technology", 0),
@@ -363,7 +399,9 @@ async def run_s2_assessment(
             "process_summary": process_summary,  # NEW: include validated process summary
         }
 
-    logger.info(f"S2 assessment complete: {scoring_result.complexity_class} class, {scoring_result.total_score} score")
+    logger.info(
+        f"S2 assessment complete: {scoring_result.complexity_class} class, {scoring_result.total_score} score"
+    )
 
     return result_data
 
@@ -408,7 +446,9 @@ async def create_s2_run(
     await session.commit()
     await session.refresh(stage_run)
 
-    logger.info(f"Created S2 StageRun {stage_run.id} (run #{run_number}) for use_case {use_case_id}")
+    logger.info(
+        f"Created S2 StageRun {stage_run.id} (run #{run_number}) for use_case {use_case_id}"
+    )
     return stage_run
 
 

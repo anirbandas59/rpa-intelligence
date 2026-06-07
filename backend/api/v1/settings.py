@@ -36,7 +36,9 @@ class LLMConfigResponse(BaseModel):
 class LLMConfigUpdate(BaseModel):
     """Request to update LLM config for a stage."""
 
-    stage: str = Field(..., pattern="^(s1_scoring|s1_followup|s2_extract|s3_narrative|s4_decompose)$")
+    stage: str = Field(
+        ..., pattern="^(s1_scoring|s1_followup|s2_extract|s3_narrative|s4_decompose)$"
+    )
     model: str = Field(..., pattern="^claude-(haiku|sonnet|opus)-4")
     temperature: float = Field(0.3, ge=0.0, le=1.0)
     max_tokens: int = Field(1000, ge=100, le=4000)
@@ -48,7 +50,9 @@ async def list_llm_configs(
     user: User = Depends(require_superuser),
 ):
     """List all active LLM configurations."""
-    result = await db.execute(select(LLMConfig).where(LLMConfig.is_active).order_by(LLMConfig.stage))
+    result = await db.execute(
+        select(LLMConfig).where(LLMConfig.is_active).order_by(LLMConfig.stage)
+    )
     configs = result.scalars().all()
 
     return {
@@ -75,7 +79,9 @@ async def update_llm_config(
 ):
     """Update LLM config for a stage. Creates if doesn't exist."""
     # Check if config exists for this stage
-    result = await db.execute(select(LLMConfig).where(LLMConfig.stage == update_req.stage, LLMConfig.is_active))
+    result = await db.execute(
+        select(LLMConfig).where(LLMConfig.stage == update_req.stage, LLMConfig.is_active)
+    )
     config = result.scalar_one_or_none()
 
     if config:
@@ -126,7 +132,9 @@ class PromptVariantResponse(BaseModel):
 class PromptVariantCreate(BaseModel):
     """Request to create a new prompt variant."""
 
-    stage: str = Field(..., pattern="^(s1_scoring|s1_followup|s2_extract|s3_narrative|s4_decompose)$")
+    stage: str = Field(
+        ..., pattern="^(s1_scoring|s1_followup|s2_extract|s3_narrative|s4_decompose)$"
+    )
     name: str = Field(..., min_length=1, max_length=100)
     content: dict = Field(..., description="JSON dict with 'system' and 'user' keys")
 
@@ -143,7 +151,9 @@ async def list_prompt_variants(
     user: User = Depends(require_superuser),
 ):
     """List all prompt variants."""
-    result = await db.execute(select(PromptVariant).order_by(PromptVariant.stage, PromptVariant.created_at.desc()))
+    result = await db.execute(
+        select(PromptVariant).order_by(PromptVariant.stage, PromptVariant.created_at.desc())
+    )
     variants = result.scalars().all()
 
     return {
@@ -235,7 +245,9 @@ async def activate_prompt_variant(
         raise HTTPException(status_code=404, detail="Prompt variant not found")
 
     # Deactivate all other variants for this stage
-    await db.execute(update(PromptVariant).where(PromptVariant.stage == variant.stage).values(is_active=False))
+    await db.execute(
+        update(PromptVariant).where(PromptVariant.stage == variant.stage).values(is_active=False)
+    )
 
     # Activate this variant
     variant.is_active = True

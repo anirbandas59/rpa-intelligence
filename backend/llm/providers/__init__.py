@@ -10,7 +10,7 @@ Agents and tools MUST ONLY import from llm.manager, never directly from SDK modu
 import asyncio
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Type
+from typing import Any
 
 from pydantic import BaseModel, computed_field
 

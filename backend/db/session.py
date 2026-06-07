@@ -12,7 +12,9 @@ from config import get_settings
 class Base(DeclarativeBase):
     pass
 
+
 _engine: AsyncEngine | None = None
+
 
 def get_engine() -> AsyncEngine:
     global _engine
@@ -25,6 +27,7 @@ def get_engine() -> AsyncEngine:
             pool_pre_ping=True,
         )
     return _engine
+
 
 def get_session_factory(engine: AsyncEngine | None = None):
     if engine is None:

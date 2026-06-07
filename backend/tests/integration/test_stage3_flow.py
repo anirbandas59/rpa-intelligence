@@ -85,9 +85,7 @@ async def test_use_case(db_session, test_project):
                 "effort_max_weeks": 8,
                 "total_score": 21,
             },
-            "process_summary": {
-                "key_activities": ["activity 1"]
-            }
+            "process_summary": {"key_activities": ["activity 1"]},
         },
         status="complete",
     )

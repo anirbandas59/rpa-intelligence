@@ -1,6 +1,5 @@
 """OpenAI provider implementation using the openai SDK."""
 
-
 import openai
 from pydantic import BaseModel
 

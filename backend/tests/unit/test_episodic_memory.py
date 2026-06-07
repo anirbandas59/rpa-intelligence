@@ -1,4 +1,5 @@
 """Unit tests for EpisodicMemory class."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -78,11 +79,7 @@ async def test_retrieve_similar_with_results(mock_db_session):
 
     mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-    result = await mem.retrieve_similar(
-        query_keywords=["test", "assessment"],
-        stage="s1",
-        limit=5
-    )
+    result = await mem.retrieve_similar(query_keywords=["test", "assessment"], stage="s1", limit=5)
 
     assert len(result) == 2
     assert result[0].id == "mem-1"

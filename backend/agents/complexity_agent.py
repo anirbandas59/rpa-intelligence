@@ -1,6 +1,7 @@
 """
 Complexity agent — deterministic scoring pipeline.
-Calls four tools in sequence: attribute_scorer → weighted_calculator → classifier_tool → effort_table_tool.
+Calls four tools in sequence:
+attribute_scorer → weighted_calculator → classifier_tool → effort_table_tool.
 Zero LLM calls.
 """
 

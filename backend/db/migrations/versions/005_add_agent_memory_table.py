@@ -4,6 +4,7 @@ Revision ID: 005_agent_memory
 Revises: 004_quality_columns
 Create Date: 2026-06-01
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.sqlite import JSON
@@ -18,8 +19,18 @@ def upgrade() -> None:
     op.create_table(
         "agent_memories",
         sa.Column("id", sa.String(), primary_key=True),
-        sa.Column("use_case_id", sa.String(), sa.ForeignKey("use_cases.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("project_id", sa.String(), sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "use_case_id",
+            sa.String(),
+            sa.ForeignKey("use_cases.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "project_id",
+            sa.String(),
+            sa.ForeignKey("projects.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("memory_type", sa.String(), nullable=False),
         sa.Column("stage", sa.String(), nullable=False),
         sa.Column("content", JSON(), nullable=False),

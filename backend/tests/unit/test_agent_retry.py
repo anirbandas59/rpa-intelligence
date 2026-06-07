@@ -277,9 +277,7 @@ class TestProcessAgentGraph:
     async def test_retry_count_increments_on_invalid_response(self) -> None:
         """When first response is invalid, retries once and succeeds."""
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(
-            side_effect=[INVALID_BANDS_JSON, VALID_BANDS_JSON]
-        )
+        mock_manager.complete_async = AsyncMock(side_effect=[INVALID_BANDS_JSON, VALID_BANDS_JSON])
 
         with patch("agents.process_agent.get_default_manager", return_value=mock_manager):
             result = await pa.extract_bands_from_text("Some document text.")
@@ -291,9 +289,7 @@ class TestProcessAgentGraph:
     async def test_retry_hint_appears_in_second_prompt(self) -> None:
         """The second LLM call must include the retry hint from QualityEvaluator."""
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(
-            side_effect=[INVALID_BANDS_JSON, VALID_BANDS_JSON]
-        )
+        mock_manager.complete_async = AsyncMock(side_effect=[INVALID_BANDS_JSON, VALID_BANDS_JSON])
 
         with patch("agents.process_agent.get_default_manager", return_value=mock_manager):
             await pa.extract_bands_from_text("Some document text.")
@@ -323,18 +319,16 @@ class TestProcessAgentGraph:
 # tracker_agent — node-level unit tests
 # ──────────────────────────────────────────────
 
-VALID_WBS_JSON = json.dumps({
-    "wbs_rows": [
-        {"feature": "F1", "hours": 100.0, "priority": "MUST"},
-        {"feature": "F2", "hours": 100.0, "priority": "SHOULD"}
-    ]
-})
+VALID_WBS_JSON = json.dumps(
+    {
+        "wbs_rows": [
+            {"feature": "F1", "hours": 100.0, "priority": "MUST"},
+            {"feature": "F2", "hours": 100.0, "priority": "SHOULD"},
+        ]
+    }
+)
 
-INVALID_WBS_JSON = json.dumps({
-    "wbs_rows": [
-        {"feature": "F1", "hours": 50.0, "priority": "MUST"}
-    ]
-})
+INVALID_WBS_JSON = json.dumps({"wbs_rows": [{"feature": "F1", "hours": 50.0, "priority": "MUST"}]})
 
 
 class TestTrackerAgentNodes:
@@ -487,6 +481,7 @@ class TestTrackerAgentNodes:
 # tracker_agent — full graph integration
 # ──────────────────────────────────────────────
 
+
 class TestTrackerAgentGraph:
     @pytest.mark.asyncio
     async def test_valid_wbs_no_retry(self) -> None:
@@ -516,9 +511,7 @@ class TestTrackerAgentGraph:
     async def test_retry_count_increments_on_invalid_wbs(self) -> None:
         """When first LLM response has invalid WBS, retry fires and second succeeds."""
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(
-            side_effect=[INVALID_WBS_JSON, VALID_WBS_JSON]
-        )
+        mock_manager.complete_async = AsyncMock(side_effect=[INVALID_WBS_JSON, VALID_WBS_JSON])
 
         with (
             patch("agents.tracker_agent.get_default_manager", return_value=mock_manager),
@@ -541,9 +534,7 @@ class TestTrackerAgentGraph:
     async def test_retry_hint_appears_in_second_group_prompt(self) -> None:
         """The second grouping call must contain the retry hint."""
         mock_manager = MagicMock()
-        mock_manager.complete_async = AsyncMock(
-            side_effect=[INVALID_WBS_JSON, VALID_WBS_JSON]
-        )
+        mock_manager.complete_async = AsyncMock(side_effect=[INVALID_WBS_JSON, VALID_WBS_JSON])
 
         with (
             patch("agents.tracker_agent.get_default_manager", return_value=mock_manager),

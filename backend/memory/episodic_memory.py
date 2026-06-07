@@ -26,6 +26,7 @@ Usage:
     await memory.store(use_case_id, project_id, "s1", "assessment", result_dict, ["invoice", "automation"])
     similar = await memory.retrieve_similar(["invoice", "sap"], stage="s1", limit=3)
 """
+
 import logging
 from datetime import datetime
 
@@ -87,7 +88,9 @@ class EpisodicMemory:
         self.db.add(memory)
         await self.db.commit()
         await self.db.refresh(memory)
-        logger.info(f"[memory] Stored {memory_type} memory for use_case={use_case_id} stage={stage}")
+        logger.info(
+            f"[memory] Stored {memory_type} memory for use_case={use_case_id} stage={stage}"
+        )
         return memory
 
     async def retrieve_similar(
@@ -119,10 +122,7 @@ class EpisodicMemory:
         if not query_keywords:
             return []
 
-        conditions = [
-            AgentMemory.keywords.ilike(f"%{kw}%")
-            for kw in query_keywords[:5]
-        ]
+        conditions = [AgentMemory.keywords.ilike(f"%{kw}%") for kw in query_keywords[:5]]
         query = select(AgentMemory).where(or_(*conditions))
 
         if stage:
@@ -148,9 +148,7 @@ class EpisodicMemory:
 
     async def delete(self, memory_id: str) -> bool:
         """Delete a specific memory by ID. Returns True if found and deleted."""
-        result = await self.db.execute(
-            select(AgentMemory).where(AgentMemory.id == memory_id)
-        )
+        result = await self.db.execute(select(AgentMemory).where(AgentMemory.id == memory_id))
         memory = result.scalar_one_or_none()
         if not memory:
             return False

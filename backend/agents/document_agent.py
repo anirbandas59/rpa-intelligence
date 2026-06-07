@@ -61,12 +61,14 @@ def extract_text_from_pdf(file_path: str) -> str:
     try:
         doc = fitz.open(file_path)
         if doc.is_encrypted:
-            raise DocumentProcessingError("PDF is encrypted. Please provide an unencrypted version.")
+            raise DocumentProcessingError(
+                "PDF is encrypted. Please provide an unencrypted version."
+            )
 
         pages = []
         for page in doc:
             text = page.get_text()
-            if text.strip():
+            if isinstance(text, str) and text.strip():
                 pages.append(text)
 
         doc.close()
@@ -105,7 +107,9 @@ def process_document(file_path: str) -> str:
     elif suffix == ".pdf":
         text = extract_text_from_pdf(file_path)
     else:
-        raise DocumentProcessingError(f"Unsupported file type: {suffix}. Only .docx and .pdf are supported.")
+        raise DocumentProcessingError(
+            f"Unsupported file type: {suffix}. Only .docx and .pdf are supported."
+        )
 
     if not text.strip():
         raise DocumentProcessingError("Extracted text is empty. Please check the document content.")

@@ -126,10 +126,7 @@ def test_column_mapping_validation():
 
     # Valid mapping with all fields
     mapping2 = ColumnMapping(
-        name="name",
-        description="desc",
-        source_platform="platform",
-        install_status="status"
+        name="name", description="desc", source_platform="platform", install_status="status"
     )
     assert mapping2.name == "name"
     assert mapping2.description == "desc"
@@ -163,7 +160,7 @@ def test_bulk_upload_response_model():
             {"name": "Process A", "description": "Desc A"},
             {"name": "Process B", "description": "Desc B"},
         ],
-        row_count=10
+        row_count=10,
     )
 
     assert response.columns == ["name", "description"]
@@ -175,10 +172,7 @@ def test_bulk_confirm_response_model():
     """Test BulkConfirmResponse Pydantic model."""
     from api.v1.projects import BulkConfirmResponse
 
-    response = BulkConfirmResponse(
-        created=5,
-        use_case_ids=["id1", "id2", "id3", "id4", "id5"]
-    )
+    response = BulkConfirmResponse(created=5, use_case_ids=["id1", "id2", "id3", "id4", "id5"])
 
     assert response.created == 5
     assert len(response.use_case_ids) == 5

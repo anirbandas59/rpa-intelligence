@@ -21,6 +21,7 @@ Checkpoint lifecycle:
 2. If agent interrupted (server restart, error), state persists in checkpoints.db
 3. Next run can resume from last checkpoint via thread_id lookup
 """
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -53,20 +54,26 @@ async def get_checkpointer():
             from pathlib import Path
 
             from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
             checkpoint_db = str(Path(__file__).parent.parent / "checkpoints.db")
             _checkpointer = AsyncSqliteSaver.from_conn_string(checkpoint_db)
-            logger.info(f"LangGraph checkpointer initialized with AsyncSqliteSaver at {checkpoint_db}")
+            logger.info(
+                f"LangGraph checkpointer initialized with AsyncSqliteSaver at {checkpoint_db}"
+            )
         except ImportError:
             # Fall back to in-memory MemorySaver
             try:
                 from langgraph.checkpoint.memory import MemorySaver
+
                 _checkpointer = MemorySaver()
                 logger.warning(
                     "AsyncSqliteSaver not available, using in-memory MemorySaver. "
                     "State will not persist across server restarts."
                 )
             except ImportError:
-                logger.error("No checkpointer available. Install langgraph[sqlite] or use MemorySaver.")
+                logger.error(
+                    "No checkpointer available. Install langgraph[sqlite] or use MemorySaver."
+                )
                 raise
 
     return _checkpointer

@@ -29,7 +29,13 @@ def classify_complexity(total_score: int, bands: AttributeBands) -> Classificati
         ClassificationResult with complexity_class
     """
     # XS special case: max 2 attributes selected, all in XS column
-    all_bands = [bands.activities, bands.business_rules, bands.layouts, bands.interfaces, bands.technology]
+    all_bands = [
+        bands.activities,
+        bands.business_rules,
+        bands.layouts,
+        bands.interfaces,
+        bands.technology,
+    ]
     xs_count = sum(1 for b in all_bands if b == "XS")
     non_xs_count = len(all_bands) - xs_count
 

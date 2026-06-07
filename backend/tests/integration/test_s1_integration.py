@@ -79,7 +79,9 @@ async def test_assessment_service_creates_stage_run(test_db):
 
     service = AssessmentService(session, model="claude-haiku-4-5")
 
-    with patch.object(service.llm, "complete_async", new_callable=AsyncMock, return_value=mock_response):
+    with patch.object(
+        service.llm, "complete_async", new_callable=AsyncMock, return_value=mock_response
+    ):
         stage_run = await service.run_assessment(use_case.id)
 
     # Verify StageRun was created
@@ -136,7 +138,9 @@ Hope this helps!"""
 
     service = AssessmentService(session, model="claude-haiku-4-5")
 
-    with patch.object(service.llm, "complete_async", new_callable=AsyncMock, return_value=mock_response):
+    with patch.object(
+        service.llm, "complete_async", new_callable=AsyncMock, return_value=mock_response
+    ):
         stage_run = await service.run_assessment(use_case.id)
 
     # Should still parse successfully

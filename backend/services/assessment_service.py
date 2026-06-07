@@ -161,6 +161,7 @@ class AssessmentService:
         """
         try:
             from memory.episodic_memory import EpisodicMemory
+
             keywords = [w for w in name.lower().split() if len(w) > 3][:4]
             if not keywords:
                 return ""
@@ -208,7 +209,9 @@ class AssessmentService:
             parsed = self._parse_json_response(raw_response)
             result = self._safe_defaults(parsed)
 
-            logger.info(f"Scored use-case: {use_case_data.get('name')} → {result['migration_decision']}")
+            logger.info(
+                f"Scored use-case: {use_case_data.get('name')} → {result['migration_decision']}"
+            )
             return result
 
         except Exception as e:
@@ -278,6 +281,7 @@ class AssessmentService:
             # Write episodic memory
             try:
                 from memory.episodic_memory import EpisodicMemory
+
                 mem = EpisodicMemory(self.db)
                 name_words = (use_case.name or "").lower().split()[:5]
                 await mem.store(
@@ -318,7 +322,9 @@ class AssessmentService:
         if not use_case or not use_case.s1_latest_run_id:
             return []
 
-        run_result = await self.db.execute(select(StageRun).where(StageRun.id == use_case.s1_latest_run_id))
+        run_result = await self.db.execute(
+            select(StageRun).where(StageRun.id == use_case.s1_latest_run_id)
+        )
         stage_run = run_result.scalar_one_or_none()
 
         if not stage_run:
