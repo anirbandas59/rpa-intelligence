@@ -1,3 +1,20 @@
+"""
+FastAPI dependency injection functions for authentication and database access.
+
+Provides injectable dependencies for route handlers using FastAPI's Depends
+pattern. Handles database session management, JWT authentication, and role-based
+access control. Supports development mode bypass for easier local testing.
+
+Key dependencies:
+- get_db: Provides async database session with automatic cleanup
+- get_current_user: Extracts and validates JWT token, returns authenticated User
+- require_superuser: Enforces superuser role for privileged operations
+
+Authentication modes:
+- Production: JWT Bearer token required (SECRET_KEY set)
+- Development: Auth bypass with auto-created dev@localhost superuser (no SECRET_KEY)
+"""
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -8,15 +25,34 @@ from config.settings import get_settings
 from db.models import User
 from db.session import get_session_factory
 
-security = HTTPBearer(auto_error=False)  # auto_error=False allows optional auth
+# HTTPBearer security scheme with auto_error=False to allow optional auth
+security = HTTPBearer(auto_error=False)
 
 
 async def get_session_maker() -> async_sessionmaker[AsyncSession]:
-    """Injectable factory so background tasks can be overridden in tests."""
+    """
+    Get async session factory for creating database sessions.
+
+    Injectable factory that allows overriding in tests. Used by background
+    tasks that need to create their own sessions outside request context.
+
+    Returns:
+        Async session maker factory
+    """
     return get_session_factory()
 
 
 async def get_db() -> AsyncSession:
+    """
+    Dependency that provides async database session with automatic cleanup.
+
+    Creates a new database session for each request and automatically closes
+    it when the request completes (via yield). Handles transaction rollback
+    on errors. Use via FastAPI Depends(get_db).
+
+    Yields:
+        Async database session for the request
+    """
     factory = get_session_factory()
     async with factory() as session:
         yield session
@@ -46,19 +82,19 @@ async def get_current_user(
 
     # DEV MODE: Bypass auth if in development and no SECRET_KEY configured
     if settings.environment == "development" and not settings.secret_key:
-        # Return or create a default dev user
+        # Look up or create default dev user for local development
         result = await db.execute(
             select(User).where(User.email == "dev@localhost")
         )
         dev_user = result.scalar_one_or_none()
 
         if not dev_user:
-            # Create default dev user
+            # Auto-create dev user with superuser role for full access
             from auth import hash_password
             dev_user = User(
                 email="dev@localhost",
                 hashed_password=hash_password("dev"),
-                role="superuser",  # Give superuser role for full access in dev
+                role="superuser",
                 is_active=True,
             )
             db.add(dev_user)
@@ -75,6 +111,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Extract and decode JWT token
     token = credentials.credentials
     payload = decode_token(token)
     if payload is None:
@@ -84,6 +121,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Look up user from token subject (user ID)
     result = await db.execute(select(User).where(User.id == payload["sub"]))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
@@ -96,6 +134,24 @@ async def get_current_user(
 
 
 async def require_superuser(user: User = Depends(get_current_user)) -> User:
+    """
+    Dependency that enforces superuser role for privileged operations.
+
+    Chains with get_current_user to first authenticate, then verify superuser
+    role. Use on routes that manage LLM config, prompt variants, or users.
+
+    Args:
+        user: Authenticated user from get_current_user dependency
+
+    Returns:
+        User object if superuser
+
+    Raises:
+        HTTPException: 403 if user is not a superuser
+    """
     if user.role != "superuser":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superuser required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superuser required"
+        )
     return user
