@@ -1,6 +1,30 @@
 """
-Episodic memory for agents — stores and retrieves past stage outcomes.
-Uses keyword-based SQL similarity (no vector DB required).
+Episodic memory for agent learning from past stage outcomes.
+
+Provides EpisodicMemory class for storing and retrieving past assessment results
+using keyword-based similarity matching. Enables few-shot learning without requiring
+vector databases - uses simple SQL ILIKE queries on keyword tags.
+
+Key features:
+- Store stage outcomes with keyword tags in AgentMemory table
+- Retrieve similar past cases via keyword matching (SQL ILIKE)
+- No vector embeddings required (lightweight, no external dependencies)
+- Used by AssessmentService for few-shot learning context
+
+Storage:
+- Table: AgentMemory (use_case_id, stage, memory_type, content JSONB, keywords TEXT)
+- Keywords: Space-separated string for ILIKE matching (e.g., "invoice automation sap")
+- Content: Arbitrary JSON dict with stage-specific data
+
+Retrieval:
+- Query keywords matched via SQL ILIKE (case-insensitive substring match)
+- Optionally filtered by stage (s1, s2, s3, s4)
+- Returns most recent matches (ORDER BY created_at DESC)
+
+Usage:
+    memory = EpisodicMemory(db)
+    await memory.store(use_case_id, project_id, "s1", "assessment", result_dict, ["invoice", "automation"])
+    similar = await memory.retrieve_similar(["invoice", "sap"], stage="s1", limit=3)
 """
 import logging
 from datetime import datetime
@@ -33,7 +57,23 @@ class EpisodicMemory:
         content: dict,
         keywords: list[str],
     ) -> AgentMemory:
-        """Store a new memory record."""
+        """
+        Store new episodic memory record for future retrieval.
+
+        Creates AgentMemory record with keyword tags for similarity matching.
+        Keywords are joined with spaces for SQL ILIKE queries.
+
+        Args:
+            use_case_id: UseCase ID this memory relates to
+            project_id: Project ID for organizational grouping
+            stage: Stage identifier (s1, s2, s3, s4)
+            memory_type: Memory type tag (e.g., "assessment", "complexity", "timeline")
+            content: Arbitrary JSON dict with stage-specific data
+            keywords: List of keywords for similarity matching (e.g., ["invoice", "automation", "sap"])
+
+        Returns:
+            Created AgentMemory record with generated ID
+        """
         memory = AgentMemory(
             id=new_uuid(),
             use_case_id=use_case_id,
@@ -57,8 +97,24 @@ class EpisodicMemory:
         limit: int = 3,
     ) -> list[AgentMemory]:
         """
-        Retrieve memories matching any of the query keywords.
-        Optionally filter by stage. Returns up to `limit` most recent results.
+        Retrieve memories matching any of the query keywords via SQL ILIKE.
+
+        Builds SQL query with OR conditions for keyword matching (case-insensitive
+        substring match). Optionally filters by stage and returns most recent matches.
+
+        Args:
+            query_keywords: List of keywords to match (uses first 5 keywords max)
+            stage: Optional stage filter (s1, s2, s3, s4) - None matches all stages
+            limit: Maximum number of memories to return (default: 3)
+
+        Returns:
+            List of AgentMemory records ordered by created_at DESC (most recent first)
+
+        Query pattern:
+            WHERE (keywords ILIKE '%kw1%' OR keywords ILIKE '%kw2%' OR ...)
+            AND stage = 's1'
+            ORDER BY created_at DESC
+            LIMIT 3
         """
         if not query_keywords:
             return []

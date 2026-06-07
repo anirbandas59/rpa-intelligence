@@ -1,6 +1,25 @@
 """
-LangGraph checkpointer for agent state persistence.
-Enables resume of interrupted runs across server restarts.
+LangGraph checkpointer for agent state persistence and resumption.
+
+Provides singleton checkpointer instance for LangGraph StateGraph agents to persist
+state across interruptions and server restarts. Supports both AsyncSqliteSaver
+(preferred for production) and MemorySaver (fallback for development).
+
+Key features:
+- Singleton pattern: get_checkpointer() returns same instance across calls
+- AsyncSqliteSaver: Persists checkpoints to checkpoints.db SQLite file
+- MemorySaver fallback: In-memory persistence when SQLite unavailable
+- Graceful degradation: Logs warnings when falling back to in-memory mode
+
+Usage:
+    from memory.session_memory import get_checkpointer
+    checkpointer = await get_checkpointer()
+    graph = StateGraph(...).compile(checkpointer=checkpointer)
+
+Checkpoint lifecycle:
+1. Agent nodes save state after each step via checkpointer.aput()
+2. If agent interrupted (server restart, error), state persists in checkpoints.db
+3. Next run can resume from last checkpoint via thread_id lookup
 """
 import logging
 
@@ -10,7 +29,23 @@ _checkpointer = None
 
 
 async def get_checkpointer():
-    """Get or create the singleton checkpointer."""
+    """
+    Get or create singleton LangGraph checkpointer instance.
+
+    Lazy initialization: creates checkpointer on first call, returns same instance
+    on subsequent calls. Tries AsyncSqliteSaver first, falls back to MemorySaver
+    if SQLite backend unavailable.
+
+    Returns:
+        AsyncSqliteSaver or MemorySaver instance for StateGraph compilation
+
+    Raises:
+        ImportError: If neither AsyncSqliteSaver nor MemorySaver available
+
+    Persistence modes:
+    - AsyncSqliteSaver: Checkpoints persist in checkpoints.db (survives restarts)
+    - MemorySaver: In-memory only (lost on restart, logged as warning)
+    """
     global _checkpointer
     if _checkpointer is None:
         # Try async SQLite first (preferred for production)
