@@ -1,7 +1,16 @@
 """
 Process agent — extracts complexity bands from document text using LLM.
-Uses Haiku via LLMManager.
-LangGraph StateGraph: extract_bands → validate_bands → END (with retry loop up to 2 retries).
+
+Implements a LangGraph StateGraph workflow for extracting and validating
+complexity attribute bands (activities, business_rules, layouts, interfaces,
+technology) from RPA process documents. Uses Haiku via LLMManager with built-in
+retry logic (up to 2 attempts) and reflexion-based self-correction for
+justification alignment validation.
+
+Workflow: extract_bands → validate_bands → validate_justification → END
+(with retry and reflexion loops for error recovery)
+
+Entry point: extract_bands_from_text(document_text, model)
 """
 
 import json
@@ -38,32 +47,35 @@ class ProcessState(TypedDict):
 
 def parse_llm_json(response: str) -> dict:
     """
-    Parse LLM response as JSON, handling common formatting issues.
-    Strips markdown fences and preamble/postamble.
+    Parse LLM JSON response, handling common formatting issues.
+
+    LLMs often return JSON wrapped in markdown code fences (```json...```)
+    or with extra text before/after the JSON object. This function strips
+    those formatting artifacts and extracts the first valid JSON object.
 
     Args:
-        response: Raw LLM response text
+        response: Raw LLM response text (may include markdown fences)
 
     Returns:
-        Parsed JSON dict
+        Parsed JSON dictionary extracted from response
 
     Raises:
-        AgentExecutionError: If JSON cannot be parsed
+        AgentExecutionError: If no JSON object found or parsing fails
     """
     text = response.strip()
 
-    # Strip markdown fences
+    # Strip markdown code fences that LLMs often add
     if text.startswith("```json"):
-        text = text[7:]
+        text = text[7:]  # Remove ```json prefix
     elif text.startswith("```"):
-        text = text[3:]
+        text = text[3:]  # Remove ``` prefix
 
     if text.endswith("```"):
-        text = text[:-3]
+        text = text[:-3]  # Remove ``` suffix
 
     text = text.strip()
 
-    # Find first { and last }
+    # Extract JSON object from remaining text (handles preamble/postamble)
     start = text.find("{")
     end = text.rfind("}")
 
@@ -72,6 +84,7 @@ def parse_llm_json(response: str) -> dict:
 
     json_text = text[start : end + 1]
 
+    # Parse extracted JSON
     try:
         return json.loads(json_text)
     except json.JSONDecodeError as e:
@@ -80,8 +93,17 @@ def parse_llm_json(response: str) -> dict:
 
 async def extract_bands_node(state: ProcessState) -> ProcessState:
     """
-    Node 1: Call LLM to extract complexity bands.
-    When retry_hint is set, appends correction hint to the user prompt.
+    Node 1: Call LLM to extract complexity bands from document text.
+
+    Sends document text to LLM (Haiku) for band extraction. On retry attempts,
+    appends validation hint from QualityEvaluator to guide correction. Returns
+    raw band dict and process_summary for downstream validation.
+
+    Args:
+        state: ProcessState with document_text, model, and optional retry_hint
+
+    Returns:
+        Updated state with bands, process_summary, and extraction_notes
     """
     retry_count = state.get("retry_count", 0)
     logger.info(
@@ -133,9 +155,20 @@ async def extract_bands_node(state: ProcessState) -> ProcessState:
 def validate_bands_node(state: ProcessState) -> ProcessState:
     """
     Node 2: Validate extracted bands using QualityEvaluator.
-    On pass: builds AttributeBandsWithSource and sets state['result'].
-    On fail with retries remaining: sets retry_hint, increments retry_count.
-    On fail with no retries left: raises AgentExecutionError.
+
+    Runs quality checks on extracted band values to ensure they conform to
+    expected structure and constraints. On success, builds AttributeBandsWithSource
+    model and marks extraction complete. On failure, provides retry hint or raises
+    error if max retries exceeded.
+
+    Args:
+        state: ProcessState with bands dict from LLM
+
+    Returns:
+        Updated state with result (on success) or retry_hint + incremented retry_count (on failure)
+
+    Raises:
+        AgentExecutionError: If validation fails after 2 retry attempts
     """
     logger.info(
         f"[process_agent] validate_bands_node retry_count={state.get('retry_count', 0)}"
@@ -197,11 +230,18 @@ def route_validate(state: ProcessState) -> str:
 
 def validate_justification_node(state: ProcessState) -> ProcessState:
     """
-    Node 3 (NEW): Reflexion validation - ensure process_summary arrays justify bands.
+    Node 3: Reflexion validation - ensure process_summary arrays align with band classifications.
 
-    Checks that array counts align with band classifications.
-    If misaligned and reflexion_count < 2: trigger reflexion correction.
-    If aligned or exhausted retries: pass through.
+    Validates semantic coherence between band values (XS/S/M/L/XL) and the count
+    of justification items in process_summary arrays. For example, an "XL" activities
+    band should have many activity items listed, not just 3. Triggers reflexion
+    correction if misaligned (up to 2 attempts), otherwise proceeds with warning.
+
+    Args:
+        state: ProcessState with bands and process_summary from extraction
+
+    Returns:
+        Updated state with reflexion_errors if misaligned, unchanged if aligned
     """
     from prompts.reflexion_validation_prompts import BAND_RANGES
 
@@ -266,7 +306,22 @@ def validate_justification_node(state: ProcessState) -> ProcessState:
 
 
 def _check_count_alignment(band: str, count: int, attribute: str) -> bool:
-    """Check if array count aligns with band classification (approximate)."""
+    """
+    Check if justification array count aligns with band classification.
+
+    Validates that the number of items in a process_summary array matches
+    the expected range for the given band value. For example, an "XL"
+    activities band should have 41-100 items listed, not just 5.
+
+    Args:
+        band: Band value (XS/S/M/L/XL)
+        count: Actual count of items in justification array
+        attribute: Attribute name (activities, business_rules, layouts, interfaces, technology)
+
+    Returns:
+        True if count falls within expected range for the band, False otherwise
+    """
+    # Expected count ranges per attribute and band (approximate alignment thresholds)
     if attribute == "activities":
         ranges = {"XS": (1, 5), "S": (6, 10), "M": (11, 20), "L": (21, 40), "XL": (41, 100)}
     elif attribute == "business_rules":
@@ -278,9 +333,12 @@ def _check_count_alignment(band: str, count: int, attribute: str) -> bool:
     elif attribute == "technology":
         ranges = {"XS": (0, 0), "S": (1, 2), "M": (3, 4), "L": (5, 6), "XL": (7, 20)}
     else:
-        return True  # Unknown attribute, pass
+        # Unknown attribute: skip validation
+        return True
 
+    # Get range for the band, default to (0, 100) if band not found
     min_count, max_count = ranges.get(band, (0, 100))
+    # Check if count falls within range
     return min_count <= count <= max_count
 
 
