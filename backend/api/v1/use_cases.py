@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -7,9 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_current_user, get_db
-from db.models import StageRun, UseCase, User
+from db.models import Project, StageRun, UseCase, User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class UseCaseCreate(BaseModel):
@@ -50,11 +52,80 @@ async def get_use_case(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(UseCase).where(UseCase.id == id))
+    """
+    Get a use case by ID.
+
+    Only the project owner can view their use cases, unless the user is a superuser.
+
+    Args:
+        id: UseCase ID to retrieve
+        user: Current authenticated user (injected)
+        db: Database session (injected)
+
+    Returns:
+        UseCase details
+
+    Raises:
+        HTTPException: 404 if use case not found or user doesn't have access
+    """
+    # Fetch use case with project join to check ownership
+    result = await db.execute(
+        select(UseCase).join(Project).where(
+            UseCase.id == id,
+            (Project.created_by == user.id) | (user.role == "superuser"),
+        )
+    )
     use_case = result.scalar_one_or_none()
     if not use_case:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Use case not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Use case not found or you don't have access to it",
+        )
     return use_case
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_use_case(
+    id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a use case.
+
+    Only the project owner can delete their use cases, unless the user is a superuser.
+    Superusers can delete any use case.
+
+    Args:
+        id: UseCase ID to delete
+        user: Current authenticated user (injected)
+        db: Database session (injected)
+
+    Returns:
+        204 No Content on success
+
+    Raises:
+        HTTPException: 404 if use case not found or user doesn't have access
+    """
+    # Fetch use case with project join to check ownership
+    result = await db.execute(
+        select(UseCase).join(Project).where(
+            UseCase.id == id,
+            (Project.created_by == user.id) | (user.role == "superuser"),
+        )
+    )
+    use_case = result.scalar_one_or_none()
+
+    if not use_case:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Use case not found or you don't have permission to delete it",
+        )
+
+    await db.delete(use_case)
+    await db.commit()
+
+    logger.info(f"Deleted use case {id} by user {user.id} (role: {user.role})")
 
 
 def _compute_inputs_hash(inputs: dict) -> str:

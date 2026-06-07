@@ -309,6 +309,83 @@ class AssessmentService:
             logger.error(f"Failed S1 StageRun {stage_run.id}: {e}")
             raise
 
+    async def run_assessment_with_existing_run(self, run_id: str, use_case_id: str) -> StageRun:
+        """
+        Run S1 assessment for an already-created StageRun record.
+
+        Used when StageRun is created by the endpoint before background task execution.
+        Updates the existing StageRun with result on completion or error.
+
+        Args:
+            run_id: ID of existing StageRun record to update
+            use_case_id: UseCase ID to assess
+
+        Returns:
+            Updated StageRun record
+
+        Raises:
+            ValueError: If StageRun or UseCase not found
+        """
+        # Fetch existing StageRun
+        run_result = await self.db.execute(select(StageRun).where(StageRun.id == run_id))
+        stage_run = run_result.scalar_one_or_none()
+
+        if not stage_run:
+            raise ValueError(f"StageRun {run_id} not found")
+
+        # Fetch use-case
+        uc_result = await self.db.execute(select(UseCase).where(UseCase.id == use_case_id))
+        use_case = uc_result.scalar_one_or_none()
+
+        if not use_case:
+            raise ValueError(f"UseCase {use_case_id} not found")
+
+        # Get inputs from StageRun's inputs_snapshot (already saved by endpoint)
+        inputs = stage_run.inputs_snapshot
+
+        try:
+            # Run scoring
+            assessment_result = await self._score_single_use_case(inputs)
+
+            # Update StageRun
+            stage_run.result = assessment_result
+            stage_run.status = "complete"
+            await self.db.commit()
+            await self.db.refresh(stage_run)
+
+            logger.info(f"Completed S1 StageRun {stage_run.id}")
+
+            # Write episodic memory
+            try:
+                from memory.episodic_memory import EpisodicMemory
+
+                mem = EpisodicMemory(self.db)
+                name_words = (use_case.name or "").lower().split()[:5]
+                await mem.store(
+                    use_case_id=use_case_id,
+                    project_id=use_case.project_id,
+                    stage="s1",
+                    memory_type="assessment_result",
+                    content={
+                        "migration_decision": assessment_result.get("migration_decision"),
+                        "total_score": assessment_result.get("total_score"),
+                        "confidence": assessment_result.get("confidence"),
+                    },
+                    keywords=name_words,
+                )
+            except Exception as mem_err:
+                # Memory write failure must not break the main flow
+                logger.warning(f"Memory write failed (non-critical): {mem_err}")
+
+            return stage_run
+
+        except Exception as e:
+            stage_run.status = "failed"
+            stage_run.error_message = str(e)
+            await self.db.commit()
+            logger.error(f"Failed S1 StageRun {stage_run.id}: {e}")
+            raise
+
     async def run_bulk_assessment(self, project_id: str, use_case_ids: list[str]) -> list[StageRun]:
         """Run assessments in parallel using asyncio.gather."""
         tasks = [self.run_assessment(uc_id) for uc_id in use_case_ids]

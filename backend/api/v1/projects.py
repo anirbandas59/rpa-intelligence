@@ -151,7 +151,27 @@ async def list_projects(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Project))
+    """
+    List all projects.
+
+    Superusers see all projects. Regular users see only their own projects.
+
+    Args:
+        user: Current authenticated user (injected)
+        db: Database session (injected)
+
+    Returns:
+        List of projects accessible to the current user
+    """
+    # Superuser sees all, regular user sees only their own
+    if user.role == "superuser":
+        result = await db.execute(select(Project).order_by(Project.created_at.desc()))
+    else:
+        result = await db.execute(
+            select(Project)
+            .where(Project.created_by == user.id)
+            .order_by(Project.created_at.desc())
+        )
     return result.scalars().all()
 
 
@@ -166,6 +186,51 @@ async def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a project and all associated use cases (cascade).
+
+    Only the project owner can delete their project, unless the user is a superuser.
+    Superusers can delete any project.
+
+    Args:
+        id: Project ID to delete
+        user: Current authenticated user (injected)
+        db: Database session (injected)
+
+    Returns:
+        204 No Content on success
+
+    Raises:
+        HTTPException: 404 if project not found or user doesn't have access
+    """
+    # Check ownership - superuser can delete any project, regular user only their own
+    result = await db.execute(
+        select(Project).where(
+            Project.id == id,
+            (Project.created_by == user.id) | (user.role == "superuser"),
+        )
+    )
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or you don't have permission to delete it",
+        )
+
+    # Cascade delete handled by SQLAlchemy (UseCase.project_id has ondelete="CASCADE")
+    await db.delete(project)
+    await db.commit()
+
+    logger.info(f"Deleted project {id} by user {user.id} (role: {user.role})")
 
 
 @router.get("/{id}/use-cases", response_model=list[UseCaseListItem])

@@ -5,6 +5,17 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -22,9 +33,9 @@ import { ComplexityChip } from "@/components/shared/ComplexityChip";
 import { PriorityBadge, BAND_META } from "@/components/shared/PriorityBadge";
 import { MiniSpark } from "@/components/shared/MiniSpark";
 import { Icon } from "@/components/shared/icons";
-import { ArrowLeft, Plus, Loader2, Users, ChevronDown, Upload, Edit3 } from "lucide-react";
+import { ArrowLeft, Plus, Loader2, Users, ChevronDown, Upload, Edit3, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiGetRuns, apiPost, isAuthenticated } from "@/lib/api";
+import { apiGet, apiGetRuns, apiPost, apiDelete, isAuthenticated } from "@/lib/api";
 import { BulkUploadModal } from "@/components/BulkUploadModal";
 import type {
   Project,
@@ -248,6 +259,31 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleDeleteProject = async () => {
+    try {
+      await apiDelete(`/api/v1/projects/${projectId}`);
+      toast.success("Project deleted");
+      router.push("/projects");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete project",
+      );
+    }
+  };
+
+  const handleDeleteUseCase = async (useCaseId: string) => {
+    try {
+      await apiDelete(`/api/v1/use-cases/${useCaseId}`);
+      toast.success("Use case deleted");
+      // Reload page to fetch updated data
+      window.location.reload();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete use case",
+      );
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -328,29 +364,59 @@ export default function ProjectDetailPage() {
             justifyContent: "space-between",
           }}
         >
-          <div>
-            <h1
-              className="rpa-gradient-text"
-              style={{
-                fontSize: 30,
-                fontWeight: 700,
-                letterSpacing: -0.6,
-                margin: 0,
-              }}
-            >
-              {project.name}
-            </h1>
-            <p
-              style={{
-                fontSize: 13.5,
-                color: "var(--muted-fg)",
-                margin: "6px 0 0",
-              }}
-            >
-              {project.description || "Four-stage delivery intelligence"} ·{" "}
-              {useCases.length} use case{useCases.length !== 1 ? "s" : ""} ·{" "}
-              {quickWins} quick win{quickWins !== 1 ? "s" : ""} identified
-            </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div>
+              <h1
+                className="rpa-gradient-text"
+                style={{
+                  fontSize: 30,
+                  fontWeight: 700,
+                  letterSpacing: -0.6,
+                  margin: 0,
+                }}
+              >
+                {project.name}
+              </h1>
+              <p
+                style={{
+                  fontSize: 13.5,
+                  color: "var(--muted-fg)",
+                  margin: "6px 0 0",
+                }}
+              >
+                {project.description || "Four-stage delivery intelligence"} ·{" "}
+                {useCases.length} use case{useCases.length !== 1 ? "s" : ""} ·{" "}
+                {quickWins} quick win{quickWins !== 1 ? "s" : ""} identified
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete project?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete "{project.name}" and all {useCases.length} use case{useCases.length !== 1 ? "s" : ""}. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteProject}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           <div style={{ display: "flex", gap: 26 }}>
             {[
@@ -737,15 +803,13 @@ export default function ProjectDetailPage() {
                   const isHighlighted = u.id === selectedUcId;
 
                   return (
-                    <button
+                    <div
                       key={u.id}
-                      onClick={() => setSelectedUcId(u.id)}
+                      className="group"
                       style={{
                         width: "100%",
-                        textAlign: "left",
-                        cursor: "pointer",
                         display: "grid",
-                        gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr",
+                        gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr auto",
                         gap: 0,
                         padding: "12px 16px",
                         alignItems: "center",
@@ -756,10 +820,20 @@ export default function ProjectDetailPage() {
                         background: isHighlighted
                           ? "color-mix(in oklab, var(--primary) 6%, transparent)"
                           : "transparent",
-                        border: "none",
                         transition: "background 0.12s",
                       }}
                     >
+                      <button
+                        onClick={() => setSelectedUcId(u.id)}
+                        style={{
+                          all: "unset",
+                          cursor: "pointer",
+                          gridColumn: "1 / 6",
+                          display: "grid",
+                          gridTemplateColumns: "subgrid",
+                          width: "100%",
+                        }}
+                      >
                       <div style={{ minWidth: 0, paddingRight: 12 }}>
                         <div
                           style={{
@@ -837,42 +911,72 @@ export default function ProjectDetailPage() {
                           );
                         })}
                       </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "flex-end",
-                          gap: 8,
-                        }}
-                      >
                         <div
                           style={{
-                            width: 52,
-                            height: 5,
-                            borderRadius: 99,
-                            background: "var(--track)",
-                            overflow: "hidden",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            gap: 8,
                           }}
                         >
                           <div
                             style={{
-                              width: `${(done / 4) * 100}%`,
-                              height: "100%",
-                              background: "var(--c-green)",
+                              width: 52,
+                              height: 5,
+                              borderRadius: 99,
+                              background: "var(--track)",
+                              overflow: "hidden",
                             }}
-                          />
+                          >
+                            <div
+                              style={{
+                                width: `${(done / 4) * 100}%`,
+                                height: "100%",
+                                background: "var(--c-green)",
+                              }}
+                            />
+                          </div>
+                          <span
+                            style={{
+                              fontFamily: "var(--mono)",
+                              fontSize: 11,
+                              color: "var(--muted-fg)",
+                            }}
+                          >
+                            {done}/4
+                          </span>
                         </div>
-                        <span
-                          style={{
-                            fontFamily: "var(--mono)",
-                            fontSize: 11,
-                            color: "var(--muted-fg)",
-                          }}
-                        >
-                          {done}/4
-                        </span>
-                      </div>
-                    </button>
+                      </button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete use case?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete "{u.name}". This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteUseCase(u.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   );
                 })}
               </div>
@@ -985,6 +1089,29 @@ export default function ProjectDetailPage() {
                   />
                 ))}
                 {/* Bubbles */}
+                {useCases.filter((uc) => {
+                  const cache = ucCache.get(uc.id);
+                  return cache?.s1 && cache.s2;
+                }).length === 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      textAlign: "center",
+                      color: "var(--muted-fg)",
+                      maxWidth: 280,
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                      Run assessments to populate map
+                    </div>
+                    <div style={{ fontSize: 11.5 }}>
+                      Complete both Stage 1 (Migration Assessment) and Stage 2 (Complexity Analysis) for use cases to see them plotted here.
+                    </div>
+                  </div>
+                )}
                 {useCases.map((uc) => {
                   const cache = ucCache.get(uc.id);
                   if (!cache?.s1 || !cache.s2) return null;

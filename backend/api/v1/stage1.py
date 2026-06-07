@@ -21,6 +21,8 @@ Assessment flow:
 5. Optional: user can backfill from S2 complexity for refined scoring suggestions
 """
 
+import hashlib
+import json
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -77,6 +79,7 @@ class S1RunResponse(BaseModel):
 
 
 async def _execute_s1_background_task(
+    run_id: str,
     use_case_id: str,
     model: str,
     db_factory,
@@ -86,9 +89,10 @@ async def _execute_s1_background_task(
 
     Creates its own database session to avoid transaction conflicts with the
     request handler. Delegates to AssessmentService for LLM-based scoring and
-    decision derivation. Updates StageRun record on completion or failure.
+    decision derivation. Updates existing StageRun record on completion or failure.
 
     Args:
+        run_id: StageRun ID to update (already created by endpoint)
         use_case_id: UseCase ID to assess
         model: LLM model name (e.g., "claude-haiku-4-5")
         db_factory: Async session factory for creating independent database session
@@ -99,9 +103,9 @@ async def _execute_s1_background_task(
     async with db_factory() as session:
         try:
             service = AssessmentService(session, model=model)
-            await service.run_assessment(use_case_id)
+            await service.run_assessment_with_existing_run(run_id, use_case_id)
         except Exception:
-            logger.exception(f"Error in S1 assessment for use case {use_case_id}")
+            logger.exception(f"Error in S1 assessment for use case {use_case_id}, run {run_id}")
             raise
 
 
@@ -164,8 +168,8 @@ async def create_s1_run(
     """
     Create Stage 1 assessment run and execute in background.
 
-    Returns immediately with placeholder response. Actual assessment runs
-    asynchronously via background task. Frontend should poll GET /runs/{run_id}
+    Returns immediately with run_id and status="running". Actual assessment runs
+    asynchronously via background task. Frontend should poll GET /readiness
     to check completion status.
 
     Args:
@@ -177,7 +181,7 @@ async def create_s1_run(
         db_factory: Session factory for background task's independent session (injected)
 
     Returns:
-        S1RunResponse with placeholder run_id and status="running"
+        S1RunResponse with run_id and status="running"
 
     Raises:
         HTTPException: 404 if use case not found
@@ -188,19 +192,58 @@ async def create_s1_run(
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
 
+    # Compute inputs snapshot and hash
+    inputs = {
+        "name": use_case.name,
+        "description": use_case.description,
+        "source_platform": use_case.source_platform,
+        "install_status": use_case.install_status,
+        **use_case.s1_inputs,
+    }
+    inputs_hash = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+
+    # Count existing runs for run_number
+    count_result = await db.execute(
+        select(StageRun).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s1")
+    )
+    run_number = len(count_result.scalars().all()) + 1
+
+    # Create StageRun record immediately (before background task)
+    stage_run = StageRun(
+        use_case_id=use_case_id,
+        stage="s1",
+        run_number=run_number,
+        inputs_snapshot=inputs,
+        inputs_hash=inputs_hash,
+        result={},
+        model_used=request.model,
+        status="running",
+    )
+
+    db.add(stage_run)
+    await db.commit()
+    await db.refresh(stage_run)
+
+    # Update use_case.s1_latest_run_id immediately
+    use_case.s1_latest_run_id = stage_run.id
+    await db.commit()
+
+    logger.info(f"Created S1 StageRun {stage_run.id} for use case {use_case_id}")
+
     # Fire background task with session factory (not request session)
     background_tasks.add_task(
         _execute_s1_background_task,
+        run_id=stage_run.id,
         use_case_id=use_case_id,
         model=request.model,
         db_factory=db_factory,
     )
 
-    # Return immediately with placeholder (actual run creation happens in background)
+    # Return immediately with actual run_id
     return S1RunResponse(
-        run_id="pending",
+        run_id=stage_run.id,
         status="running",
-        run_number=1,
+        run_number=run_number,
     )
 
 

@@ -40,6 +40,7 @@ export function AsyncRunProgress({
   useEffect(() => {
     let interval: NodeJS.Timeout
     let progressInterval: NodeJS.Timeout
+    let pollCount = 0
 
     // Poll readiness every 2 seconds
     const poll = async () => {
@@ -48,6 +49,7 @@ export function AsyncRunProgress({
           `/api/v1/use-cases/${useCaseId}/readiness`
         )
         const stageStatus = getStageStatus(readiness, stage)
+        pollCount++
 
         if (stageStatus === "complete") {
           setStatus("complete")
@@ -56,16 +58,32 @@ export function AsyncRunProgress({
           clearInterval(progressInterval)
           toast.success("Run complete")
           onComplete?.()
-        } else if (stageStatus === "stale" || stageStatus === "ready") {
-          // Something went wrong - stage should be running
-          const msg = "Run status changed unexpectedly"
+        } else if (stageStatus === "failed" || stageStatus === "not_ready") {
+          // Actual failure or run lost
+          const msg = stageStatus === "failed"
+            ? "Assessment failed during processing"
+            : "Run status lost - please try again"
           setStatus("failed")
           setError(msg)
           clearInterval(interval)
           clearInterval(progressInterval)
           toast.error(`Run failed: ${msg}`)
           onError?.(msg)
+        } else if (stageStatus === "stale" || stageStatus === "ready") {
+          // Allow transient "ready" status for first few polls (race condition)
+          // Only error if stuck in this state for >10 seconds (5 polls)
+          if (pollCount > 5) {
+            const msg = "Run status changed unexpectedly - may need to refresh"
+            setStatus("failed")
+            setError(msg)
+            clearInterval(interval)
+            clearInterval(progressInterval)
+            toast.error(`Run failed: ${msg}`)
+            onError?.(msg)
+          }
+          // Otherwise, keep polling - might be race condition during StageRun creation
         }
+        // "running" status - keep polling
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to check status"
         setStatus("failed")
