@@ -1,6 +1,25 @@
 """
-Stage 4 API routes — Sprint Tracker (Sonnet decompose + deterministic bin-packing).
-Async execution pattern with BackgroundTasks.
+Stage 4 (Sprint Tracker) API routes for RPA Intelligence Platform.
+
+Provides endpoints for sprint tracker workflow: feature decomposition via Sonnet,
+deterministic bin-packing for sprint assignment, and Excel export with formula templates.
+All runs execute asynchronously via background tasks.
+
+Key endpoints:
+- PATCH /{use_case_id}/s4/inputs: Update sprint config (sprint_count, capacity)
+- POST /{use_case_id}/s4/runs: Create tracker run (async, returns run_id immediately)
+- GET /{use_case_id}/s4/runs: List all tracker runs
+- GET /{use_case_id}/s4/runs/{run_id}: Get single run with WBS rows
+- GET /{use_case_id}/s4/runs/{run_id}/export: Download Excel tracker file
+- POST /{use_case_id}/s4/load-from-s2: Copy complexity and process description
+- POST /{use_case_id}/s4/load-from-s3: Copy sprint count from timeline
+
+Tracker flow:
+1. User provides sprint_count (or loads from S3 via POST /load-from-s3)
+2. User triggers run via POST /runs (returns immediately, processing in background)
+3. Backend runs tracker_agent: groups S3 task_extraction → WBS rows with sprint assignment
+4. Deterministic bin-packing assigns rows to sprints within Build+SIT window
+5. User exports via GET /export → openpyxl fills template with formulas
 """
 
 import hashlib
@@ -55,7 +74,25 @@ async def run_tracker_background(
     sprint_count: int,
     sprint_capacity: int,
 ):
-    """Background task: run tracker agent and update StageRun."""
+    """
+    Execute tracker agent in background with independent database session.
+
+    Runs tracker_agent (Sonnet + LangGraph) to group S3 task extraction into WBS rows,
+    then deterministic bin-packing for sprint assignment within Build+SIT window.
+    Updates StageRun to "complete" or "failed" based on outcome.
+
+    Args:
+        run_id: StageRun ID to update
+        use_case_id: UseCase ID being processed
+        use_case_name: Process name for context
+        task_extraction: Task extraction result from S3 (activities with hours)
+        total_effort_hours: Total effort constraint for validation
+        build_sit_window: Dict with start_date and end_date from S3
+        complexity_class: Complexity class for context
+        effort_weeks: Effort in weeks for context
+        sprint_count: Number of sprints for bin-packing
+        sprint_capacity: Story points per sprint
+    """
     session_factory = get_session_factory()
     async with session_factory() as db:
         try:
@@ -139,7 +176,26 @@ async def create_s4_run(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create Stage 4 run — async with background task."""
+    """
+    Create Stage 4 sprint tracker run - async execution via background task.
+
+    Requires S3 task_extraction to be "complete" or "synthesized". Extracts Build+SIT
+    window from S3 timeline, then runs tracker_agent in background. Returns immediately
+    with run_id and status="running". Frontend polls GET /runs/{run_id} for completion.
+
+    Args:
+        use_case_id: UseCase ID to create tracker for
+        background_tasks: FastAPI background task scheduler (injected)
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        Dict with run_id and status="running"
+
+    Raises:
+        HTTPException: 404 if use case or S3 run not found,
+                      400 if sprint_count missing or S3 task_extraction incomplete
+    """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
     if not use_case:
@@ -304,7 +360,26 @@ async def export_s4_run(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Export Stage 4 run as Excel file."""
+    """
+    Export Stage 4 tracker run as Excel file with formula templates.
+
+    Generates Excel workbook from output_template.xlsx with 3 sheets: Dashboard,
+    Tracker, Project Details. Fills WBS rows with data but preserves formulas for
+    SP calculations and Dev Status lookups. Only works on completed runs.
+
+    Args:
+        use_case_id: UseCase ID owning the run
+        run_id: StageRun ID to export
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        StreamingResponse with Excel file attachment
+
+    Raises:
+        HTTPException: 404 if use case or run not found, 400 if run not complete,
+                      500 if Excel generation fails
+    """
     # Get use case
     uc_result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = uc_result.scalar_one_or_none()

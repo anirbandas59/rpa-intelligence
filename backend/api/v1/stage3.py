@@ -1,6 +1,25 @@
 """
-Stage 3 API routes — Delivery Timeline (deterministic, synchronous).
-No LLM calls in main flow. Optional narrative generation in background.
+Stage 3 (Delivery Timeline) API routes for RPA Intelligence Platform.
+
+Provides endpoints for delivery timeline calculation and task extraction workflow.
+Timeline calculation is deterministic (pure Python, synchronous). Task extraction
+runs in background via LangGraph agent with hour-sum constraint enforcement.
+
+Key endpoints:
+- PATCH /{use_case_id}/s3/inputs: Update timeline inputs (effort_weeks, start_date, buffers)
+- POST /{use_case_id}/s3/runs: Create timeline run (synchronous, returns immediately)
+- GET /{use_case_id}/s3/runs: List all timeline runs
+- GET /{use_case_id}/s3/runs/{run_id}: Get single run with full phase details
+- PATCH /{use_case_id}/s3/phase-delta: Adjust individual phase durations
+- POST /{use_case_id}/s3/reset-deltas: Clear all phase adjustments
+- POST /{use_case_id}/s3/load-from-s2: Copy complexity and effort from Stage 2
+
+Timeline flow:
+1. User provides effort_weeks + start_date (or loads from S2 via POST /load-from-s2)
+2. User triggers run via POST /runs (returns timeline synchronously)
+3. Backend calculates 6 phases (Define/Design/Build/SIT/UAT/Deploy) with buffers
+4. Task extraction runs in background (if document exists from S2)
+5. Optional narrative summary generated via Sonnet in background (non-blocking)
 """
 
 import hashlib
@@ -26,19 +45,25 @@ logger = logging.getLogger(__name__)
 
 
 class S3InputsUpdate(BaseModel):
+    """Request model for updating Stage 3 timeline inputs."""
+
     effort_weeks: int | None = Field(None, ge=1, description="Build effort in weeks")
-    start_date: str | None = Field(None, description="Project start date (ISO format)")
-    complexity_class: str | None = Field(None, pattern="^(XS|S|M|L|XL)$")
-    buffers: dict | None = Field(None, description="Custom buffer configuration")
+    start_date: str | None = Field(None, description="Project start date (ISO format YYYY-MM-DD)")
+    complexity_class: str | None = Field(None, pattern="^(XS|S|M|L|XL)$", description="Complexity class from S2")
+    buffers: dict | None = Field(None, description="Custom buffer configuration (overrides defaults)")
 
 
 class PhaseAdjustment(BaseModel):
+    """Request model for adjusting individual phase durations."""
+
     phase_name: str = Field(..., description="Phase name (lowercase): define, design, build, sit, uat, deploy")
     delta_weeks: int = Field(..., description="Adjustment in weeks (can be negative)")
 
 
 class LoadFromS2Request(BaseModel):
-    prefer_max: bool = Field(True, description="Use max_weeks if true, else min_weeks")
+    """Request model for loading Stage 2 complexity data into Stage 3 inputs."""
+
+    prefer_max: bool = Field(True, description="Use max_weeks if true, else min_weeks from S2 effort range")
 
 
 def compute_inputs_hash(inputs: dict) -> str:
@@ -53,7 +78,21 @@ async def generate_narrative_background(
     build_weeks: int,
     phases: list[dict],
 ):
-    """Background task: generate narrative summary with Sonnet."""
+    """
+    Generate narrative timeline summary using Sonnet in background (optional enhancement).
+
+    Creates executive-friendly summary of timeline phases using LLM. Runs asynchronously
+    and updates StageRun.result with "narrative" field. Non-critical - timeline is
+    usable without narrative.
+
+    Args:
+        run_id: StageRun ID to update with narrative
+        use_case_name: Use case name for context
+        complexity_class: Complexity class (XS/S/M/L/XL)
+        total_weeks: Total project duration
+        build_weeks: Build phase duration
+        phases: List of phase dicts with name, start_date, end_date, weeks
+    """
     session_factory = get_session_factory()
     async with session_factory() as db:
         try:
@@ -95,8 +134,24 @@ async def run_task_extraction_background(
     session_id: str,
 ):
     """
-    Background task: extract tasks with hour-sum constraint via Sonnet.
-    Creates its own DB session (request session is closed by the time this runs).
+    Extract activity breakdown from document with hour-sum constraint using task extraction agent.
+
+    Runs task_extraction_agent (Sonnet + LangGraph) to decompose process into activities
+    with hours and reusability tags. Enforces CRITICAL constraint: sum of non-reusable
+    hours must equal total_effort_hours. Updates s3_inputs.task_extraction on completion.
+
+    Args:
+        use_case_id: UseCase ID to update
+        document_path: Path to uploaded document (from S2)
+        process_name: Process name for context
+        total_effort_hours: Total effort constraint (effort_weeks * 40)
+        session_id: Session ID for logging (typically run_id)
+
+    Flow:
+    1. Read document text from file
+    2. Run task_extraction_agent with hour constraint
+    3. Update s3_inputs.task_extraction with result
+    4. On failure: mark extraction_status as "failed"
     """
     from agents.task_extraction_agent import run_task_extraction_agent
 
@@ -150,7 +205,24 @@ async def update_s3_inputs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update Stage 3 inputs. Does not trigger a run."""
+    """
+    Update Stage 3 timeline inputs (effort, start date, complexity, buffers).
+
+    Partial update endpoint for modifying timeline calculation parameters. Does NOT
+    trigger a new run automatically - user must call POST /runs after updating inputs.
+
+    Args:
+        use_case_id: UseCase ID to update
+        update: Partial update request with optional fields
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        Updated s3_inputs dict
+
+    Raises:
+        HTTPException: 404 if use case not found, 400 if start_date format invalid
+    """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
     if not use_case:
@@ -188,7 +260,26 @@ async def create_s3_run(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create Stage 3 run — synchronous, returns timeline immediately."""
+    """
+    Create Stage 3 timeline run - synchronous calculation, returns timeline immediately.
+
+    Calculates 6-phase delivery timeline (Define/Design/Build/SIT/UAT/Deploy) using pure
+    Python date arithmetic. Returns result synchronously in response. Optionally triggers
+    background tasks for task extraction (if document exists) and narrative generation.
+
+    Args:
+        use_case_id: UseCase ID to create run for
+        background_tasks: FastAPI background task scheduler (injected)
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        Dict with run_id, status="complete", result (timeline with phases), and task_extraction_status
+
+    Raises:
+        HTTPException: 404 if use case not found, 400 if required inputs missing or S2 prerequisite not met,
+                      500 if timeline calculation fails
+    """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
     if not use_case:
@@ -492,7 +583,25 @@ async def load_from_s2(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Copy effort and complexity class from Stage 2 latest run into s3_inputs."""
+    """
+    Copy effort estimate and complexity class from Stage 2 into Stage 3 inputs.
+
+    Convenience endpoint for data flow from S2 → S3. Extracts effort_min_weeks,
+    effort_max_weeks, and complexity_class from latest S2 run and copies to s3_inputs.
+    User can choose min or max effort via prefer_max flag.
+
+    Args:
+        use_case_id: UseCase ID to load data for
+        request: Preference for min vs max effort weeks
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        Updated s3_inputs with loaded values and source tags
+
+    Raises:
+        HTTPException: 404 if use case or S2 run not found, 400 if S2 data incomplete
+    """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
     if not use_case:
