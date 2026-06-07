@@ -160,9 +160,8 @@ async def get_readiness(
     return {
         "s1": s1_status,
         "s2": s2_status,
-        "s3": {
-            "phase_calculator": s3_phase_calc_status,
-            "task_extraction": task_extraction_status,
-        },
+        "s3": s3_phase_calc_status,
+        "s3_phase_calculator": s3_phase_calc_status,
+        "s3_task_extraction": task_extraction_status,
         "s4": s4_status,
     }

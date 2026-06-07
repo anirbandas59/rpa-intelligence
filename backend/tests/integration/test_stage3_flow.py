@@ -57,7 +57,7 @@ async def test_project(db_session, test_user):
 
 @pytest.fixture
 async def test_use_case(db_session, test_project):
-    """Create a test use case with S3 inputs."""
+    """Create a test use case with S3 inputs and a completed S2 run."""
     use_case = UseCase(
         project_id=test_project.id,
         name="Test Use Case",
@@ -69,6 +69,32 @@ async def test_use_case(db_session, test_project):
         },
     )
     db_session.add(use_case)
+    await db_session.flush()
+
+    # Create mock completed S2 run with process_summary
+    s2_run = StageRun(
+        use_case_id=use_case.id,
+        stage="s2",
+        run_number=1,
+        inputs_snapshot={},
+        inputs_hash="mock_hash",
+        result={
+            "scoring": {
+                "complexity_class": "L",
+                "effort_min_weeks": 6,
+                "effort_max_weeks": 8,
+                "total_score": 21,
+            },
+            "process_summary": {
+                "key_activities": ["activity 1"]
+            }
+        },
+        status="complete",
+    )
+    db_session.add(s2_run)
+    await db_session.flush()
+
+    use_case.s2_latest_run_id = s2_run.id
     await db_session.commit()
     await db_session.refresh(use_case)
     return use_case

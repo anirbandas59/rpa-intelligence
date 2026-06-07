@@ -198,7 +198,7 @@ async def test_invite_user(async_client, test_superuser_token, test_db_session):
     invite_payload = {"email": "newuser@example.com", "password": "securepass123", "role": "user"}
 
     # Mock hash_password to avoid bcrypt issues in tests
-    with patch("api.routes.settings.hash_password", return_value="$2b$12$mocked_hash"):
+    with patch("api.v1.settings.hash_password", return_value="$2b$12$mocked_hash"):
         response = await async_client.post("/api/v1/settings/users/invite", json=invite_payload, headers=headers)
     assert response.status_code == 201
     data = response.json()
@@ -237,7 +237,7 @@ async def test_deactivate_user(async_client, test_superuser_token):
     headers = {"Authorization": f"Bearer {test_superuser_token}"}
 
     # First create a user to deactivate
-    with patch("api.routes.settings.hash_password", return_value="$2b$12$mocked_hash"):
+    with patch("api.v1.settings.hash_password", return_value="$2b$12$mocked_hash"):
         invite_response = await async_client.post(
             "/api/v1/settings/users/invite",
             json={"email": "todeactivate@example.com", "password": "password123", "role": "user"},

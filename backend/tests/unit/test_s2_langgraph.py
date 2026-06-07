@@ -5,10 +5,28 @@ Tests the v2 (LangGraph) path in isolation and compares output
 with v1 (legacy) path to ensure equivalence.
 """
 
+import pytest
+from unittest.mock import MagicMock, patch
 
 from agents.orchestrator import _run_scoring_v1, _run_scoring_v2, assessment_to_scoring_result
 from core.constants import ComplexityTier
 from core.models.scoring import AttributeBands
+from tools.scoring.classifier_tool import ReasoningResponse
+
+
+@pytest.fixture(autouse=True)
+def mock_llm_manager():
+    """Mock LLMManager to avoid actual LLM calls and API key validation errors."""
+    with patch("tools.scoring.classifier_tool.LLMManager") as mock_class:
+        mock_instance = mock_class.return_value
+        mock_response = ReasoningResponse(
+            reasoning="Mocked reasoning narrative for complexity classification.",
+            key_drivers=["Driver 1", "Driver 2"],
+            simplification_opportunities=["Opportunity 1"],
+            tech_lead_note="Mocked tech lead note."
+        )
+        mock_instance.complete_structured.return_value = mock_response
+        yield mock_instance
 
 
 def test_langgraph_ground_truth():

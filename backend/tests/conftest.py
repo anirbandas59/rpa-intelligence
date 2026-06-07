@@ -2,6 +2,9 @@
 Shared pytest fixtures for all tests.
 """
 
+import os
+os.environ["SECRET_KEY"] = "test_secret_key_for_unit_tests"
+
 import asyncio
 
 import pytest
