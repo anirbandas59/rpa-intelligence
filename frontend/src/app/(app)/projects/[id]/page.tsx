@@ -174,7 +174,7 @@ export default function ProjectDetailPage() {
                 id: string;
                 status: string;
                 result: unknown;
-              }>(`/api/v1/stage1/${uc.id}/s1/runs`);
+              }>(`/api/v1/use-cases/${uc.id}/s1/runs`);
               const lr = runs.find(
                 (r) => r.id === uc.s1_latest_run_id && r.status === "complete",
               );
@@ -185,7 +185,7 @@ export default function ProjectDetailPage() {
                 id: string;
                 status: string;
                 result: unknown;
-              }>(`/api/v1/stage2/${uc.id}/s2/runs`);
+              }>(`/api/v1/use-cases/${uc.id}/s2/runs`);
               const lr = runs.find(
                 (r) => r.id === uc.s2_latest_run_id && r.status === "complete",
               );
@@ -197,7 +197,7 @@ export default function ProjectDetailPage() {
                 id: string;
                 status: string;
                 result: S3Result;
-              }>(`/api/v1/stage3/${uc.id}/s3/runs/${uc.s3_latest_run_id}`);
+              }>(`/api/v1/use-cases/${uc.id}/s3/runs/${uc.s3_latest_run_id}`);
               if (fullRun.status === "complete") cache.s3 = fullRun.result;
             }
           } catch {

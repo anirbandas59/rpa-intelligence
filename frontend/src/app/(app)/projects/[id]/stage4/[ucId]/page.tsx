@@ -93,7 +93,7 @@ export default function Stage4Page() {
         const [ucData, readinessData, runsData] = await Promise.all([
           apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
           apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
-          apiGetRuns<StageRun>(`/api/v1/stage4/${ucId}/s4/runs`),
+          apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s4/runs`),
         ])
         setUseCase(ucData)
         setReadiness(readinessData)
@@ -106,7 +106,7 @@ export default function Stage4Page() {
           const latestRun = runsData.find((r) => r.id === ucData.s4_latest_run_id)
           if (latestRun?.status === "complete") {
             // List endpoint returns summary only — fetch full result from single-run endpoint
-            const fullRun = await apiGet<{ result: S4Result }>(`/api/v1/stage4/${ucId}/s4/runs/${ucData.s4_latest_run_id}`)
+            const fullRun = await apiGet<{ result: S4Result }>(`/api/v1/use-cases/${ucId}/s4/runs/${ucData.s4_latest_run_id}`)
             setLatestResult(fullRun.result)
           }
         }
@@ -121,7 +121,7 @@ export default function Stage4Page() {
 
   const handleLoadFromS2 = async () => {
     try {
-      await apiPost(`/api/v1/stage4/${ucId}/s4/load-from-s2`, {})
+      await apiPost(`/api/v1/use-cases/${ucId}/s4/load-from-s2`, {})
       toast.success("Loaded process documents from Stage 2")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load from S2")
@@ -130,7 +130,7 @@ export default function Stage4Page() {
 
   const handleLoadFromS3 = async () => {
     try {
-      await apiPost(`/api/v1/stage4/${ucId}/s4/load-from-s3`, {})
+      await apiPost(`/api/v1/use-cases/${ucId}/s4/load-from-s3`, {})
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load from S3")
@@ -141,10 +141,10 @@ export default function Stage4Page() {
     setRunningStage(true)
     setError("")
     try {
-      await apiPatch(`/api/v1/stage4/${ucId}/s4/inputs`, {
+      await apiPatch(`/api/v1/use-cases/${ucId}/s4/inputs`, {
         sprint_count: sprintCount, sprint_length_weeks: sprintLength,
       })
-      await apiPost(`/api/v1/stage4/${ucId}/s4/runs`, {})
+      await apiPost(`/api/v1/use-cases/${ucId}/s4/runs`, {})
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run stage")
       setRunningStage(false)
@@ -162,7 +162,7 @@ export default function Stage4Page() {
       const runId = useCase?.s4_latest_run_id
       if (!runId) return
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/stage4/${ucId}/s4/runs/${runId}/export`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/use-cases/${ucId}/s4/runs/${runId}/export`,
         { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
       )
       if (!response.ok) throw new Error("Export failed")

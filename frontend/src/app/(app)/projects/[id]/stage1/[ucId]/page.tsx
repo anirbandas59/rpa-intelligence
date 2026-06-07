@@ -116,7 +116,7 @@ export default function Stage1Page() {
         const [ucData, readinessData, runsData] = await Promise.all([
           apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
           apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
-          apiGetRuns<StageRun>(`/api/v1/stage1/${ucId}/s1/runs`).catch(
+          apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s1/runs`).catch(
             () => [] as StageRun[],
           ),
         ]);
@@ -160,7 +160,7 @@ export default function Stage1Page() {
               return { uc: u, result: null, status: "not_ready" };
             try {
               const ucRuns = await apiGetRuns<StageRun>(
-                `/api/v1/stage1/${u.id}/s1/runs`,
+                `/api/v1/use-cases/${u.id}/s1/runs`,
               );
               const latest = ucRuns.find((r) => r.id === u.s1_latest_run_id);
               if (latest?.status === "complete") {
@@ -205,7 +205,7 @@ export default function Stage1Page() {
     setRunningStage(true);
     setError("");
     try {
-      await apiPost(`/api/v1/stage1/${ucId}/s1/runs`, {});
+      await apiPost(`/api/v1/use-cases/${ucId}/s1/runs`, {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start run");
       setRunningStage(false);
@@ -219,7 +219,7 @@ export default function Stage1Page() {
 
   const handleBackfill = async () => {
     try {
-      await apiPost(`/api/v1/stage1/${ucId}/s1/backfill-from-s2`, {});
+      await apiPost(`/api/v1/use-cases/${ucId}/s1/backfill-from-s2`, {});
       toast.success(
         "Backfill complete — re-run assessment to see updated inputs",
       );
@@ -234,7 +234,7 @@ export default function Stage1Page() {
       return;
     }
     try {
-      await apiPost(`/api/v1/stage1/${ucId}/s1/override`, {
+      await apiPost(`/api/v1/use-cases/${ucId}/s1/override`, {
         ...overrideDims,
         reason: overrideReason,
       });

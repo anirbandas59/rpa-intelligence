@@ -69,7 +69,7 @@ export default function Stage3Page() {
         const [ucData, readinessData, runsData] = await Promise.all([
           apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
           apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
-          apiGetRuns<StageRun>(`/api/v1/stage3/${ucId}/s3/runs`),
+          apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s3/runs`),
         ])
         setUseCase(ucData)
         setReadiness(readinessData)
@@ -84,7 +84,7 @@ export default function Stage3Page() {
           const latestRun = runsData.find((r) => r.id === ucData.s3_latest_run_id)
           if (latestRun?.status === "complete") {
             // List endpoint returns summary only — fetch full result from single-run endpoint
-            const fullRun = await apiGet<{ result: S3Result }>(`/api/v1/stage3/${ucId}/s3/runs/${ucData.s3_latest_run_id}`)
+            const fullRun = await apiGet<{ result: S3Result }>(`/api/v1/use-cases/${ucId}/s3/runs/${ucData.s3_latest_run_id}`)
             setLatestResult(fullRun.result)
           }
         }
@@ -99,7 +99,7 @@ export default function Stage3Page() {
 
   const handleLoadFromS2 = async () => {
     try {
-      await apiPost(`/api/v1/stage3/${ucId}/s3/load-from-s2`, {})
+      await apiPost(`/api/v1/use-cases/${ucId}/s3/load-from-s2`, {})
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load from S2")
@@ -109,10 +109,10 @@ export default function Stage3Page() {
   const handleRunStage = async () => {
     setError("")
     try {
-      await apiPatch(`/api/v1/stage3/${ucId}/s3/inputs`, {
+      await apiPatch(`/api/v1/use-cases/${ucId}/s3/inputs`, {
         effort_weeks: effortWeeks, start_date: startDate, complexity_class: complexityClass,
       })
-      await apiPost(`/api/v1/stage3/${ucId}/s3/runs`, {})
+      await apiPost(`/api/v1/use-cases/${ucId}/s3/runs`, {})
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run stage")
@@ -123,7 +123,7 @@ export default function Stage3Page() {
     const newDeltas = { ...phaseDeltas, [phaseName]: (phaseDeltas[phaseName] || 0) + delta }
     setPhaseDeltas(newDeltas)
     try {
-      await apiPatch(`/api/v1/stage3/${ucId}/s3/phase-delta`, { [phaseName]: newDeltas[phaseName] })
+      await apiPatch(`/api/v1/use-cases/${ucId}/s3/phase-delta`, { [phaseName]: newDeltas[phaseName] })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update delta")
     }
@@ -131,7 +131,7 @@ export default function Stage3Page() {
 
   const handleResetDeltas = async () => {
     try {
-      await apiPost(`/api/v1/stage3/${ucId}/s3/reset-deltas`, {})
+      await apiPost(`/api/v1/use-cases/${ucId}/s3/reset-deltas`, {})
       setPhaseDeltas({})
       window.location.reload()
     } catch (err) {

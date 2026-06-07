@@ -66,7 +66,7 @@ export default function Stage2Page() {
         const [ucData, readinessData, runsData] = await Promise.all([
           apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
           apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
-          apiGetRuns<StageRun>(`/api/v1/stage2/${ucId}/s2/runs`),
+          apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s2/runs`),
         ])
         setUseCase(ucData)
         setReadiness(readinessData)
@@ -97,7 +97,7 @@ export default function Stage2Page() {
     try {
       const formData = new FormData()
       formData.append("file", file)
-      await apiPostFormData(`/api/v1/stage2/${ucId}/s2/documents`, formData)
+      await apiPostFormData(`/api/v1/use-cases/${ucId}/s2/documents`, formData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed")
     } finally {
@@ -109,7 +109,7 @@ export default function Stage2Page() {
     const newBands = { ...bands, [attribute]: value }
     setBands(newBands)
     try {
-      await apiPatch(`/api/v1/stage2/${ucId}/s2/inputs`, {
+      await apiPatch(`/api/v1/use-cases/${ucId}/s2/inputs`, {
         bands: { [attribute]: value, [`${attribute}_source`]: "corrected" },
       })
     } catch (err) {
@@ -121,7 +121,7 @@ export default function Stage2Page() {
     setRunningStage(true)
     setError("")
     try {
-      await apiPost(`/api/v1/stage2/${ucId}/s2/runs`, {})
+      await apiPost(`/api/v1/use-cases/${ucId}/s2/runs`, {})
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start run")
       setRunningStage(false)
