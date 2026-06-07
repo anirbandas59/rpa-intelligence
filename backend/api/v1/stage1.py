@@ -1,3 +1,26 @@
+"""
+Stage 1 (Migration Assessment) API routes for RPA Intelligence Platform.
+
+Provides endpoints for managing migration assessment workflow: input updates,
+run creation, result retrieval, score overrides, and S2 backfill integration.
+All assessment runs execute asynchronously via background tasks.
+
+Key endpoints:
+- PATCH /{use_case_id}/s1/inputs: Update assessment inputs (name, description, platform)
+- POST /{use_case_id}/s1/runs: Create new assessment run (async via background task)
+- GET /{use_case_id}/s1/runs: List all runs for a use case
+- GET /{use_case_id}/s1/runs/{run_id}: Get single run with full details
+- POST /{use_case_id}/s1/override: Override scores without creating new run
+- POST /{use_case_id}/s1/backfill-from-s2: Generate suggestions from S2 complexity data
+
+Assessment flow:
+1. User updates s1 inputs via PATCH endpoint
+2. User triggers run via POST /runs (returns immediately, processing in background)
+3. Frontend polls GET /runs/{run_id} until status is "complete"
+4. User can override scores via POST /override (preserves audit trail with reason)
+5. Optional: user can backfill from S2 complexity for refined scoring suggestions
+"""
+
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -16,6 +39,8 @@ router = APIRouter()
 
 
 class UpdateS1InputsRequest(BaseModel):
+    """Request model for updating Stage 1 inputs on a use case."""
+
     name: str | None = None
     description: str | None = None
     source_platform: str | None = None
@@ -23,10 +48,19 @@ class UpdateS1InputsRequest(BaseModel):
 
 
 class CreateS1RunRequest(BaseModel):
+    """Request model for creating a new Stage 1 assessment run."""
+
     model: str = "claude-haiku-4-5"
 
 
 class OverrideS1Request(BaseModel):
+    """
+    Request model for overriding Stage 1 scores without creating a new run.
+
+    Requires a reason for audit trail. Scores are recalculated and migration
+    decision is automatically re-derived from the new total score.
+    """
+
     technical_feasibility: int | None = None
     migration_effort: int | None = None
     platform_suitability: int | None = None
@@ -35,6 +69,8 @@ class OverrideS1Request(BaseModel):
 
 
 class S1RunResponse(BaseModel):
+    """Response model for Stage 1 run creation."""
+
     run_id: str
     status: str
     run_number: int
@@ -46,8 +82,19 @@ async def _execute_s1_background_task(
     db_factory,
 ):
     """
-    Background task to execute S1 assessment.
-    Creates its own database session to avoid transaction conflicts.
+    Execute Stage 1 assessment in background task with independent database session.
+
+    Creates its own database session to avoid transaction conflicts with the
+    request handler. Delegates to AssessmentService for LLM-based scoring and
+    decision derivation. Updates StageRun record on completion or failure.
+
+    Args:
+        use_case_id: UseCase ID to assess
+        model: LLM model name (e.g., "claude-haiku-4-5")
+        db_factory: Async session factory for creating independent database session
+
+    Raises:
+        Exception: Re-raises any exception after logging for error tracking
     """
     async with db_factory() as session:
         try:
@@ -65,14 +112,31 @@ async def update_s1_inputs(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Update S1 inputs on UseCase."""
+    """
+    Update Stage 1 inputs on UseCase (name, description, platform, install status).
+
+    Updates top-level UseCase fields used as assessment inputs. Does not trigger
+    a new assessment run automatically. Only provided fields are updated (partial update).
+
+    Args:
+        use_case_id: UseCase ID to update
+        request: Partial update request with optional fields
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        Confirmation message with use_case_id
+
+    Raises:
+        HTTPException: 404 if use case not found
+    """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
 
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
 
-    # Update top-level fields
+    # Update only provided fields (partial update pattern)
     if request.name is not None:
         use_case.name = request.name
     if request.description is not None:
@@ -97,14 +161,34 @@ async def create_s1_run(
     user: User = Depends(get_current_user),
     db_factory=Depends(get_session_maker),
 ):
-    """Create S1 StageRun and execute assessment in background."""
+    """
+    Create Stage 1 assessment run and execute in background.
+
+    Returns immediately with placeholder response. Actual assessment runs
+    asynchronously via background task. Frontend should poll GET /runs/{run_id}
+    to check completion status.
+
+    Args:
+        use_case_id: UseCase ID to assess
+        request: Model selection for assessment (default: claude-haiku-4-5)
+        background_tasks: FastAPI background task scheduler (injected)
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+        db_factory: Session factory for background task's independent session (injected)
+
+    Returns:
+        S1RunResponse with placeholder run_id and status="running"
+
+    Raises:
+        HTTPException: 404 if use case not found
+    """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
 
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
 
-    # Fire background task with factory, not session
+    # Fire background task with session factory (not request session)
     background_tasks.add_task(
         _execute_s1_background_task,
         use_case_id=use_case_id,
@@ -126,7 +210,20 @@ async def list_s1_runs(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """List all S1 StageRuns for a use-case."""
+    """
+    List all Stage 1 runs for a use case, ordered by most recent first.
+
+    Returns summary view of all assessment runs including status, scores, and metadata.
+    Useful for version history and comparison across runs.
+
+    Args:
+        use_case_id: UseCase ID to list runs for
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        List of run summaries with id, run_number, status, timestamps, model, and result
+    """
     result = await db.execute(
         select(StageRun)
         .where(StageRun.use_case_id == use_case_id, StageRun.stage == "s1")
@@ -154,7 +251,24 @@ async def get_s1_run(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Get single S1 StageRun with full details."""
+    """
+    Get single Stage 1 run with full details including inputs snapshot and result.
+
+    Returns complete run record for detailed inspection, version comparison, or
+    debugging. Includes inputs_hash for staleness detection.
+
+    Args:
+        use_case_id: UseCase ID owning the run
+        run_id: StageRun ID to retrieve
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        Full StageRun record with all fields
+
+    Raises:
+        HTTPException: 404 if run not found or doesn't belong to this use case
+    """
     result = await db.execute(
         select(StageRun).where(
             StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1"
@@ -185,7 +299,25 @@ async def override_s1_decision(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Update decision/score fields without creating a new run. Requires reason."""
+    """
+    Override Stage 1 scores without creating a new run (preserves audit trail with reason).
+
+    Allows manual score adjustments when AI assessment needs correction. Updates
+    the latest StageRun's result in-place, recalculates total score, and auto-derives
+    migration decision from new total. Requires a reason for compliance and audit.
+
+    Args:
+        use_case_id: UseCase ID to override scores for
+        request: Override request with optional dimension scores and required reason
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        Updated result with new scores, total, decision, and override metadata
+
+    Raises:
+        HTTPException: 404 if use case or latest run not found
+    """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
 
@@ -198,7 +330,7 @@ async def override_s1_decision(
     if not stage_run:
         raise HTTPException(status_code=404, detail="Latest run not found")
 
-    # Apply overrides to result
+    # Apply overrides to result (partial update, preserving other fields)
     result_data = dict(stage_run.result)
 
     if request.technical_feasibility is not None:
@@ -210,7 +342,7 @@ async def override_s1_decision(
     if request.risk is not None:
         result_data["risk"] = request.risk
 
-    # Recalculate total
+    # Recalculate total score from all four dimensions
     result_data["total_score"] = (
         result_data.get("technical_feasibility", 0)
         + result_data.get("migration_effort", 0)
@@ -218,12 +350,12 @@ async def override_s1_decision(
         + result_data.get("risk", 0)
     )
 
-    # Auto-derive migration_decision from new total_score
+    # Auto-derive migration_decision from new total_score (QUICK_WIN, STRATEGIC, HOLD, DO_NOT_MIGRATE)
     from core.assessment.decision_utils import derive_migration_decision
 
     result_data["migration_decision"] = derive_migration_decision(result_data["total_score"])
 
-    # Add override metadata
+    # Add override metadata for audit trail
     result_data["override_reason"] = request.reason
     result_data["override_by"] = user.id
 
@@ -241,7 +373,26 @@ async def backfill_from_s2(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Fire Sonnet backfill using S2 data. Returns suggestions without auto-applying."""
+    """
+    Generate Stage 1 score suggestions from Stage 2 complexity data using Sonnet.
+
+    Uses detailed complexity analysis from S2 (attribute weights, complexity class,
+    effort estimates) to generate informed S1 score suggestions. Returns suggestions
+    only - does not auto-apply. User must review and manually apply via override endpoint.
+
+    Args:
+        use_case_id: UseCase ID to generate suggestions for
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        Suggestions dict with proposed scores for four dimensions (technical_feasibility,
+        migration_effort, platform_suitability, risk)
+
+    Raises:
+        HTTPException: 400 if S1 or S2 runs missing/incomplete, 404 if use case not found
+        ScoringValidationError: If S2 result missing required fields
+    """
     # Fetch use-case
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
@@ -269,14 +420,14 @@ async def backfill_from_s2(
     if not s1_run:
         raise HTTPException(status_code=404, detail="S1 run not found")
 
-    # Build backfill prompt
+    # Extract S2 and S1 data for prompt construction
     from llm.manager import LLMManager
     from prompts.assessment_prompts import S1_BACKFILL_SYSTEM, S1_BACKFILL_USER
 
     s2_data = s2_run.result
     s1_data = s1_run.result
 
-    # Validate required S2 fields
+    # Validate required S2 fields are present
     complexity_class = s2_data.get("complexity_class")
     if not complexity_class:
         raise ScoringValidationError("S2 run missing required field: complexity_class")
