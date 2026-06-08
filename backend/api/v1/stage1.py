@@ -24,13 +24,16 @@ Assessment flow:
 import hashlib
 import json
 import logging
+import uuid
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_current_user, get_db, get_session_maker
+from api.dependencies import get_current_user, get_db, get_redis, get_session_maker
+from core.batch_scorer import BatchScorer
 from core.exceptions import ScoringValidationError
 from db.models import StageRun, UseCase, User
 from services.assessment_service import AssessmentService
@@ -525,3 +528,297 @@ async def backfill_from_s2(
     except Exception as e:
         logger.error(f"Backfill failed: {e}")
         raise HTTPException(status_code=500, detail=f"Backfill failed: {str(e)}")
+
+
+class BatchScoreRequest(BaseModel):
+    """Request model for batch scoring multiple use cases."""
+
+    use_case_ids: list[str]
+    model: str = "claude-haiku-4-5"
+
+
+class BatchScoreResponse(BaseModel):
+    """Response model for batch scoring request."""
+
+    batch_id: str
+    status: str
+    total_count: int
+
+
+class BatchStatusResponse(BaseModel):
+    """Response model for batch status polling."""
+
+    batch_id: str
+    status: str
+    completed_count: int
+    total_count: int
+    failed_count: int
+    errors: dict[str, str]
+
+
+@router.post("/{project_id}/s1/batch-score", response_model=BatchScoreResponse)
+async def batch_score_use_cases(
+    project_id: str,
+    request: BatchScoreRequest,
+    background_tasks: BackgroundTasks,
+    redis: aioredis.Redis = Depends(get_redis),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    db_factory=Depends(get_session_maker),
+):
+    """
+    Create batch scoring job for multiple use cases with concurrency control.
+
+    Queues multiple use cases for parallel S1 assessment with configurable
+    concurrency limit (default: 3 concurrent LLM calls) to prevent overloading
+    LLM providers and control costs. Returns immediately with batch_id for
+    progress polling. Processing runs in background with Redis-based queue.
+
+    Args:
+        project_id: Project ID containing the use cases
+        request: List of use case IDs to score and optional model selection
+        background_tasks: FastAPI background task scheduler (injected)
+        redis: Redis client for queue management (injected)
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+        db_factory: Session factory for background task's independent sessions (injected)
+
+    Returns:
+        BatchScoreResponse with batch_id, status="queued", and total_count
+
+    Raises:
+        HTTPException: 400 if use_case_ids list is empty
+    """
+    if not request.use_case_ids:
+        raise HTTPException(status_code=400, detail="use_case_ids cannot be empty")
+
+    # Generate unique batch ID
+    batch_id = str(uuid.uuid4())
+
+    # Create batch scorer with concurrency limit (3 concurrent LLM calls max)
+    scorer = BatchScorer(redis, max_concurrent=3)
+
+    # Create batch in Redis (metadata + queue)
+    await scorer.create_batch(batch_id, request.use_case_ids)
+
+    # Fire background task to process batch
+    background_tasks.add_task(
+        scorer.process_batch,
+        batch_id=batch_id,
+        db_factory=db_factory,
+        model=request.model,
+    )
+
+    logger.info(
+        f"Batch {batch_id}: Queued {len(request.use_case_ids)} use cases for project {project_id}"
+    )
+
+    return BatchScoreResponse(
+        batch_id=batch_id,
+        status="queued",
+        total_count=len(request.use_case_ids),
+    )
+
+
+@router.get("/{project_id}/s1/batch/{batch_id}/status", response_model=BatchStatusResponse)
+async def get_batch_status(
+    project_id: str,
+    batch_id: str,
+    redis: aioredis.Redis = Depends(get_redis),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get batch scoring progress for frontend polling.
+
+    Returns current status of batch job including completion progress and any errors.
+    Frontend should poll this endpoint every 2 seconds until status is "complete".
+
+    Args:
+        project_id: Project ID (for route consistency, not used in logic)
+        batch_id: Batch identifier to query
+        redis: Redis client for queue management (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        BatchStatusResponse with progress counters and error details
+
+    Raises:
+        HTTPException: 404 if batch not found
+    """
+    scorer = BatchScorer(redis)
+    status = await scorer.get_batch_status(batch_id)
+
+    if not status:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    return BatchStatusResponse(
+        batch_id=status["batch_id"],
+        status=status["status"],
+        completed_count=status["completed_count"],
+        total_count=status["total_count"],
+        failed_count=status["failed_count"],
+        errors=status.get("errors", {}),
+    )
+
+
+class SetCurrentRunRequest(BaseModel):
+    """Request model for setting a run as current (empty body, run_id in path)."""
+
+    pass
+
+
+@router.post("/{use_case_id}/s1/runs/{run_id}/set-current")
+async def set_current_run(
+    use_case_id: str,
+    run_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Set a specific run as the current run for display and stats.
+
+    Updates use_case.s1_latest_run_id to point to the selected run. This affects
+    which run is used for project-level statistics and default display in UI.
+    Useful when user wants to promote an older run back to "current" status.
+
+    Args:
+        use_case_id: UseCase ID to update
+        run_id: StageRun ID to set as current
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        Confirmation message with updated use_case_id and run_id
+
+    Raises:
+        HTTPException: 404 if use case or run not found, or run doesn't belong to use case
+    """
+    # Verify use case exists
+    result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+    use_case = result.scalar_one_or_none()
+
+    if not use_case:
+        raise HTTPException(status_code=404, detail="UseCase not found")
+
+    # Verify run exists and belongs to this use case
+    run_result = await db.execute(
+        select(StageRun).where(
+            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1"
+        )
+    )
+    stage_run = run_result.scalar_one_or_none()
+
+    if not stage_run:
+        raise HTTPException(
+            status_code=404, detail="Run not found or does not belong to this use case"
+        )
+
+    # Update latest_run_id pointer
+    use_case.s1_latest_run_id = run_id
+    await db.commit()
+
+    logger.info(f"Set S1 current run to {run_id} for use case {use_case_id} by {user.email}")
+
+    return {"status": "updated", "use_case_id": use_case_id, "current_run_id": run_id}
+
+
+class ExplainOverrideRequest(BaseModel):
+    """Request model for generating AI explanation of override."""
+
+    pass
+
+
+@router.post("/{use_case_id}/s1/explain-override")
+async def explain_override(
+    use_case_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Generate AI explanation of override decision using context + reason + scores.
+
+    Takes existing override metadata (reason, scores) and generates coherent
+    explanation using Sonnet. Combines use case context (name, description),
+    override reason (can be 1-2 words), and score changes into clear narrative.
+    This is optional and on-demand - user clicks "Explain Override" button.
+
+    Args:
+        use_case_id: UseCase ID with override to explain
+        db: Database session (injected)
+        user: Current authenticated user (injected)
+
+    Returns:
+        Dict with "explanation" field containing AI-generated text
+
+    Raises:
+        HTTPException: 404 if use case or run not found, 400 if no override exists
+    """
+    # Fetch use case
+    result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+    use_case = result.scalar_one_or_none()
+
+    if not use_case or not use_case.s1_latest_run_id:
+        raise HTTPException(status_code=404, detail="UseCase or assessment not found")
+
+    # Fetch latest run
+    run_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s1_latest_run_id))
+    stage_run = run_result.scalar_one_or_none()
+
+    if not stage_run:
+        raise HTTPException(status_code=404, detail="Latest run not found")
+
+    # Check if override exists
+    result_data = stage_run.result
+    override_reason = result_data.get("override_reason")
+
+    if not override_reason:
+        raise HTTPException(status_code=400, detail="No override found to explain")
+
+    # Build context for LLM
+    from llm.manager import LLMManager
+
+    system_prompt = """You are an RPA migration specialist. Generate a clear, \
+professional explanation of why manual override was applied to an AI assessment.
+
+Given the use case context, override reason, and score changes, write 2-3 \
+sentences explaining the override decision in business terms.
+
+Return ONLY the explanation text - no JSON, no markdown, no preamble."""
+
+    user_prompt = f"""Explain this override:
+
+Use Case: {use_case.name}
+Description: {use_case.description or 'N/A'}
+
+Override Reason: {override_reason}
+
+Scores After Override:
+- Technical Feasibility: {result_data.get('technical_feasibility', 0)}/40
+- Migration Effort: {result_data.get('migration_effort', 0)}/25
+- Platform Suitability: {result_data.get('platform_suitability', 0)}/20
+- Risk: {result_data.get('risk', 0)}/15
+- Total: {result_data.get('total_score', 0)}/100
+- Decision: {result_data.get('migration_decision', 'N/A')}
+
+Write a clear explanation combining the context, reason, and resulting decision."""
+
+    llm = LLMManager(provider_name="anthropic", model_name="claude-sonnet-4-5")
+
+    try:
+        explanation = llm.complete(
+            prompt=user_prompt,
+            system=system_prompt,
+            max_tokens=500,
+            temperature=0.5,
+        )
+
+        logger.info(f"Generated override explanation for use case {use_case_id}")
+
+        return {
+            "status": "explanation_generated",
+            "explanation": explanation.strip(),
+        }
+
+    except Exception as e:
+        logger.error(f"Override explanation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Explanation generation failed: {str(e)}")

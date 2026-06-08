@@ -151,3 +151,21 @@ async def require_superuser(user: User = Depends(get_current_user)) -> User:
     if user.role != "superuser":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superuser required")
     return user
+
+
+async def get_redis():
+    """
+    Dependency that provides async Redis client for queue and caching.
+
+    Returns existing Redis client from redis_store module. Used for batch
+    scoring queue management and progress tracking.
+
+    Returns:
+        Async Redis client
+
+    Raises:
+        RuntimeError: If Redis store is not initialized
+    """
+    from api.redis.redis_store import _get_client
+
+    return _get_client()
