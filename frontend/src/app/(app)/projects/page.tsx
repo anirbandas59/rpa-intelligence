@@ -280,7 +280,7 @@ export default function ProjectsPage() {
               <div>
                 <span className="text-2xl font-bold text-foreground">
                   {projects.reduce(
-                    (sum, p) => sum + (p.use_cases?.length || 0),
+                    (sum, p) => sum + (p.use_case_count || 0),
                     0,
                   )}
                 </span>
@@ -309,7 +309,7 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.map((project) => {
-              const useCaseCount = project.use_cases?.length || 0;
+              const useCaseCount = project.use_case_count || 0;
               return (
                 <Link key={project.id} href={`/projects/${project.id}`}>
                   <div className="group relative glass-card rounded-xl hover:glow-primary hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden h-full flex">

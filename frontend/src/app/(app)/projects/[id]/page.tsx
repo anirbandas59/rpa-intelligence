@@ -33,9 +33,24 @@ import { ComplexityChip } from "@/components/shared/ComplexityChip";
 import { PriorityBadge, BAND_META } from "@/components/shared/PriorityBadge";
 import { MiniSpark } from "@/components/shared/MiniSpark";
 import { Icon } from "@/components/shared/icons";
-import { ArrowLeft, Plus, Loader2, Users, ChevronDown, Upload, Edit3, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Loader2,
+  Users,
+  ChevronDown,
+  Upload,
+  Edit3,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiGetRuns, apiPost, apiDelete, isAuthenticated } from "@/lib/api";
+import {
+  apiGet,
+  apiGetRuns,
+  apiPost,
+  apiDelete,
+  isAuthenticated,
+} from "@/lib/api";
 import { BulkUploadModal } from "@/components/BulkUploadModal";
 import type {
   Project,
@@ -311,21 +326,28 @@ export default function ProjectDetailPage() {
   const selectedUc = useCases.find((uc) => uc.id === selectedUcId);
   const selectedReadiness = selectedUcId ? readiness.get(selectedUcId) : null;
 
-  /* Hero stats */
-  const quickWins = useCases.filter((uc) => {
-    const c = ucCache.get(uc.id);
-    return c?.s1?.migration_decision === "QUICK_WIN";
-  }).length;
-  const totalBuildWeeks = useCases.reduce((sum, uc) => {
-    const phases = ucCache.get(uc.id)?.s3?.phases || [];
-    const buildPhase = phases.find((p) =>
-      p.name.toLowerCase().includes("build"),
-    );
-    return sum + (buildPhase?.weeks || 0);
-  }, 0);
-  const totalFeatures = useCases.reduce((sum, uc) => {
-    return sum + 0; // s4 features not cached — placeholder
-  }, 0);
+  /* Hero stats - decision band counts */
+  const decisionCounts = useCases.reduce(
+    (acc, uc) => {
+      const s1 = ucCache.get(uc.id)?.s1;
+      if (!s1 || !s1.migration_decision) {
+        acc.unprocessed++;
+      } else {
+        const decision = s1.migration_decision.toLowerCase();
+        if (decision in acc) {
+          acc[decision as keyof typeof acc]++;
+        }
+      }
+      return acc;
+    },
+    {
+      quick_win: 0,
+      strategic: 0,
+      hold: 0,
+      do_not_migrate: 0,
+      unprocessed: 0,
+    },
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -387,7 +409,7 @@ export default function ProjectDetailPage() {
               >
                 {project.description || "Four-stage delivery intelligence"} ·{" "}
                 {useCases.length} use case{useCases.length !== 1 ? "s" : ""} ·{" "}
-                {quickWins} quick win{quickWins !== 1 ? "s" : ""} identified
+                {decisionCounts.quick_win} quick win{decisionCounts.quick_win !== 1 ? "s" : ""} identified
               </p>
             </div>
             <AlertDialog>
@@ -402,7 +424,9 @@ export default function ProjectDetailPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete project?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete "{project.name}" and all {useCases.length} use case{useCases.length !== 1 ? "s" : ""}. This action cannot be undone.
+                    This will permanently delete "{project.name}" and all{" "}
+                    {useCases.length} use case{useCases.length !== 1 ? "s" : ""}
+                    . This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -419,17 +443,20 @@ export default function ProjectDetailPage() {
           </div>
           <div style={{ display: "flex", gap: 26 }}>
             {[
-              { n: useCases.length, l: "use cases" },
-              { n: quickWins, l: "quick wins" },
-              { n: totalBuildWeeks || "—", l: "build weeks" },
-              { n: totalFeatures || "—", l: "features" },
-            ].map(({ n, l }) => (
+              { n: useCases.length, l: "total use cases", color: "var(--fg)" },
+              { n: decisionCounts.quick_win, l: "quick wins", color: "var(--c-green)" },
+              { n: decisionCounts.strategic, l: "strategic", color: "var(--c-teal)" },
+              { n: decisionCounts.hold, l: "hold", color: "var(--c-amber)" },
+              { n: decisionCounts.do_not_migrate, l: "do not migrate", color: "var(--c-red)" },
+              { n: decisionCounts.unprocessed, l: "unprocessed", color: "var(--muted-fg)" },
+            ].map(({ n, l, color }) => (
               <div key={l}>
                 <div
                   style={{
                     fontFamily: "var(--mono)",
                     fontSize: 24,
                     fontWeight: 700,
+                    color,
                   }}
                 >
                   {n}
@@ -790,7 +817,7 @@ export default function ProjectDetailPage() {
                   <span>Priority</span>
                   <span>Complexity</span>
                   <span>Pipeline</span>
-                  <span style={{ textAlign: "right" }}>Progress</span>
+                  <span>Progress</span>
                 </div>
                 {useCases.map((u, idx) => {
                   const ucReadiness = readiness.get(u.id);
@@ -833,88 +860,88 @@ export default function ProjectDetailPage() {
                           width: "100%",
                         }}
                       >
-                      <div style={{ minWidth: 0, paddingRight: 12 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {u.name}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "var(--muted-fg)",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {u.description || "No description"}
-                        </div>
-                      </div>
-                      <div>
-                        {cache?.s1 ? (
-                          <PriorityBadge band={cache.s1.migration_decision} />
-                        ) : (
-                          <span
-                            style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                        <div style={{ minWidth: 0, paddingRight: 12 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
                           >
-                            —
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        {cache?.s2 ? (
-                          <ComplexityChip
-                            cls={cache.s2.complexity_class as Band}
-                            size={26}
-                          />
-                        ) : (
-                          <span
-                            style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                            {u.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "var(--muted-fg)",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
                           >
-                            —
-                          </span>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 5,
-                        }}
-                      >
-                        {STAGES.map((stage) => {
-                          const status: ReadinessStatus = resolveStatus(
-                            ucReadiness,
-                            stage.id,
-                          );
-                          const cfg = STATUS_CONFIG[status];
-                          return (
+                            {u.description || "No description"}
+                          </div>
+                        </div>
+                        <div>
+                          {cache?.s1 ? (
+                            <PriorityBadge band={cache.s1.migration_decision} />
+                          ) : (
                             <span
-                              key={stage.id}
-                              title={`${stage.short}: ${cfg.label}`}
-                              style={{
-                                width: 7,
-                                height: 7,
-                                borderRadius: 99,
-                                background: cfg.color,
-                                display: "inline-block",
-                              }}
+                              style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                            >
+                              —
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          {cache?.s2 ? (
+                            <ComplexityChip
+                              cls={cache.s2.complexity_class as Band}
+                              size={26}
                             />
-                          );
-                        })}
-                      </div>
+                          ) : (
+                            <span
+                              style={{ fontSize: 11, color: "var(--muted-fg)" }}
+                            >
+                              —
+                            </span>
+                          )}
+                        </div>
                         <div
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "flex-end",
+                            gap: 5,
+                          }}
+                        >
+                          {STAGES.map((stage) => {
+                            const status: ReadinessStatus = resolveStatus(
+                              ucReadiness,
+                              stage.id,
+                            );
+                            const cfg = STATUS_CONFIG[status];
+                            return (
+                              <span
+                                key={stage.id}
+                                title={`${stage.short}: ${cfg.label}`}
+                                style={{
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: 99,
+                                  background: cfg.color,
+                                  display: "inline-block",
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "flex-start",
                             gap: 8,
                           }}
                         >
@@ -953,15 +980,18 @@ export default function ProjectDetailPage() {
                               className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent opacity-0 group-hover:opacity-100 h-9 px-3"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                              <Trash2 className="h-3.5 w-3.5 text-accent-foreground hover:text-destructive" />
                             </button>
                           }
                         />
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete use case?</AlertDialogTitle>
+                            <AlertDialogTitle>
+                              Delete use case?
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will permanently delete "{u.name}". This action cannot be undone.
+                              This will permanently delete &quot;{u.name}&quot;.
+                              This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -1103,11 +1133,15 @@ export default function ProjectDetailPage() {
                       maxWidth: 280,
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                    <div
+                      style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}
+                    >
                       Run Stage 1 assessments to populate map
                     </div>
                     <div style={{ fontSize: 11.5 }}>
-                      Complete Stage 1 (Migration Assessment) for use cases to see them plotted. Stage 2 (Complexity) provides better positioning but is optional.
+                      Complete Stage 1 (Migration Assessment) for use cases to
+                      see them plotted. Stage 2 (Complexity) provides better
+                      positioning but is optional.
                     </div>
                   </div>
                 )}
@@ -1124,9 +1158,10 @@ export default function ProjectDetailPage() {
                     XL: 4,
                   };
                   const hasS2 = !!cache.s2;
-                  const x = hasS2 && cache.s2
-                    ? (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4
-                    : 50; // Center if no S2
+                  const x =
+                    hasS2 && cache.s2
+                      ? (complexityMap[cache.s2.complexity_class] / 4) * 88 + 4
+                      : 50; // Center if no S2
                   const y = (1 - cache.s1.total_score / 100) * 86 + 2;
                   const wk = cache.s2?.effort_max_weeks || 5; // Default 5 weeks
                   const sz = 26 + wk * 3;
