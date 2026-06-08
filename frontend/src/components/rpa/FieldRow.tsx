@@ -6,39 +6,45 @@
  * Used in Stage 1 inputs card and similar data displays.
  */
 
-import React from 'react'
-import { InputSourceBadge } from '@/components/shared/InputSourceBadge'
-import type { InputSource } from '@/lib/types'
+import React from "react";
+import { InputSourceBadge } from "@/components/shared/InputSourceBadge";
+import type { InputSource } from "@/lib/types";
 
 export interface FieldRowProps {
   /** Field label */
-  label: string
+  label: string;
   /** Field value */
-  value: string | number | React.ReactNode
+  value: string | number | React.ReactNode;
   /** Optional source indicator */
-  source?: InputSource
+  source?: InputSource;
   /** Use monospace font for value */
-  mono?: boolean
+  mono?: boolean;
 }
 
-export function FieldRow({ label, value, source, mono = false }: FieldRowProps) {
+export function FieldRow({
+  label,
+  value,
+  source,
+  mono = false,
+}: FieldRowProps) {
   return (
     <div
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '9px 0',
-        borderBottom: '1px solid var(--border)',
+        display: "flex",
+        alignItems: "start",
+        justifyContent: "space-between",
+        padding: "9px 0",
+        borderBottom: "1px solid var(--border)",
       }}
     >
-      <span style={{ fontSize: 12.5, color: 'var(--muted-fg)' }}>{label}</span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 12.5, color: "var(--muted-fg)" }}>{label}</span>
+      <span style={{ display: "flex", alignItems: "end", gap: 8 }}>
         <span
           style={{
             fontSize: 12.5,
             fontWeight: 500,
-            fontFamily: mono ? 'var(--mono)' : 'inherit',
+            fontFamily: mono ? "var(--mono)" : "inherit",
+            textAlign: "right",
           }}
         >
           {value}
@@ -46,5 +52,5 @@ export function FieldRow({ label, value, source, mono = false }: FieldRowProps) 
         {source && <InputSourceBadge source={source} />}
       </span>
     </div>
-  )
+  );
 }

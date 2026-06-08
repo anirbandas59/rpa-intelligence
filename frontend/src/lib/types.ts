@@ -189,6 +189,20 @@ export interface S2Result {
   sprint_max: number;
   attribute_weights: Record<string, number>;
   bands: AttributeBands;
+  extraction_notes?: string;
+  process_summary?: {
+    key_activities?: string[];
+    key_logical_points?: string[];
+    key_applications?: string[];
+    key_layouts?: string[];
+    key_additional_technologies?: string[];
+  };
+  _assessment_result?: {
+    complexity_tier: string;
+    confidence_score: number;
+    reasoning: string;
+    requires_tech_lead_review: boolean;
+  };
 }
 
 // ============================================================================

@@ -411,6 +411,45 @@ export default function Stage2Page() {
                     </div>
                   </div>
                 </Card>
+
+                {/* AI Analysis section - show only if we have completed result with analysis */}
+                {latestResult && (latestResult._assessment_result?.reasoning || latestResult.extraction_notes) && (
+                  <Card style={{ display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                      <SectionLabel>AI Analysis</SectionLabel>
+                      <Pill color="var(--primary)" mono style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <Icon name="bot" size={10} />
+                        Generated
+                      </Pill>
+                    </div>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.62, color: "var(--fg-2)" }}>
+                      {latestResult._assessment_result?.reasoning || latestResult.extraction_notes}
+                    </div>
+
+                    {/* Process summary if available */}
+                    {latestResult.process_summary && (
+                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+                          Process Highlights
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 11.5, lineHeight: 1.5 }}>
+                          {latestResult.process_summary.key_activities && latestResult.process_summary.key_activities.length > 0 && (
+                            <div>
+                              <span style={{ fontWeight: 600, color: "var(--fg-2)" }}>Activities: </span>
+                              <span style={{ color: "var(--muted-fg)" }}>{latestResult.process_summary.key_activities.join(", ")}</span>
+                            </div>
+                          )}
+                          {latestResult.process_summary.key_applications && latestResult.process_summary.key_applications.length > 0 && (
+                            <div>
+                              <span style={{ fontWeight: 600, color: "var(--fg-2)" }}>Applications: </span>
+                              <span style={{ color: "var(--muted-fg)" }}>{latestResult.process_summary.key_applications.join(", ")}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                )}
               </>
             ) : (
               <div style={{

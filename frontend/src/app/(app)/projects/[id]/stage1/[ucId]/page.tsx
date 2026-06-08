@@ -313,11 +313,16 @@ export default function Stage1Page() {
   const handleSetCurrentRun = async () => {
     if (!selectedRunId) return;
     try {
-      await apiPost(`/api/v1/use-cases/${ucId}/s1/runs/${selectedRunId}/set-current`, {});
+      await apiPost(
+        `/api/v1/use-cases/${ucId}/s1/runs/${selectedRunId}/set-current`,
+        {},
+      );
       toast.success("Set as current run");
       window.location.reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to set current run");
+      toast.error(
+        err instanceof Error ? err.message : "Failed to set current run",
+      );
     }
   };
 
@@ -412,7 +417,11 @@ export default function Stage1Page() {
                     color: "var(--muted-fg)",
                   }}
                 >
-                  <Icon name="chevR" size={14} style={{ transform: "rotate(180deg)" }} />
+                  <Icon
+                    name="chevR"
+                    size={14}
+                    style={{ transform: "rotate(180deg)" }}
+                  />
                 </button>
                 <span
                   style={{
@@ -482,7 +491,9 @@ export default function Stage1Page() {
               stage="s1"
               stageName="Stage 1 - Assessment"
               currentRunId={useCase?.s1_latest_run_id}
-              selectedRunId={selectedRunId || useCase?.s1_latest_run_id || undefined}
+              selectedRunId={
+                selectedRunId || useCase?.s1_latest_run_id || undefined
+              }
               onSelectRun={handleRunSelect}
             />
             <Button size="sm" onClick={handleRun} disabled={isRunning}>
@@ -836,34 +847,35 @@ export default function Stage1Page() {
                       </div>
                     )}
 
-                    {displayResult.override_reason.length > 0 && (
-                      <div style={{ marginTop: 16 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginBottom: 12,
-                          }}
-                        >
-                          <SectionLabel>Override Reason</SectionLabel>
-                          <Pill color="var(--foreground)">
-                            <Icon name="user" size={11} />{" "}
-                            {displayResult.override_by}
-                          </Pill>
+                    {displayResult.override_reason &&
+                      displayResult.override_reason.length > 0 && (
+                        <div style={{ marginTop: 16 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              marginBottom: 12,
+                            }}
+                          >
+                            <SectionLabel>Override Reason</SectionLabel>
+                            <Pill color="var(--foreground)">
+                              <Icon name="user" size={11} />{" "}
+                              {displayResult.override_by}
+                            </Pill>
+                          </div>
+                          <p
+                            style={{
+                              fontSize: 13,
+                              lineHeight: 1.62,
+                              color: "var(--muted-foreground)",
+                              margin: 0,
+                            }}
+                          >
+                            {displayResult.override_reason}
+                          </p>
                         </div>
-                        <p
-                          style={{
-                            fontSize: 13,
-                            lineHeight: 1.62,
-                            color: "var(--muted-foreground)",
-                            margin: 0,
-                          }}
-                        >
-                          {displayResult.override_reason}
-                        </p>
-                      </div>
-                    )}
+                      )}
 
                     <div
                       style={{
