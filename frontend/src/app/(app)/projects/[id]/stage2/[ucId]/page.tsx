@@ -255,6 +255,32 @@ export default function Stage2Page() {
                   disabled={uploadingFile || isRunning}
                 />
               </Label>
+
+              {/* Upload progress indicator */}
+              {uploadingFile && (
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    background: "color-mix(in oklab, var(--primary) 8%, transparent)",
+                    border: "1px solid color-mix(in oklab, var(--primary) 20%, transparent)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <Icon name="upload" size={16} style={{ color: "var(--primary)" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--primary)" }}>
+                      Uploading document...
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 2 }}>
+                      AI will extract complexity bands automatically
+                    </div>
+                  </div>
+                  <div className="spinner" style={{ width: 16, height: 16 }} />
+                </div>
+              )}
             </div>
 
             {/* 5×5 band grid */}
