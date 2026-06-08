@@ -54,6 +54,7 @@ export default function Stage2Page() {
   const [runningStage, setRunningStage] = useState(false)
   const [error, setError] = useState("")
   const [weightMatrix, setWeightMatrix] = useState<any>(null)
+  const [documentUploaded, setDocumentUploaded] = useState(false)
 
   const liveScore = hasAllBands(bands as AttributeBands)
     ? scoreComplexity(bands as AttributeBands)
@@ -101,6 +102,9 @@ export default function Stage2Page() {
       const formData = new FormData()
       formData.append("file", file)
       await apiPostFormData(`/api/v1/use-cases/${ucId}/s2/documents`, formData)
+
+      // Upload successful - band extraction happens when user clicks "Run Analysis"
+      setDocumentUploaded(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed")
     } finally {
@@ -206,7 +210,11 @@ export default function Stage2Page() {
               </span>
             )}
             <RunHistoryDrawer runs={runs} stage="s2" stageName="Stage 2 - Complexity" />
-            <Button size="sm" onClick={handleRunStage} disabled={isRunning || !hasAllBands(bands as AttributeBands)}>
+            <Button
+              size="sm"
+              onClick={handleRunStage}
+              disabled={isRunning || (!hasAllBands(bands as AttributeBands) && !documentUploaded)}
+            >
               <Play className="mr-1.5 h-3.5 w-3.5" />
               {isRunning ? "Running…" : "Run Analysis"}
             </Button>
@@ -275,10 +283,35 @@ export default function Stage2Page() {
                       Uploading document...
                     </div>
                     <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 2 }}>
-                      AI will extract complexity bands automatically
+                      Click &ldquo;Run Analysis&rdquo; after upload to extract complexity bands
                     </div>
                   </div>
                   <div className="spinner" style={{ width: 16, height: 16 }} />
+                </div>
+              )}
+
+              {/* Upload success indicator */}
+              {documentUploaded && !uploadingFile && !latestResult && (
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    background: "color-mix(in oklab, var(--c-green) 8%, transparent)",
+                    border: "1px solid color-mix(in oklab, var(--c-green) 20%, transparent)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <Icon name="check" size={16} style={{ color: "var(--c-green)" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-green)" }}>
+                      Document uploaded successfully
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 2 }}>
+                      Click &ldquo;Run Analysis&rdquo; to extract complexity bands and calculate score
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
