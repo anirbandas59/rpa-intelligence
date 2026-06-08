@@ -164,14 +164,20 @@ export default function Stage2Page() {
   const displayScore = liveScore
     ? { ...liveScore, sprint_min: liveScore.sprints, sprint_max: liveScore.sprints }
     : latestResult
-      ? {
-          total_score:      latestResult.total_score,
-          complexity_class: latestResult.complexity_class,
-          effort_min_weeks: latestResult.effort_min_weeks,
-          effort_max_weeks: latestResult.effort_max_weeks,
-          sprint_min:       latestResult.sprint_min,
-          sprint_max:       latestResult.sprint_max,
-        }
+      ? (() => {
+          // Backward compatibility: handle both old nested and new flat structures
+          const scoring = (latestResult as any).scoring // Old structure has nested "scoring"
+          const source = scoring || latestResult // Use nested if exists, otherwise flat
+
+          return {
+            total_score:      source.total_score,
+            complexity_class: source.complexity_class,
+            effort_min_weeks: source.effort_min_weeks,
+            effort_max_weeks: source.effort_max_weeks,
+            sprint_min:       source.sprint_min ?? source.sprints ?? 0,
+            sprint_max:       source.sprint_max ?? source.sprints ?? 0,
+          }
+        })()
       : null
 
   // Build tooltip text from weight matrix
