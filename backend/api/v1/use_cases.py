@@ -68,12 +68,15 @@ async def get_use_case(
     Raises:
         HTTPException: 404 if use case not found or user doesn't have access
     """
-    # Fetch use case with project join to check ownership
+    # Fetch use case with project join to check ownership (force fresh from DB)
     result = await db.execute(
-        select(UseCase).join(Project).where(
+        select(UseCase)
+        .join(Project)
+        .where(
             UseCase.id == id,
             (Project.created_by == user.id) | (user.role == "superuser"),
         )
+        .execution_options(populate_existing=True)
     )
     use_case = result.scalar_one_or_none()
     if not use_case:
@@ -107,12 +110,15 @@ async def delete_use_case(
     Raises:
         HTTPException: 404 if use case not found or user doesn't have access
     """
-    # Fetch use case with project join to check ownership
+    # Fetch use case with project join to check ownership (force fresh from DB)
     result = await db.execute(
-        select(UseCase).join(Project).where(
+        select(UseCase)
+        .join(Project)
+        .where(
             UseCase.id == id,
             (Project.created_by == user.id) | (user.role == "superuser"),
         )
+        .execution_options(populate_existing=True)
     )
     use_case = result.scalar_one_or_none()
 
@@ -198,8 +204,12 @@ async def get_readiness(
                 return "not_ready"
             return "not_ready"
 
-        # Fetch latest run
-        run_result = await db.execute(select(StageRun).where(StageRun.id == latest_run_id))
+        # Fetch latest run (force fresh from DB to avoid session caching)
+        run_result = await db.execute(
+            select(StageRun)
+            .where(StageRun.id == latest_run_id)
+            .execution_options(populate_existing=True)
+        )
         latest_run = run_result.scalar_one_or_none()
 
         if not latest_run:

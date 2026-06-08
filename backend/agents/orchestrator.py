@@ -370,10 +370,18 @@ async def run_s2_assessment(
         # Convert to ScoringResult for API compatibility
         scoring_result = assessment_to_scoring_result(assessment_result)
 
-        # Build result dict
+        # Build result dict (flatten scoring fields to match frontend S2Result type)
+        scoring_dict = scoring_result.model_dump()
         result_data = {
             "bands": bands_with_source.model_dump(),
-            "scoring": scoring_result.model_dump(),
+            # Flatten scoring fields to top level
+            "total_score": scoring_dict["total_score"],
+            "complexity_class": scoring_dict["complexity_class"],
+            "effort_min_weeks": scoring_dict["effort_min_weeks"],
+            "effort_max_weeks": scoring_dict["effort_max_weeks"],
+            "sprint_min": scoring_dict.get("sprint_min", scoring_dict.get("sprints", 0)),
+            "sprint_max": scoring_dict.get("sprint_max", scoring_dict.get("sprints", 0)),
+            "attribute_weights": scoring_dict["attribute_weights"],
             "extraction_notes": extraction_notes,
             "model_used": model if (pasted_text or document_path) else None,
             "process_summary": process_summary,  # NEW: include validated process summary
@@ -390,10 +398,18 @@ async def run_s2_assessment(
         logger.info("Using legacy complexity_agent (v1)")
         scoring_result = _run_scoring_v1(bands)
 
-        # Build result dict
+        # Build result dict (flatten scoring fields to match frontend S2Result type)
+        scoring_dict = scoring_result.model_dump()
         result_data = {
             "bands": bands_with_source.model_dump(),
-            "scoring": scoring_result.model_dump(),
+            # Flatten scoring fields to top level
+            "total_score": scoring_dict["total_score"],
+            "complexity_class": scoring_dict["complexity_class"],
+            "effort_min_weeks": scoring_dict["effort_min_weeks"],
+            "effort_max_weeks": scoring_dict["effort_max_weeks"],
+            "sprint_min": scoring_dict.get("sprint_min", scoring_dict.get("sprints", 0)),
+            "sprint_max": scoring_dict.get("sprint_max", scoring_dict.get("sprints", 0)),
+            "attribute_weights": scoring_dict["attribute_weights"],
             "extraction_notes": extraction_notes,
             "model_used": model if (pasted_text or document_path) else None,
             "process_summary": process_summary,  # NEW: include validated process summary

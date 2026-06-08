@@ -490,6 +490,7 @@ async def list_s2_runs(
         select(StageRun)
         .where(StageRun.use_case_id == id, StageRun.stage == "s2")
         .order_by(StageRun.created_at.desc())
+        .execution_options(populate_existing=True)  # Force fresh data from DB
     )
     runs = result.scalars().all()
 
