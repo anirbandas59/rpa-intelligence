@@ -198,6 +198,28 @@ export default function ProjectDetailPage() {
   }, [projectId, router]);
 
   /* Lazily resolve stage results for hero stats */
+  // Normalize S2Result to handle both old (nested) and new (flat) structures
+  const normalizeS2Result = (rawResult: unknown): S2Result => {
+    const result = rawResult as Record<string, unknown>
+    // Check if result has nested "scoring" object (old format)
+    const scoring = result.scoring as Record<string, unknown> | undefined
+    if (scoring) {
+      // Old format - flatten scoring fields
+      return {
+        ...result,
+        total_score: scoring.total_score,
+        complexity_class: scoring.complexity_class,
+        effort_min_weeks: scoring.effort_min_weeks,
+        effort_max_weeks: scoring.effort_max_weeks,
+        sprint_min: scoring.sprint_min ?? scoring.sprints ?? 0,
+        sprint_max: scoring.sprint_max ?? scoring.sprints ?? 0,
+        attribute_weights: scoring.attribute_weights,
+      } as S2Result
+    }
+    // New format - already flat
+    return result as unknown as S2Result
+  }
+
   useEffect(() => {
     if (useCases.length === 0) return;
 
@@ -227,7 +249,7 @@ export default function ProjectDetailPage() {
               const lr = runs.find(
                 (r) => r.id === uc.s2_latest_run_id && r.status === "complete",
               );
-              if (lr) cache.s2 = lr.result as S2Result;
+              if (lr) cache.s2 = normalizeS2Result(lr.result);
             }
             if (uc.s3_latest_run_id) {
               // S3 list returns summary only — fetch full result directly

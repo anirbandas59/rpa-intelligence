@@ -81,7 +81,13 @@ export default function Stage2Page() {
         if (ucData.s2_latest_run_id && runsData.length > 0) {
           const latestRun = runsData.find((r) => r.id === ucData.s2_latest_run_id)
           if (latestRun?.status === "complete") {
-            setLatestResult(latestRun.result as unknown as S2Result)
+            const result = latestRun.result as unknown as S2Result
+            setLatestResult(result)
+
+            // Load bands from run result (handles both old nested and new flat structures)
+            if (result.bands) {
+              setBands(result.bands as Partial<AttributeBands>)
+            }
           } else if (latestRun?.status === "failed") {
             setError(`Run failed: ${latestRun.error_message || "Unknown error"}`)
           }
@@ -397,6 +403,85 @@ export default function Stage2Page() {
                 )
               })}
             </Card>
+
+            {/* Process Summary Table */}
+            {latestResult?.process_summary && (
+              <Card pad={0} style={{ overflow: "hidden" }}>
+                <div style={{ padding: spacing.cardDefault, paddingBottom: 0, marginBottom: 12 }}>
+                  <SectionLabel>Process Summary</SectionLabel>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {/* Activities */}
+                  {latestResult.process_summary.key_activities && latestResult.process_summary.key_activities.length > 0 && (
+                    <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                        Key Activities ({latestResult.process_summary.key_activities.length})
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                        {latestResult.process_summary.key_activities.map((activity, idx) => (
+                          <li key={idx} style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-2)" }}>
+                            {activity}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Business Rules */}
+                  {latestResult.process_summary.key_logical_points && latestResult.process_summary.key_logical_points.length > 0 && (
+                    <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                        Business Rules ({latestResult.process_summary.key_logical_points.length})
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                        {latestResult.process_summary.key_logical_points.map((rule, idx) => (
+                          <li key={idx} style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-2)" }}>
+                            {rule}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Applications */}
+                  {latestResult.process_summary.key_applications && latestResult.process_summary.key_applications.length > 0 && (
+                    <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                        Applications ({latestResult.process_summary.key_applications.length})
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-2)" }}>
+                        {latestResult.process_summary.key_applications.join(", ")}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Layouts */}
+                  {latestResult.process_summary.key_layouts && latestResult.process_summary.key_layouts.length > 0 && (
+                    <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                        Layouts ({latestResult.process_summary.key_layouts.length})
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-2)" }}>
+                        {latestResult.process_summary.key_layouts.join(", ")}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Technologies */}
+                  {latestResult.process_summary.key_additional_technologies && latestResult.process_summary.key_additional_technologies.length > 0 && (
+                    <div style={{ padding: "12px 18px" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                        Technologies ({latestResult.process_summary.key_additional_technologies.length})
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-2)" }}>
+                        {latestResult.process_summary.key_additional_technologies.join(", ")}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
           </div>
 
           {/* ── Right: result panel ── */}
@@ -492,29 +577,6 @@ export default function Stage2Page() {
                     <div style={{ fontSize: 12.5, lineHeight: 1.62, color: "var(--fg-2)" }}>
                       {latestResult._assessment_result?.reasoning || latestResult.extraction_notes}
                     </div>
-
-                    {/* Process summary if available */}
-                    {latestResult.process_summary && (
-                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-                          Process Highlights
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 11.5, lineHeight: 1.5 }}>
-                          {latestResult.process_summary.key_activities && latestResult.process_summary.key_activities.length > 0 && (
-                            <div>
-                              <span style={{ fontWeight: 600, color: "var(--fg-2)" }}>Activities: </span>
-                              <span style={{ color: "var(--muted-fg)" }}>{latestResult.process_summary.key_activities.join(", ")}</span>
-                            </div>
-                          )}
-                          {latestResult.process_summary.key_applications && latestResult.process_summary.key_applications.length > 0 && (
-                            <div>
-                              <span style={{ fontWeight: 600, color: "var(--fg-2)" }}>Applications: </span>
-                              <span style={{ color: "var(--muted-fg)" }}>{latestResult.process_summary.key_applications.join(", ")}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </Card>
                 )}
               </>
