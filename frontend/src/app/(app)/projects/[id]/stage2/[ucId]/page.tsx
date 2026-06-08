@@ -53,6 +53,7 @@ export default function Stage2Page() {
   const [uploadingFile, setUploadingFile] = useState(false)
   const [runningStage, setRunningStage] = useState(false)
   const [error, setError] = useState("")
+  const [weightMatrix, setWeightMatrix] = useState<any>(null)
 
   const liveScore = hasAllBands(bands as AttributeBands)
     ? scoreComplexity(bands as AttributeBands)
@@ -63,14 +64,16 @@ export default function Stage2Page() {
 
     const fetchData = async () => {
       try {
-        const [ucData, readinessData, runsData] = await Promise.all([
+        const [ucData, readinessData, runsData, matrixData] = await Promise.all([
           apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
           apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
           apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s2/runs`),
+          apiGet<any>(`/api/v1/settings/weight-matrix`),
         ])
         setUseCase(ucData)
         setReadiness(readinessData)
         setRuns(runsData)
+        setWeightMatrix(matrixData)
 
         if (ucData.s2_inputs?.bands) setBands(ucData.s2_inputs.bands as Partial<AttributeBands>)
 
@@ -165,6 +168,14 @@ export default function Stage2Page() {
         }
       : null
 
+  // Build tooltip text from weight matrix
+  const getBandTooltip = (attribute: keyof AttributeBands, band: Band) => {
+    if (!weightMatrix) return ""
+    const attrData = weightMatrix.weights?.[attribute]?.[band]
+    if (!attrData) return ""
+    return `${band}: ${attrData.range}`
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
@@ -250,13 +261,13 @@ export default function Stage2Page() {
             <Card pad={0} style={{ overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: spacing.cardDefault, paddingBottom: 0, marginBottom: 18 }}>
                 <SectionLabel>Complexity bands</SectionLabel>
-                <span style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--mono)" }}>weight · 0 → 28 pts</span>
+                <span style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--mono)" }}>0 → 28 pts</span>
               </div>
 
-              {/* Header row - matching exploration stage2.jsx line 113 */}
+              {/* Header row - simplified without weight column */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: "1.5fr repeat(5, 1fr) 0.7fr",
+                gridTemplateColumns: "1fr repeat(5, 1fr)",
                 alignItems: "center",
                 padding: "12px 18px",
                 borderBottom: "1px solid var(--border)",
@@ -267,17 +278,16 @@ export default function Stage2Page() {
                     {b}
                   </span>
                 ))}
-                <span style={{ textAlign: "right", fontSize: 10.5, fontWeight: 700, color: "var(--muted-fg)" }}>WT</span>
               </div>
 
-              {/* Attribute rows - matching exploration stage2.jsx line 119 */}
+              {/* Attribute rows - clean band buttons with tooltips */}
               {ATTRS.map(({ key, label }, idx) => {
                 const active = bands[key]
                 const source = useCase.s2_inputs?.[`${key}_source`] as InputSource | undefined
                 return (
                   <div key={key} style={{
                     display: "grid",
-                    gridTemplateColumns: "1.5fr repeat(5, 1fr) 0.7fr",
+                    gridTemplateColumns: "1fr repeat(5, 1fr)",
                     alignItems: "center",
                     padding: "12px 18px",
                     borderBottom: idx < ATTRS.length - 1 ? "1px solid var(--border)" : "none",
@@ -286,14 +296,16 @@ export default function Stage2Page() {
                       {label} {active && source && <InputSourceBadge source={source} />}
                     </span>
                     {BANDS.map((b) => {
-                      const weight = WEIGHTS[key]?.[b] ?? 0
                       const isActive = active === b
                       const color = CLS_COLORS[b]
+                      const tooltip = getBandTooltip(key, b)
                       return (
                         <div key={b} style={{ display: "flex", justifyContent: "center" }}>
                           <button
                             onClick={() => handleBandChange(key, b)}
                             disabled={isRunning}
+                            title={tooltip}
+                            aria-label={`${label}: ${b} - ${tooltip}`}
                             style={{
                               width: 42,
                               height: 34,
@@ -309,14 +321,11 @@ export default function Stage2Page() {
                               transition: "all .14s",
                             }}
                           >
-                            {weight}
+                            {b}
                           </button>
                         </div>
                       )
                     })}
-                    <span style={{ textAlign: "right", fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: "var(--fg)" }}>
-                      {active ? WEIGHTS[key]?.[active] ?? 0 : "—"}
-                    </span>
                   </div>
                 )
               })}
@@ -374,26 +383,32 @@ export default function Stage2Page() {
                   </div>
                 </Card>
 
-                {/* Effort estimate card - matching exploration S2Result (stage2.jsx line 68) */}
+                {/* Effort estimate card */}
                 <Card>
                   <SectionLabel style={{ marginBottom: 12 }}>Effort estimate</SectionLabel>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    {[
-                      { label: "Min weeks", value: displayScore.effort_min_weeks },
-                      { label: "Max weeks", value: displayScore.effort_max_weeks },
-                      { label: "Sprints", value: `${displayScore.sprint_min ?? "?"}–${displayScore.sprint_max ?? "?"}` },
-                    ].map(({ label, value }) => (
-                      <div key={label} style={{
-                        padding: "10px 12px", borderRadius: 9,
-                        background: "color-mix(in oklab, var(--primary) 6%, transparent)",
-                        border: "1px solid color-mix(in oklab, var(--primary) 15%, transparent)",
-                      }}>
-                        <div style={{ fontSize: 10.5, color: "var(--muted-foreground)", marginBottom: 3 }}>{label}</div>
-                        <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 18, fontWeight: 700 }}>
-                          {value}
-                        </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {/* Weeks range */}
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--muted-fg)", marginBottom: 6 }}>Development weeks</div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700 }}>
+                          {displayScore.effort_min_weeks}
+                        </span>
+                        <span style={{ fontSize: 14, color: "var(--muted-fg)" }}>–</span>
+                        <span style={{ fontFamily: "var(--mono)", fontSize: 22, fontWeight: 700 }}>
+                          {displayScore.effort_max_weeks}
+                        </span>
+                        <span style={{ fontSize: 13, color: "var(--muted-fg)" }}>weeks</span>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Sprint count */}
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--muted-fg)", marginBottom: 6 }}>Sprint estimate</div>
+                      <div style={{ fontFamily: "var(--mono)", fontSize: 18, fontWeight: 700 }}>
+                        {displayScore.sprint_min ?? "?"}–{displayScore.sprint_max ?? "?"} sprints
+                      </div>
+                    </div>
                   </div>
                 </Card>
               </>
