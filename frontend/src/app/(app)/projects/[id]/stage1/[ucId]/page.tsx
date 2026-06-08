@@ -227,11 +227,15 @@ export default function Stage1Page() {
       return;
     }
     try {
+      // Calculate new total score from override values
+      const newTotal = Object.values(overrideDims).reduce((sum, val) => sum + (val || 0), 0);
+
       await apiPost(`/api/v1/use-cases/${ucId}/s1/override`, {
         ...overrideDims,
         reason: overrideReason,
       });
-      toast.success("Override saved");
+
+      toast.success(`Override saved — new score: ${newTotal}/100`);
       setOverrideOpen(false);
       window.location.reload();
     } catch (err) {
@@ -633,25 +637,57 @@ export default function Stage1Page() {
             {isComplete && displayResult && (
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "340px 1fr",
-                  gap: 22,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 18,
                 }}
               >
-                {/* ── Left column ── */}
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 18 }}
-                >
-                  {/* Score card */}
-                  <Card
+                {/* Override banner - show when result has override */}
+                {displayResult.override_reason && displayResult.override_reason.length > 0 && (
+                  <div
                     style={{
-                      paddingTop: 26,
-                      paddingBottom: 22,
+                      padding: "12px 16px",
+                      borderRadius: 10,
+                      background: "color-mix(in oklab, var(--c-amber) 10%, transparent)",
+                      border: "1px solid color-mix(in oklab, var(--c-amber) 25%, transparent)",
                       display: "flex",
-                      flexDirection: "column",
                       alignItems: "center",
-                      gap: 16,
+                      gap: 10,
                     }}
+                  >
+                    <Icon name="user" size={16} style={{ color: "var(--c-amber)" }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--foreground)", marginBottom: 2 }}>
+                        Manually Adjusted Score
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "var(--muted-foreground)" }}>
+                        This assessment was overridden by {displayResult.override_by}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "340px 1fr",
+                    gap: 22,
+                  }}
+                >
+                  {/* ── Left column ── */}
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 18 }}
+                  >
+                    {/* Score card */}
+                    <Card
+                      style={{
+                        paddingTop: 26,
+                        paddingBottom: 22,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 16,
+                      }}
                   >
                     <Gauge
                       value={displayResult.total_score}
@@ -927,6 +963,7 @@ export default function Stage1Page() {
                     </div>
                   </Card>
                 </div>
+              </div>
               </div>
             )}
           </>
