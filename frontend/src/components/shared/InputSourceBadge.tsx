@@ -1,9 +1,10 @@
 /**
- * InputSourceBadge - displays the source of an input field
+ * InputSourceBadge - displays the source of an input field with icon
  * Shows ai_extracted, manual, corrected, from_sN, or imported
  */
 
-import { Badge } from "@/components/ui/badge"
+import { Pill } from "@/components/rpa"
+import { Icon, type IconName } from "@/components/shared/icons"
 import type { InputSource } from "@/lib/types"
 
 interface InputSourceBadgeProps {
@@ -13,44 +14,56 @@ interface InputSourceBadgeProps {
 
 const SOURCE_CONFIG: Record<
   InputSource,
-  { label: string; variant: "default" | "secondary" | "outline" | "destructive" }
+  { icon: IconName; label: string; color: string }
 > = {
   ai_extracted: {
+    icon: "bot",
     label: "AI",
-    variant: "default",
+    color: "var(--primary)",
   },
   manual: {
+    icon: "edit",
     label: "Manual",
-    variant: "secondary",
+    color: "var(--fg)",
   },
   corrected: {
+    icon: "check",
     label: "Corrected",
-    variant: "outline",
+    color: "var(--c-green)",
   },
   from_s1: {
+    icon: "link",
     label: "From S1",
-    variant: "outline",
+    color: "var(--c-teal)",
   },
   from_s2: {
+    icon: "link",
     label: "From S2",
-    variant: "outline",
+    color: "var(--c-teal)",
   },
   from_s3: {
+    icon: "link",
     label: "From S3",
-    variant: "outline",
+    color: "var(--c-teal)",
   },
   imported: {
+    icon: "upload",
     label: "Imported",
-    variant: "secondary",
+    color: "var(--c-blue)",
   },
 }
 
 export function InputSourceBadge({ source, className }: InputSourceBadgeProps) {
-  const config = SOURCE_CONFIG[source] || { label: source, variant: "default" as const }
+  const config = SOURCE_CONFIG[source] || {
+    icon: "edit" as IconName,
+    label: source,
+    color: "var(--muted-fg)",
+  }
 
   return (
-    <Badge variant={config.variant} className={className}>
+    <Pill color={config.color} mono style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <Icon name={config.icon} size={10} />
       {config.label}
-    </Badge>
+    </Pill>
   )
 }
