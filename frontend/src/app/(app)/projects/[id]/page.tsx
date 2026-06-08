@@ -848,9 +848,20 @@ export default function ProjectDetailPage() {
                 <SectionLabel>All use cases</SectionLabel>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {selectedUcIds.size > 0 && (
-                    <span style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--mono)" }}>
-                      {selectedUcIds.size} selected
-                    </span>
+                    <>
+                      <span style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--mono)" }}>
+                        {selectedUcIds.size} selected
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedUcIds(new Set())}
+                        disabled={batchScoring}
+                        style={{ height: 28, fontSize: 11 }}
+                      >
+                        Clear
+                      </Button>
+                    </>
                   )}
                   {batchScoring && (
                     <div style={{
@@ -979,16 +990,34 @@ export default function ProjectDetailPage() {
                         }}
                       >
                         <div style={{ minWidth: 0, paddingRight: 12 }}>
-                          <div
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {u.name}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {u.name}
+                            </div>
+                            {cache?.s1 && (
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  background: "color-mix(in oklab, var(--c-green) 12%, transparent)",
+                                  color: "var(--c-green)",
+                                  fontWeight: 600,
+                                  whiteSpace: "nowrap",
+                                }}
+                                title="Assessment complete"
+                              >
+                                ✓
+                              </span>
+                            )}
                           </div>
                           <div
                             style={{
