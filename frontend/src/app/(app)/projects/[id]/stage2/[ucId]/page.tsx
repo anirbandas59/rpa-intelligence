@@ -82,6 +82,8 @@ export default function Stage2Page() {
           const latestRun = runsData.find((r) => r.id === ucData.s2_latest_run_id)
           if (latestRun?.status === "complete") {
             setLatestResult(latestRun.result as unknown as S2Result)
+          } else if (latestRun?.status === "failed") {
+            setError(`Run failed: ${latestRun.error_message || "Unknown error"}`)
           }
         }
       } catch (err) {

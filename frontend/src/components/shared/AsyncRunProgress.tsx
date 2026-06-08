@@ -36,6 +36,7 @@ export function AsyncRunProgress({
   const [status, setStatus] = useState<"running" | "complete" | "failed">("running")
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [latestRunId, setLatestRunId] = useState<string | null>(null)
 
   useEffect(() => {
     let interval: NodeJS.Timeout
@@ -58,11 +59,34 @@ export function AsyncRunProgress({
           clearInterval(progressInterval)
           toast.success("Run complete")
           onComplete?.()
-        } else if (stageStatus === "failed" || stageStatus === "not_ready") {
-          // Actual failure or run lost
-          const msg = stageStatus === "failed"
-            ? "Assessment failed during processing"
-            : "Run status lost - please try again"
+        } else if (stageStatus === "failed") {
+          // Fetch actual error message from the failed run
+          try {
+            const useCase = await apiGet<any>(`/api/v1/use-cases/${useCaseId}`)
+            const runId = useCase[`${stage}_latest_run_id`]
+            if (runId) {
+              const run = await apiGet<any>(`/api/v1/use-cases/${useCaseId}/${stage}/runs/${runId}`)
+              const errorMsg = run.error_message || "Assessment failed during processing"
+              setError(errorMsg)
+              toast.error(`Run failed: ${errorMsg}`)
+              onError?.(errorMsg)
+            } else {
+              setError("Assessment failed during processing")
+              toast.error("Run failed: Assessment failed during processing")
+              onError?.("Assessment failed during processing")
+            }
+          } catch (fetchErr) {
+            const msg = "Assessment failed during processing"
+            setError(msg)
+            toast.error(`Run failed: ${msg}`)
+            onError?.(msg)
+          }
+          setStatus("failed")
+          clearInterval(interval)
+          clearInterval(progressInterval)
+        } else if (stageStatus === "not_ready") {
+          // Run lost (no run record found)
+          const msg = "Run status lost - please try again"
           setStatus("failed")
           setError(msg)
           clearInterval(interval)

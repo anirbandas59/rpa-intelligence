@@ -209,7 +209,7 @@ async def get_readiness(
             return "running"
 
         if latest_run.status == "failed":
-            return "not_ready"
+            return "failed"
 
         # Check staleness
         current_hash = _compute_inputs_hash(current_inputs)
