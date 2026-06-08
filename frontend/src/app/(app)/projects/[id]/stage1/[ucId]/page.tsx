@@ -95,6 +95,8 @@ export default function Stage1Page() {
   const [scoringAll, setScoringAll] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedRunIndex, setSelectedRunIndex] = useState<number>(0);
+  const [overrideExplanation, setOverrideExplanation] = useState("");
+  const [loadingExplanation, setLoadingExplanation] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -240,6 +242,22 @@ export default function Stage1Page() {
       window.location.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Override failed");
+    }
+  };
+
+  const handleExplainOverride = async () => {
+    setLoadingExplanation(true);
+    try {
+      const result = await apiPost<{ status: string; explanation: string }>(
+        `/api/v1/use-cases/${ucId}/s1/explain-override`,
+        {}
+      );
+      setOverrideExplanation(result.explanation);
+      toast.success("Explanation generated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate explanation");
+    } finally {
+      setLoadingExplanation(false);
     }
   };
 
@@ -910,6 +928,60 @@ export default function Stage1Page() {
                           >
                             {displayResult.override_reason}
                           </p>
+
+                          {/* Explain Override button and explanation */}
+                          {!overrideExplanation ? (
+                            <div style={{ marginTop: 12 }}>
+                              <Btn
+                                variant="ghost"
+                                size="sm"
+                                icon="bot"
+                                onClick={handleExplainOverride}
+                                disabled={loadingExplanation}
+                              >
+                                {loadingExplanation ? "Generating..." : "Explain Override"}
+                              </Btn>
+                            </div>
+                          ) : (
+                            <Card
+                              style={{
+                                marginTop: 12,
+                                padding: 14,
+                                background: "color-mix(in oklab, var(--primary) 5%, transparent)",
+                                border: "1px solid color-mix(in oklab, var(--primary) 15%, transparent)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  marginBottom: 8,
+                                }}
+                              >
+                                <Icon name="bot" size={14} style={{ color: "var(--primary)" }} />
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: "var(--primary)",
+                                  }}
+                                >
+                                  AI Explanation
+                                </div>
+                              </div>
+                              <p
+                                style={{
+                                  fontSize: 12.5,
+                                  lineHeight: 1.62,
+                                  color: "var(--muted-foreground)",
+                                  margin: 0,
+                                }}
+                              >
+                                {overrideExplanation}
+                              </p>
+                            </Card>
+                          )}
                         </div>
                       )}
 
