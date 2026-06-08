@@ -19,7 +19,7 @@ import { DimBar } from "@/components/shared/DimBar";
 import { RadialDim } from "@/components/shared/RadialDim";
 import { PriorityBadge, BAND_META } from "@/components/shared/PriorityBadge";
 import { Icon } from "@/components/shared/icons";
-import { ArrowLeft, Loader2, Play, BarChart3, LayoutList } from "lucide-react";
+import { ArrowLeft, Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiGetRuns, apiPost, isAuthenticated } from "@/lib/api";
 import type {
@@ -64,15 +64,6 @@ const S1_DIMS = [
   },
 ];
 
-type ViewMode = "scorecard" | "portfolio";
-
-/* ── Portfolio row (per-use-case) ──────────────────────────── */
-interface PortfolioRow {
-  uc: UseCase;
-  result: S1Result | null;
-  status: string;
-}
-
 export default function Stage1Page() {
   const params = useParams();
   const router = useRouter();
@@ -86,13 +77,9 @@ export default function Stage1Page() {
   const [loading, setLoading] = useState(true);
   const [runningStage, setRunningStage] = useState(false);
   const [error, setError] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("scorecard");
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [overrideDims, setOverrideDims] = useState<Record<string, number>>({});
-  const [portfolioRows, setPortfolioRows] = useState<PortfolioRow[]>([]);
-  const [portfolioLoading, setPortfolioLoading] = useState(false);
-  const [scoringAll, setScoringAll] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedRunIndex, setSelectedRunIndex] = useState<number>(0);
   const [overrideExplanation, setOverrideExplanation] = useState("");
@@ -135,66 +122,6 @@ export default function Stage1Page() {
     fetchData();
   }, [ucId, router]);
 
-  /* portfolio: fetch all UCs + their s1 runs */
-  useEffect(() => {
-    if (viewMode !== "portfolio") return;
-
-    let cancelled = false;
-
-    const loadPortfolio = async () => {
-      setPortfolioLoading(true);
-      try {
-        const allUcs = await apiGet<UseCase[]>(
-          `/api/v1/projects/${projectId}/use-cases`,
-        );
-        const rows: PortfolioRow[] = await Promise.all(
-          allUcs.map(async (u) => {
-            if (!u.s1_latest_run_id)
-              return { uc: u, result: null, status: "not_ready" };
-            try {
-              const ucRuns = await apiGetRuns<StageRun>(
-                `/api/v1/use-cases/${u.id}/s1/runs`,
-              );
-              const latest = ucRuns.find((r) => r.id === u.s1_latest_run_id);
-              if (latest?.status === "complete") {
-                return {
-                  uc: u,
-                  result: latest.result as unknown as S1Result,
-                  status: "complete",
-                };
-              }
-              return {
-                uc: u,
-                result: null,
-                status: latest?.status || "not_ready",
-              };
-            } catch {
-              return { uc: u, result: null, status: "not_ready" };
-            }
-          }),
-        );
-        if (!cancelled) {
-          setPortfolioRows(rows);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Failed to load portfolio",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setPortfolioLoading(false);
-        }
-      }
-    };
-
-    loadPortfolio();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [viewMode, projectId]);
 
   const handleRun = async () => {
     setRunningStage(true);
@@ -261,31 +188,6 @@ export default function Stage1Page() {
     }
   };
 
-  const handleScoreAll = async () => {
-    const unscored = portfolioRows.filter((r) => r.status !== "complete");
-    if (unscored.length === 0) {
-      toast.info("All use cases already scored");
-      return;
-    }
-    setScoringAll(true);
-    try {
-      await Promise.all(
-        unscored.map((r) =>
-          apiPost(`/api/v1/use-cases/${r.uc.id}/s1/runs`, {}),
-        ),
-      );
-      toast.success(`Started scoring ${unscored.length} use cases`);
-      // Trigger portfolio reload by toggling viewMode briefly
-      setTimeout(() => {
-        setViewMode("scorecard");
-        setTimeout(() => setViewMode("portfolio"), 50);
-      }, 3000);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Scoring failed");
-    } finally {
-      setScoringAll(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -382,32 +284,6 @@ export default function Stage1Page() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* view toggle */}
-            <div className="flex items-center gap-1 rounded-lg border border-border/50 p-1">
-              <button
-                onClick={() => setViewMode("scorecard")}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  viewMode === "scorecard"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-                Scorecard
-              </button>
-              <button
-                onClick={() => setViewMode("portfolio")}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  viewMode === "portfolio"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <LayoutList className="h-3.5 w-3.5" />
-                Portfolio
-              </button>
-            </div>
-
             {/* Run history navigation */}
             {isComplete && runs.length > 1 && (
               <div
@@ -543,9 +419,7 @@ export default function Stage1Page() {
         )}
 
         {/* ══ SCORECARD VIEW ══════════════════════════════════════════ */}
-        {viewMode === "scorecard" && (
-          <>
-            {/* Empty state — no run yet */}
+        {/* Empty state — no run yet */}
             {!isComplete && !isRunning && (
               <div
                 style={{
@@ -1038,287 +912,6 @@ export default function Stage1Page() {
               </div>
               </div>
             )}
-          </>
-        )}
-
-        {/* ══ PORTFOLIO VIEW ══════════════════════════════════════════ */}
-        {viewMode === "portfolio" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Header row */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div>
-                <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>
-                  Parallel assessment
-                </h2>
-                <p
-                  style={{
-                    fontSize: 12.5,
-                    color: "var(--muted-foreground)",
-                    margin: "4px 0 0",
-                  }}
-                >
-                  AI scores every use case concurrently across the four
-                  dimensions.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                onClick={handleScoreAll}
-                disabled={scoringAll || portfolioLoading}
-              >
-                <Icon name="zap" size={13} style={{ marginRight: 6 }} />
-                {scoringAll ? "Scoring…" : "Score all"}
-              </Button>
-            </div>
-
-            {portfolioLoading && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            )}
-
-            {!portfolioLoading && (
-              <div
-                style={{
-                  borderRadius: 13,
-                  border: "1px solid var(--border)",
-                  overflow: "hidden",
-                  background: "var(--card)",
-                }}
-              >
-                {/* Table header */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "2.1fr repeat(4, 1fr) 1fr 1.1fr",
-                    padding: "11px 18px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                    color: "var(--muted-foreground)",
-                    textTransform: "uppercase",
-                    borderBottom: "1px solid var(--border)",
-                  }}
-                >
-                  <span>Use case</span>
-                  {S1_DIMS.map((d) => (
-                    <span key={d.key} style={{ textAlign: "center" }}>
-                      {d.label.split(" ")[0].slice(0, 5)}
-                    </span>
-                  ))}
-                  <span style={{ textAlign: "center" }}>Score</span>
-                  <span style={{ textAlign: "right" }}>Decision</span>
-                </div>
-
-                {portfolioRows.map((row, idx) => {
-                  const { uc, result, status } = row;
-                  const isActive = uc.id === ucId;
-                  const running = status === "running";
-                  return (
-                    <div
-                      key={uc.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "2.1fr repeat(4, 1fr) 1fr 1.1fr",
-                        padding: "13px 18px",
-                        alignItems: "center",
-                        borderBottom:
-                          idx < portfolioRows.length - 1
-                            ? "1px solid var(--border)"
-                            : "none",
-                        background: isActive
-                          ? "color-mix(in oklab, var(--primary) 6%, transparent)"
-                          : "transparent",
-                      }}
-                    >
-                      <div style={{ minWidth: 0, paddingRight: 10 }}>
-                        <div
-                          style={{
-                            fontSize: 12.5,
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {uc.name}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 10.5,
-                            color: "var(--muted-foreground)",
-                          }}
-                        >
-                          {uc.source_platform || "—"}
-                        </div>
-                      </div>
-
-                      {running ? (
-                        <div
-                          style={{
-                            gridColumn: "2 / 7",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            color: "var(--primary)",
-                            fontSize: 12,
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: 99,
-                              background: "var(--primary)",
-                              animation: "rpaPulse 1.6s ease-in-out infinite",
-                            }}
-                          />
-                          Scoring across 4 dimensions…
-                        </div>
-                      ) : result ? (
-                        <>
-                          {S1_DIMS.map((d) => (
-                            <div
-                              key={d.key}
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                gap: 4,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontFamily: "var(--font-geist-mono)",
-                                  fontSize: 11.5,
-                                  color: "var(--muted-foreground)",
-                                }}
-                              >
-                                {result[d.key] ?? 0}
-                              </span>
-                              <div
-                                style={{
-                                  width: 34,
-                                  height: 4,
-                                  borderRadius: 99,
-                                  background: "var(--track)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    width: `${((result[d.key] ?? 0) / d.max) * 100}%`,
-                                    height: "100%",
-                                    background: d.color,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                          <div
-                            style={{
-                              textAlign: "center",
-                              fontFamily: "var(--font-geist-mono)",
-                              fontSize: 16,
-                              fontWeight: 700,
-                              color:
-                                BAND_META[result.migration_decision]?.color,
-                            }}
-                          >
-                            {result.total_score}
-                          </div>
-                        </>
-                      ) : (
-                        <div
-                          style={{
-                            gridColumn: "2 / 7",
-                            fontSize: 12,
-                            color: "var(--muted-foreground)",
-                          }}
-                        >
-                          Queued — awaiting score
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          textAlign: "right",
-                          display: "flex",
-                          justifyContent: "flex-end",
-                        }}
-                      >
-                        {result ? (
-                          <PriorityBadge band={result.migration_decision} />
-                        ) : (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "var(--muted-foreground)",
-                            }}
-                          >
-                            —
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Follow-up callout */}
-            {portfolioRows.some(
-              (r) => r.result?.follow_up_questions?.length,
-            ) && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "14px 18px",
-                  borderRadius: 12,
-                  background:
-                    "color-mix(in oklab, var(--primary) 7%, var(--card))",
-                  border:
-                    "1px solid color-mix(in oklab, var(--primary) 18%, transparent)",
-                }}
-              >
-                <span
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    flexShrink: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background:
-                      "color-mix(in oklab, var(--primary) 16%, transparent)",
-                    color: "var(--primary)",
-                  }}
-                >
-                  <Icon name="spark" size={18} />
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>
-                    Follow-up questions generated for low-confidence cases
-                  </div>
-                  <div
-                    style={{ fontSize: 11.5, color: "var(--muted-foreground)" }}
-                  >
-                    Review the individual scorecard for each flagged use case.
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Override Sheet ── */}
