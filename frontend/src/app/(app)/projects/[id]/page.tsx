@@ -153,6 +153,9 @@ export default function ProjectDetailPage() {
   const [activeView, setActiveView] = useState<"pipeline" | "portfolio">(
     "pipeline",
   );
+  const [selectedUcIds, setSelectedUcIds] = useState<Set<string>>(new Set());
+  const [batchScoring, setBatchScoring] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 });
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -297,6 +300,65 @@ export default function ProjectDetailPage() {
       toast.error(
         err instanceof Error ? err.message : "Failed to delete use case",
       );
+    }
+  };
+
+  const toggleSelection = (ucId: string) => {
+    setSelectedUcIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(ucId)) {
+        next.delete(ucId);
+      } else {
+        next.add(ucId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUcIds.size === useCases.length) {
+      setSelectedUcIds(new Set());
+    } else {
+      setSelectedUcIds(new Set(useCases.map((uc) => uc.id)));
+    }
+  };
+
+  const handleScoreSelected = async () => {
+    if (selectedUcIds.size === 0) {
+      toast.error("No use cases selected");
+      return;
+    }
+
+    setBatchScoring(true);
+    setBatchProgress({ completed: 0, total: selectedUcIds.size });
+
+    try {
+      // TODO: Replace with batch API when backend is ready
+      // For now, score sequentially with progress updates
+      const ucIds = Array.from(selectedUcIds);
+      let completed = 0;
+
+      for (const ucId of ucIds) {
+        try {
+          await apiPost(`/api/v1/use-cases/${ucId}/s1/runs`, {});
+          completed++;
+          setBatchProgress({ completed, total: ucIds.length });
+        } catch (err) {
+          console.error(`Failed to score ${ucId}:`, err);
+        }
+      }
+
+      toast.success(`Started scoring ${completed} use cases`);
+      setSelectedUcIds(new Set());
+
+      // Reload to show updated results
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Batch scoring failed");
+    } finally {
+      setBatchScoring(false);
     }
   };
 
@@ -782,9 +844,40 @@ export default function ProjectDetailPage() {
                 flexDirection: "column",
               }}
             >
-              <SectionLabel style={{ marginBottom: 10 }}>
-                All use cases
-              </SectionLabel>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <SectionLabel>All use cases</SectionLabel>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {selectedUcIds.size > 0 && (
+                    <span style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--mono)" }}>
+                      {selectedUcIds.size} selected
+                    </span>
+                  )}
+                  {batchScoring && (
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      background: "color-mix(in oklab, var(--primary) 8%, transparent)",
+                      border: "1px solid color-mix(in oklab, var(--primary) 20%, transparent)",
+                    }}>
+                      <div style={{ width: 14, height: 14, borderRadius: 99, border: "2px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                      <span style={{ fontSize: 11, color: "var(--primary)", fontFamily: "var(--mono)" }}>
+                        {batchProgress.completed} / {batchProgress.total}
+                      </span>
+                    </div>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handleScoreSelected}
+                    disabled={selectedUcIds.size === 0 || batchScoring}
+                  >
+                    <Icon name="zap" size={13} style={{ marginRight: 6 }} />
+                    {batchScoring ? "Scoring..." : `Score Selected${selectedUcIds.size > 0 ? ` (${selectedUcIds.size})` : ""}`}
+                  </Button>
+                </div>
+              </div>
               <div
                 style={{
                   borderRadius: 13,
@@ -801,7 +894,7 @@ export default function ProjectDetailPage() {
                     top: 0,
                     zIndex: 10,
                     display: "grid",
-                    gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr",
+                    gridTemplateColumns: "32px 1.9fr 0.9fr 0.7fr 1fr 0.9fr",
                     gap: 0,
                     padding: "9px 16px",
                     fontSize: 10.5,
@@ -813,6 +906,18 @@ export default function ProjectDetailPage() {
                     background: "var(--surface)",
                   }}
                 >
+                  <input
+                    type="checkbox"
+                    checked={selectedUcIds.size === useCases.length && useCases.length > 0}
+                    onChange={toggleSelectAll}
+                    style={{
+                      width: 16,
+                      height: 16,
+                      cursor: "pointer",
+                      accentColor: "var(--primary)",
+                    }}
+                    title="Select all use cases"
+                  />
                   <span>Use case</span>
                   <span>Priority</span>
                   <span>Complexity</span>
@@ -835,7 +940,7 @@ export default function ProjectDetailPage() {
                       style={{
                         width: "100%",
                         display: "grid",
-                        gridTemplateColumns: "1.9fr 0.9fr 0.7fr 1fr 0.9fr auto",
+                        gridTemplateColumns: "32px 1.9fr 0.9fr 0.7fr 1fr 0.9fr auto",
                         gap: 0,
                         padding: "12px 16px",
                         alignItems: "center",
@@ -849,12 +954,25 @@ export default function ProjectDetailPage() {
                         transition: "background 0.12s",
                       }}
                     >
+                      <input
+                        type="checkbox"
+                        checked={selectedUcIds.has(u.id)}
+                        onChange={() => toggleSelection(u.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          width: 16,
+                          height: 16,
+                          cursor: "pointer",
+                          accentColor: "var(--primary)",
+                        }}
+                        title="Select for batch scoring"
+                      />
                       <button
                         onClick={() => setSelectedUcId(u.id)}
                         style={{
                           all: "unset",
                           cursor: "pointer",
-                          gridColumn: "1 / 6",
+                          gridColumn: "2 / 7",
                           display: "grid",
                           gridTemplateColumns: "subgrid",
                           width: "100%",
