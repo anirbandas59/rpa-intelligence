@@ -24,13 +24,30 @@ interface RunHistoryDrawerProps {
   stage: StageId
   stageName: string
   trigger?: React.ReactNode
+  currentRunId?: string
+  selectedRunId?: string
+  onSelectRun?: (runId: string) => void
 }
 
-export function RunHistoryDrawer({ runs, stage, stageName, trigger }: RunHistoryDrawerProps) {
+export function RunHistoryDrawer({
+  runs,
+  stage,
+  stageName,
+  trigger,
+  currentRunId,
+  selectedRunId,
+  onSelectRun
+}: RunHistoryDrawerProps) {
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
 
   const toggleExpand = (runId: string) => {
     setExpandedRunId(expandedRunId === runId ? null : runId)
+  }
+
+  const handleRunClick = (runId: string) => {
+    if (onSelectRun) {
+      onSelectRun(runId)
+    }
   }
 
   return (
@@ -63,47 +80,72 @@ export function RunHistoryDrawer({ runs, stage, stageName, trigger }: RunHistory
             <p className="text-center text-sm text-muted-foreground py-8">No runs yet</p>
           )}
 
-          {runs.map((run) => (
-            <div
-              key={run.id}
-              className="rounded-lg border bg-card p-4 space-y-3 hover:bg-accent/50 transition-colors"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">Run #{run.run_number}</span>
-                    <Badge
-                      variant={
-                        run.status === "complete"
-                          ? "default"
-                          : run.status === "failed"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {run.status}
-                    </Badge>
+          {runs.map((run) => {
+            const isSelected = selectedRunId === run.id
+            const isCurrent = currentRunId === run.id
+            return (
+              <div
+                key={run.id}
+                className="rounded-lg border p-4 space-y-3 transition-colors cursor-pointer"
+                style={{
+                  background: isSelected
+                    ? "color-mix(in oklab, var(--primary) 8%, var(--card))"
+                    : isCurrent
+                      ? "color-mix(in oklab, var(--c-green) 6%, var(--card))"
+                      : "var(--card)"
+                }}
+                onClick={() => handleRunClick(run.id)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">Run #{run.run_number}</span>
+                      <Badge
+                        variant={
+                          run.status === "complete"
+                            ? "default"
+                            : run.status === "failed"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {run.status}
+                      </Badge>
+                      {isCurrent && (
+                        <Badge
+                          variant="outline"
+                          style={{
+                            color: "var(--c-green)",
+                            borderColor: "var(--c-green)"
+                          }}
+                        >
+                          Current
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(run.created_at).toLocaleString()}
+                    </div>
+                    {run.model_used && (
+                      <div className="text-xs text-muted-foreground">Model: {run.model_used}</div>
+                    )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(run.created_at).toLocaleString()}
-                  </div>
-                  {run.model_used && (
-                    <div className="text-xs text-muted-foreground">Model: {run.model_used}</div>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleExpand(run.id)
+                    }}
+                    className="h-8 w-8 p-0"
+                  >
+                    {expandedRunId === run.id ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleExpand(run.id)}
-                  className="h-8 w-8 p-0"
-                >
-                  {expandedRunId === run.id ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
 
               {expandedRunId === run.id && (
                 <div className="space-y-3 pt-3 border-t">
@@ -131,7 +173,8 @@ export function RunHistoryDrawer({ runs, stage, stageName, trigger }: RunHistory
                 </div>
               )}
             </div>
-          ))}
+          )
+        })}
         </div>
       </SheetContent>
     </Sheet>

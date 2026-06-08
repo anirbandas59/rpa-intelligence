@@ -19,20 +19,9 @@ import { DimBar } from "@/components/shared/DimBar";
 import { RadialDim } from "@/components/shared/RadialDim";
 import { PriorityBadge, BAND_META } from "@/components/shared/PriorityBadge";
 import { Icon } from "@/components/shared/icons";
-import {
-  ArrowLeft,
-  Loader2,
-  Play,
-  BarChart3,
-  LayoutList,
-} from "lucide-react";
+import { ArrowLeft, Loader2, Play, BarChart3, LayoutList } from "lucide-react";
 import { toast } from "sonner";
-import {
-  apiGet,
-  apiGetRuns,
-  apiPost,
-  isAuthenticated,
-} from "@/lib/api";
+import { apiGet, apiGetRuns, apiPost, isAuthenticated } from "@/lib/api";
 import type {
   UseCase,
   StageRun,
@@ -104,6 +93,8 @@ export default function Stage1Page() {
   const [portfolioRows, setPortfolioRows] = useState<PortfolioRow[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [scoringAll, setScoringAll] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunIndex, setSelectedRunIndex] = useState<number>(0);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -185,7 +176,9 @@ export default function Stage1Page() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load portfolio");
+          setError(
+            err instanceof Error ? err.message : "Failed to load portfolio",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -295,6 +288,47 @@ export default function Stage1Page() {
   // Show scorecard if we have a result, regardless of readiness status
   const isComplete = !!latestResult;
 
+  // Display result: selected run if navigating history, otherwise latest
+  const displayResult = selectedRunId
+    ? (runs.find((r) => r.id === selectedRunId)?.result as S1Result | undefined)
+    : latestResult;
+
+  // Navigation functions
+  const navigateToPreviousRun = () => {
+    if (selectedRunIndex > 0) {
+      const newIndex = selectedRunIndex - 1;
+      setSelectedRunIndex(newIndex);
+      setSelectedRunId(runs[newIndex].id);
+    }
+  };
+
+  const navigateToNextRun = () => {
+    if (selectedRunIndex < runs.length - 1) {
+      const newIndex = selectedRunIndex + 1;
+      setSelectedRunIndex(newIndex);
+      setSelectedRunId(runs[newIndex].id);
+    }
+  };
+
+  const handleSetCurrentRun = async () => {
+    if (!selectedRunId) return;
+    try {
+      await apiPost(`/api/v1/use-cases/${ucId}/s1/runs/${selectedRunId}/set-current`, {});
+      toast.success("Set as current run");
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to set current run");
+    }
+  };
+
+  const handleRunSelect = (runId: string) => {
+    const index = runs.findIndex((r) => r.id === runId);
+    if (index !== -1) {
+      setSelectedRunId(runId);
+      setSelectedRunIndex(index);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* ── Header ── */}
@@ -347,7 +381,74 @@ export default function Stage1Page() {
               </button>
             </div>
 
-            {isComplete && (
+            {/* Run history navigation */}
+            {isComplete && runs.length > 1 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "0 10px",
+                  height: 30,
+                  borderRadius: 6,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                }}
+              >
+                <button
+                  onClick={navigateToPreviousRun}
+                  disabled={selectedRunIndex === 0}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 20,
+                    height: 20,
+                    borderRadius: 4,
+                    border: "none",
+                    background: "transparent",
+                    cursor: selectedRunIndex === 0 ? "not-allowed" : "pointer",
+                    opacity: selectedRunIndex === 0 ? 0.4 : 1,
+                    color: "var(--muted-fg)",
+                  }}
+                >
+                  <Icon name="chevR" size={14} style={{ transform: "rotate(180deg)" }} />
+                </button>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "var(--mono)",
+                    color: "var(--muted-fg)",
+                  }}
+                >
+                  Run {selectedRunIndex + 1} of {runs.length}
+                </span>
+                <button
+                  onClick={navigateToNextRun}
+                  disabled={selectedRunIndex === runs.length - 1}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 20,
+                    height: 20,
+                    borderRadius: 4,
+                    border: "none",
+                    background: "transparent",
+                    cursor:
+                      selectedRunIndex === runs.length - 1
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity: selectedRunIndex === runs.length - 1 ? 0.4 : 1,
+                    color: "var(--muted-fg)",
+                  }}
+                >
+                  <Icon name="chevR" size={14} />
+                </button>
+              </div>
+            )}
+
+            {isComplete && !selectedRunId && (
               <span
                 style={{
                   display: "inline-flex",
@@ -365,13 +466,24 @@ export default function Stage1Page() {
                     "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
                 }}
               >
-                <Icon name="check" size={12} /> Complete · run #{runs.length}
+                <Icon name="check" size={12} /> Current
               </span>
             )}
+
+            {selectedRunId && selectedRunId !== useCase?.s1_latest_run_id && (
+              <Button size="sm" variant="outline" onClick={handleSetCurrentRun}>
+                <Icon name="check" size={13} style={{ marginRight: 6 }} />
+                Set as Current
+              </Button>
+            )}
+
             <RunHistoryDrawer
               runs={runs}
               stage="s1"
               stageName="Stage 1 - Assessment"
+              currentRunId={useCase?.s1_latest_run_id}
+              selectedRunId={selectedRunId || useCase?.s1_latest_run_id || undefined}
+              onSelectRun={handleRunSelect}
             />
             <Button size="sm" onClick={handleRun} disabled={isRunning}>
               <Play className="mr-1.5 h-3.5 w-3.5" />
@@ -507,7 +619,7 @@ export default function Stage1Page() {
             )}
 
             {/* Scorecard — complete */}
-            {isComplete && latestResult && (
+            {isComplete && displayResult && (
               <div
                 style={{
                   display: "grid",
@@ -531,12 +643,12 @@ export default function Stage1Page() {
                     }}
                   >
                     <Gauge
-                      value={latestResult.total_score}
-                      band={latestResult.migration_decision}
+                      value={displayResult.total_score}
+                      band={displayResult.migration_decision}
                       size={170}
                     />
                     <PriorityBadge
-                      band={latestResult.migration_decision}
+                      band={displayResult.migration_decision}
                       solid
                     />
                     <div
@@ -550,29 +662,26 @@ export default function Stage1Page() {
                       <span style={{ color: "var(--muted-fg)" }}>
                         Confidence
                       </span>
-                      <Pill color={CONF_COLOR[latestResult.confidence]}>
-                        {latestResult.confidence}
+                      <Pill color={CONF_COLOR[displayResult.confidence]}>
+                        {displayResult.confidence}
                       </Pill>
                     </div>
                   </Card>
 
                   {/* Inputs card */}
                   <Card>
-                    <SectionLabel style={{ marginBottom: 6 }}>Inputs</SectionLabel>
-                    <FieldRow
-                      label="Use case"
-                      value={useCase.name}
-                      source="manual"
-                    />
+                    <SectionLabel style={{ marginBottom: 6 }}>
+                      Inputs
+                    </SectionLabel>
+                    <FieldRow label="Use case" value={useCase.name} />
+                    <FieldRow label="Description" value={useCase.description} />
                     <FieldRow
                       label="Platform"
                       value={useCase.source_platform || "—"}
-                      source="imported"
                     />
                     <FieldRow
                       label="Install"
                       value={useCase.install_status || "—"}
-                      source="manual"
                     />
                     <div style={{ paddingTop: 10 }}>
                       <Btn
@@ -629,7 +738,7 @@ export default function Stage1Page() {
                         <DimBar
                           key={d.key}
                           label={d.label}
-                          value={latestResult[d.key] ?? 0}
+                          value={displayResult[d.key] ?? 0}
                           max={d.max}
                           color={d.color}
                         />
@@ -667,10 +776,10 @@ export default function Stage1Page() {
                         margin: 0,
                       }}
                     >
-                      {latestResult.analysis}
+                      {displayResult.analysis}
                     </p>
 
-                    {latestResult.blockers.length > 0 && (
+                    {displayResult.blockers.length > 0 && (
                       <div style={{ marginTop: 16 }}>
                         <div
                           style={{
@@ -684,7 +793,7 @@ export default function Stage1Page() {
                           }}
                         >
                           <Icon name="flag" size={13} /> Blockers (
-                          {latestResult.blockers.length})
+                          {displayResult.blockers.length})
                         </div>
                         <div
                           style={{
@@ -693,7 +802,7 @@ export default function Stage1Page() {
                             gap: 7,
                           }}
                         >
-                          {latestResult.blockers.map((b, i) => (
+                          {displayResult.blockers.map((b, i) => (
                             <div
                               key={i}
                               style={{
@@ -727,6 +836,35 @@ export default function Stage1Page() {
                       </div>
                     )}
 
+                    {displayResult.override_reason.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 12,
+                          }}
+                        >
+                          <SectionLabel>Override Reason</SectionLabel>
+                          <Pill color="var(--foreground)">
+                            <Icon name="user" size={11} />{" "}
+                            {displayResult.override_by}
+                          </Pill>
+                        </div>
+                        <p
+                          style={{
+                            fontSize: 13,
+                            lineHeight: 1.62,
+                            color: "var(--muted-foreground)",
+                            margin: 0,
+                          }}
+                        >
+                          {displayResult.override_reason}
+                        </p>
+                      </div>
+                    )}
+
                     <div
                       style={{
                         marginTop: 16,
@@ -753,7 +891,7 @@ export default function Stage1Page() {
                             marginTop: 2,
                           }}
                         >
-                          {latestResult.power_automate_fit}
+                          {displayResult.power_automate_fit}
                         </div>
                       </div>
                       <Btn
@@ -763,11 +901,11 @@ export default function Stage1Page() {
                         onClick={() => {
                           setOverrideDims({
                             technical_feasibility:
-                              latestResult.technical_feasibility,
-                            migration_effort: latestResult.migration_effort,
+                              displayResult.technical_feasibility,
+                            migration_effort: displayResult.migration_effort,
                             platform_suitability:
-                              latestResult.platform_suitability,
-                            risk: latestResult.risk,
+                              displayResult.platform_suitability,
+                            risk: displayResult.risk,
                           });
                           setOverrideOpen(true);
                         }}
@@ -1064,15 +1202,30 @@ export default function Stage1Page() {
 
       {/* ── Override Sheet ── */}
       <Sheet open={overrideOpen} onOpenChange={setOverrideOpen}>
-        <SheetContent className="w-120" style={{ padding: spacing.cardDefault }}>
+        <SheetContent
+          className="w-120"
+          style={{ padding: spacing.cardDefault }}
+        >
           <SheetHeader style={{ marginBottom: spacing.gapDefault }}>
             <SectionLabel>Manual Override</SectionLabel>
-            <p style={{ fontSize: 12.8, color: "var(--muted-foreground)", marginTop: 8 }}>
-              Adjust dimensions directly. Overrides are stored as a new run with a
-              required reason.
+            <p
+              style={{
+                fontSize: 12.8,
+                color: "var(--muted-foreground)",
+                marginTop: 8,
+              }}
+            >
+              Adjust dimensions directly. Overrides are stored as a new run with
+              a required reason.
             </p>
           </SheetHeader>
-          <div style={{ display: "flex", flexDirection: "column", gap: spacing.gapLoose }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: spacing.gapLoose,
+            }}
+          >
             <div className="flex justify-around">
               {S1_DIMS.map((d) => (
                 <RadialDim
