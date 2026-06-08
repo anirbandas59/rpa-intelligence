@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { ReadinessStatus } from "@/lib/types"
-import { CheckCircle2, Circle, Loader2, AlertCircle, ArrowRight } from "lucide-react"
+import { CheckCircle2, Circle, Loader2, AlertCircle, XCircle, ArrowRight } from "lucide-react"
 
 interface StageCardProps {
   stageId: string
@@ -57,6 +57,12 @@ const STATUS_CONFIG: Record<
     label: "Stale",
     color: "text-amber-600 dark:text-amber-400",
     dotColor: "bg-amber-600 dark:bg-amber-400",
+  },
+  failed: {
+    icon: XCircle,
+    label: "Failed",
+    color: "text-red-600 dark:text-red-400",
+    dotColor: "bg-red-600 dark:bg-red-400",
   },
 }
 

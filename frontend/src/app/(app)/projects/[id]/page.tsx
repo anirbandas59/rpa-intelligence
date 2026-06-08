@@ -81,6 +81,7 @@ const STATUS_CONFIG: Record<
     color: "var(--c-green)",
   },
   stale: { label: "Stale", dotClass: "bg-amber-500", color: "var(--c-amber)" },
+  failed: { label: "Failed", dotClass: "bg-red-500", color: "var(--c-red)" },
 };
 
 const STAGES = [

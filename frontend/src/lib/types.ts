@@ -20,7 +20,7 @@ export type InputSource =
 
 export type StageId = "s1" | "s2" | "s3" | "s4"
 export type StageRunStatus = "running" | "complete" | "failed"
-export type ReadinessStatus = "complete" | "stale" | "running" | "ready" | "not_ready"
+export type ReadinessStatus = "complete" | "stale" | "running" | "ready" | "not_ready" | "failed"
 
 export type MigrationDecision = "QUICK_WIN" | "STRATEGIC" | "HOLD" | "DO_NOT_MIGRATE"
 export type Confidence = "HIGH" | "MEDIUM" | "LOW"
