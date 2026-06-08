@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Sheet,
   SheetContent,
@@ -16,13 +16,15 @@ import {
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { History, ChevronDown, ChevronRight } from "lucide-react"
+import { History, ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import type { StageRun, StageId } from "@/lib/types"
+import { apiGet } from "@/lib/api"
 
 interface RunHistoryDrawerProps {
   runs: StageRun[]
   stage: StageId
   stageName: string
+  useCaseId?: string
   trigger?: React.ReactNode
   currentRunId?: string
   selectedRunId?: string
@@ -33,15 +35,34 @@ export function RunHistoryDrawer({
   runs,
   stage,
   stageName,
+  useCaseId,
   trigger,
   currentRunId,
   selectedRunId,
   onSelectRun
 }: RunHistoryDrawerProps) {
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const [loadedRuns, setLoadedRuns] = useState<Record<string, StageRun>>({})
+  const [loadingRunId, setLoadingRunId] = useState<string | null>(null)
 
-  const toggleExpand = (runId: string) => {
-    setExpandedRunId(expandedRunId === runId ? null : runId)
+  const toggleExpand = async (runId: string) => {
+    const isCollapsing = expandedRunId === runId
+    setExpandedRunId(isCollapsing ? null : runId)
+
+    // If expanding and we don't have full data yet, fetch it (only if useCaseId is provided)
+    if (!isCollapsing && !loadedRuns[runId] && useCaseId) {
+      setLoadingRunId(runId)
+      try {
+        const fullRun = await apiGet<StageRun>(
+          `/api/v1/use-cases/${useCaseId}/${stage}/runs/${runId}`
+        )
+        setLoadedRuns(prev => ({ ...prev, [runId]: fullRun }))
+      } catch (err) {
+        console.error("Failed to load run details:", err)
+      } finally {
+        setLoadingRunId(null)
+      }
+    }
   }
 
   const handleRunClick = (runId: string) => {
@@ -52,16 +73,17 @@ export function RunHistoryDrawer({
 
   return (
     <Sheet>
-      <SheetTrigger
-        render={
-          (trigger as React.ReactElement | undefined) ?? (
-            <Button variant="outline" size="sm">
-              <History className="mr-2 h-4 w-4" />
-              Run History ({runs.length})
-            </Button>
-          )
-        }
-      />
+      {trigger ? (
+        <SheetTrigger render={trigger as React.ReactElement}>
+          <History className="mr-2 h-4 w-4" />
+          Run History ({runs.length})
+        </SheetTrigger>
+      ) : (
+        <SheetTrigger render={<Button variant="outline" size="sm" />}>
+          <History className="mr-2 h-4 w-4" />
+          Run History ({runs.length})
+        </SheetTrigger>
+      )}
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>
@@ -149,26 +171,43 @@ export function RunHistoryDrawer({
 
               {expandedRunId === run.id && (
                 <div className="space-y-3 pt-3 border-t">
-                  {run.error_message && (
-                    <div className="rounded bg-destructive/10 p-3 text-sm text-destructive">
-                      <strong>Error:</strong> {run.error_message}
+                  {loadingRunId === run.id ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      <span className="text-sm">Loading run details...</span>
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {(loadedRuns[run.id]?.error_message || run.error_message) && (
+                        <div className="rounded bg-destructive/10 p-3 text-sm text-destructive">
+                          <strong>Error:</strong> {loadedRuns[run.id]?.error_message || run.error_message}
+                        </div>
+                      )}
 
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Inputs Snapshot</h4>
-                    <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-auto max-h-64 text-muted-foreground">
-                      {JSON.stringify(run.inputs_snapshot, null, 2)}
-                    </pre>
-                  </div>
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Inputs Snapshot</h4>
+                        <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-auto max-h-64 text-muted-foreground">
+                          {loadedRuns[run.id]?.inputs_snapshot
+                            ? JSON.stringify(loadedRuns[run.id].inputs_snapshot, null, 2)
+                            : run.inputs_snapshot
+                              ? JSON.stringify(run.inputs_snapshot, null, 2)
+                              : "No inputs snapshot available"}
+                        </pre>
+                      </div>
 
-                  {run.status === "complete" && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Result</h4>
-                      <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-auto max-h-64 text-muted-foreground">
-                        {JSON.stringify(run.result, null, 2)}
-                      </pre>
-                    </div>
+                      {run.status === "complete" && (
+                        <div>
+                          <h4 className="text-sm font-medium mb-2">Result</h4>
+                          <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-auto max-h-64 text-muted-foreground">
+                            {loadedRuns[run.id]?.result
+                              ? JSON.stringify(loadedRuns[run.id].result, null, 2)
+                              : run.result
+                                ? JSON.stringify(run.result, null, 2)
+                                : "No result data available"}
+                          </pre>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

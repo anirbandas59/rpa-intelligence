@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from api.dependencies import get_current_user, get_db
+from core.utils.encoding import read_text_file_with_fallback
 from db.models import StageRun, UploadedFile, UseCase, User
 from db.session import get_session_factory
 from llm.manager import LLMManager
@@ -49,29 +50,21 @@ class S3InputsUpdate(BaseModel):
 
     effort_weeks: int | None = Field(None, ge=1, description="Build effort in weeks")
     start_date: str | None = Field(None, description="Project start date (ISO format YYYY-MM-DD)")
-    complexity_class: str | None = Field(
-        None, pattern="^(XS|S|M|L|XL)$", description="Complexity class from S2"
-    )
-    buffers: dict | None = Field(
-        None, description="Custom buffer configuration (overrides defaults)"
-    )
+    complexity_class: str | None = Field(None, pattern="^(XS|S|M|L|XL)$", description="Complexity class from S2")
+    buffers: dict | None = Field(None, description="Custom buffer configuration (overrides defaults)")
 
 
 class PhaseAdjustment(BaseModel):
     """Request model for adjusting individual phase durations."""
 
-    phase_name: str = Field(
-        ..., description="Phase name (lowercase): define, design, build, sit, uat, deploy"
-    )
+    phase_name: str = Field(..., description="Phase name (lowercase): define, design, build, sit, uat, deploy")
     delta_weeks: int = Field(..., description="Adjustment in weeks (can be negative)")
 
 
 class LoadFromS2Request(BaseModel):
     """Request model for loading Stage 2 complexity data into Stage 3 inputs."""
 
-    prefer_max: bool = Field(
-        True, description="Use max_weeks if true, else min_weeks from S2 effort range"
-    )
+    prefer_max: bool = Field(True, description="Use max_weeks if true, else min_weeks from S2 effort range")
 
 
 def compute_inputs_hash(inputs: dict) -> str:
@@ -106,10 +99,7 @@ async def generate_narrative_background(
         try:
             llm = LLMManager()
             phase_list = "\n".join(
-                [
-                    f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)"
-                    for p in phases
-                ]
+                [f"- {p['name']}: {p['start_date']} to {p['end_date']} ({p['weeks']}w)" for p in phases]
             )
 
             user_prompt = S3_NARRATIVE_USER.format(
@@ -171,9 +161,8 @@ async def run_task_extraction_background(
     session_factory = get_session_factory()
     async with session_factory() as db:
         try:
-            # Read document text from file
-            with open(document_path, encoding="utf-8") as f:
-                doc_text = f.read()
+            # Read document text from file with encoding fallback
+            doc_text = read_text_file_with_fallback(document_path)
 
             # Run task extraction agent
             result = await run_task_extraction_agent(
@@ -333,9 +322,7 @@ async def create_s3_run(
 
     # Compute run number
     count_result = await db.execute(
-        select(func.count(StageRun.id)).where(
-            StageRun.use_case_id == use_case_id, StageRun.stage == "s3"
-        )
+        select(func.count(StageRun.id)).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s3")
     )
     run_number = count_result.scalar() + 1
 
@@ -355,7 +342,7 @@ async def create_s3_run(
     db.add(stage_run)
     await db.flush()  # populates stage_run.id (default=new_uuid fires at INSERT)
     use_case.s3_latest_run_id = stage_run.id
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now()
     await db.commit()
     await db.refresh(stage_run)
 
@@ -430,9 +417,7 @@ async def create_s3_run(
                     )
 
                     # Update s3_inputs with synthesis result
-                    uc_result = await session.execute(
-                        select(UseCase).where(UseCase.id == use_case_id)
-                    )
+                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
                     uc = uc_result.scalar_one_or_none()
                     if uc:
                         uc.s3_inputs["task_extraction"] = synthesis_result
@@ -444,9 +429,7 @@ async def create_s3_run(
                 except Exception as e:
                     logger.error(f"Task synthesis failed for use case {use_case_id}: {e}")
                     # Update status to failed
-                    uc_result = await session.execute(
-                        select(UseCase).where(UseCase.id == use_case_id)
-                    )
+                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
                     uc = uc_result.scalar_one_or_none()
                     if uc and "task_extraction" in uc.s3_inputs:
                         uc.s3_inputs["task_extraction"]["extraction_status"] = "failed"
@@ -528,9 +511,7 @@ async def get_s3_run(
 ):
     """Get single Stage 3 run with full details."""
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s3"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s3")
     )
     run = result.scalar_one_or_none()
     if not run:
@@ -562,9 +543,7 @@ async def adjust_phase(
 
     valid_phases = {"define", "design", "build", "sit", "uat", "deploy"}
     if adjustment.phase_name.lower() not in valid_phases:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid phase name. Must be one of: {valid_phases}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid phase name. Must be one of: {valid_phases}")
 
     inputs = use_case.s3_inputs or {}
     phase_deltas = inputs.get("phase_deltas", {})
@@ -600,6 +579,62 @@ async def reset_phase_deltas(
     await db.commit()
 
     return {"message": "Phase deltas cleared", "s3_inputs": inputs}
+
+
+@router.post("/{use_case_id}/s3/generate-narrative")
+async def generate_narrative(
+    use_case_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate narrative summary for latest S3 run (user-triggered).
+
+    Returns immediately with status, narrative generation runs in background.
+    """
+    result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+    use_case = result.scalar_one_or_none()
+    if not use_case:
+        raise HTTPException(status_code=404, detail="Use case not found")
+
+    if not use_case.s3_latest_run_id:
+        raise HTTPException(status_code=400, detail="No S3 run found. Run timeline first.")
+
+    # Fetch latest run
+    run_result = await db.execute(
+        select(StageRun).where(StageRun.id == use_case.s3_latest_run_id)
+    )
+    latest_run = run_result.scalar_one_or_none()
+    if not latest_run or latest_run.status != "complete":
+        raise HTTPException(status_code=400, detail="Latest S3 run not complete")
+
+    result_data = latest_run.result or {}
+    phases = result_data.get("phases", [])
+    total_weeks = result_data.get("total_weeks", 0)
+
+    # Get build phase weeks
+    build_weeks = next(
+        (p["weeks"] for p in phases if "build" in p["name"].lower()),
+        0
+    )
+
+    # Get complexity class from inputs
+    inputs = use_case.s3_inputs or {}
+    complexity_class = inputs.get("complexity_class", "M")
+
+    # Dispatch background task
+    background_tasks.add_task(
+        generate_narrative_background,
+        run_id=use_case.s3_latest_run_id,
+        use_case_name=use_case.name,
+        complexity_class=complexity_class,
+        total_weeks=total_weeks,
+        build_weeks=build_weeks,
+        phases=phases,
+    )
+
+    return {"status": "generating", "message": "Narrative generation started"}
 
 
 @router.post("/{use_case_id}/s3/load-from-s2")
@@ -664,7 +699,7 @@ async def load_from_s2(
 
     use_case.s3_inputs = inputs
     flag_modified(use_case, "s3_inputs")
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now()
     await db.commit()
 
     logger.info(f"Loaded S2 data into S3 inputs for use case {use_case_id}")

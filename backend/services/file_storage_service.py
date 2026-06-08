@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from core.exceptions import DocumentProcessingError
+from core.utils.encoding import read_text_file_with_fallback, detect_encoding
 from db.models import UploadSession, UseCase
 
 try:
@@ -212,7 +213,9 @@ class FileStorageService:
     def _parse_csv_metadata(self, file_path: Path) -> tuple[list[str], int]:
         """Parse CSV column names and count rows."""
         try:
-            with file_path.open("r", encoding="utf-8") as f:
+            # Detect encoding and read file
+            encoding = detect_encoding(file_path)
+            with file_path.open("r", encoding=encoding) as f:
                 reader = csv.DictReader(f)
                 if not reader.fieldnames:
                     raise DocumentProcessingError("CSV has no columns")
@@ -221,7 +224,8 @@ class FileStorageService:
             return columns, row_count
         except UnicodeDecodeError as e:
             raise DocumentProcessingError(
-                "File encoding error. Please ensure the file is UTF-8 encoded."
+                f"File encoding error. Failed to decode with detected encoding. "
+                f"Please re-save the file as UTF-8."
             ) from e
 
     def _parse_xlsx_metadata(self, file_path: Path) -> tuple[list[str], int]:
@@ -250,7 +254,8 @@ class FileStorageService:
     def _preview_csv(self, file_path: Path, limit: int) -> list[dict[str, str]]:
         """Read first N rows from CSV."""
         preview = []
-        with file_path.open("r", encoding="utf-8") as f:
+        encoding = detect_encoding(file_path)
+        with file_path.open("r", encoding=encoding) as f:
             reader = csv.DictReader(f)
             for i, row in enumerate(reader):
                 if i >= limit:
@@ -295,7 +300,8 @@ class FileStorageService:
         batch_size: int,
     ) -> AsyncIterator[list[UseCase]]:
         """Parse CSV in batches, yielding UseCase objects."""
-        with file_path.open("r", encoding="utf-8") as f:
+        encoding = detect_encoding(file_path)
+        with file_path.open("r", encoding=encoding) as f:
             reader = csv.DictReader(f)
             batch = []
 

@@ -224,6 +224,15 @@ export interface S3Inputs {
   phase_deltas?: Record<string, number>;
 }
 
+export interface S3LoadedResponse {
+  message: string;
+  s3_inputs: S3Inputs;
+  loaded_values: {
+    effort_weeks: number;
+    complexity_class: ComplexityClass;
+  };
+}
+
 export interface S3Result {
   phases: Phase[];
   narrative?: string;
