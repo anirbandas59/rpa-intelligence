@@ -29,6 +29,7 @@ class ProjectResponse(BaseModel):
     id: str
     name: str
     description: str | None
+    use_case_count: int = 0
     created_at: datetime
 
 
@@ -152,7 +153,7 @@ async def list_projects(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    List all projects.
+    List all projects with use case counts.
 
     Superusers see all projects. Regular users see only their own projects.
 
@@ -161,7 +162,7 @@ async def list_projects(
         db: Database session (injected)
 
     Returns:
-        List of projects accessible to the current user
+        List of projects accessible to the current user with use_case_count
     """
     # Superuser sees all, regular user sees only their own
     if user.role == "superuser":
@@ -172,7 +173,27 @@ async def list_projects(
             .where(Project.created_by == user.id)
             .order_by(Project.created_at.desc())
         )
-    return result.scalars().all()
+    projects = result.scalars().all()
+
+    # Compute use case counts for each project
+    project_responses = []
+    for project in projects:
+        uc_count_result = await db.execute(
+            select(func.count(UseCase.id)).where(UseCase.project_id == project.id)
+        )
+        use_case_count = uc_count_result.scalar() or 0
+
+        project_responses.append(
+            ProjectResponse(
+                id=project.id,
+                name=project.name,
+                description=project.description,
+                use_case_count=use_case_count,
+                created_at=project.created_at,
+            )
+        )
+
+    return project_responses
 
 
 @router.get("/{id}", response_model=ProjectResponse)
@@ -185,7 +206,20 @@ async def get_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return project
+
+    # Compute use case count
+    uc_count_result = await db.execute(
+        select(func.count(UseCase.id)).where(UseCase.project_id == id)
+    )
+    use_case_count = uc_count_result.scalar() or 0
+
+    return ProjectResponse(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        use_case_count=use_case_count,
+        created_at=project.created_at,
+    )
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

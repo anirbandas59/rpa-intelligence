@@ -3,7 +3,9 @@ Settings API routes — Superuser-only configuration management.
 All endpoints require superuser role.
 """
 
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,11 +13,41 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_db, require_superuser
+from api.dependencies import get_current_user, get_db, require_superuser
 from auth import hash_password
 from db.models import LLMConfig, PromptVariant, User
 
 router = APIRouter()
+
+# Path to weight matrix reference file
+_WEIGHT_MATRIX_PATH = (
+    Path(__file__).parent.parent.parent / "data" / "reference" / "weight_matrix.json"
+)
+
+
+# ==================== Weight Matrix (Reference Data) ====================
+
+
+@router.get("/weight-matrix")
+async def get_weight_matrix(
+    user: User = Depends(get_current_user),
+):
+    """
+    Get the weight matrix with band descriptions and ranges.
+    Available to all authenticated users (not superuser-only).
+
+    Returns:
+        Weight matrix with metadata, attribute descriptions, and band ranges
+    """
+    try:
+        with open(_WEIGHT_MATRIX_PATH) as f:
+            matrix_data = json.load(f)
+        return matrix_data
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Weight matrix file not found"
+        )
 
 
 # ==================== LLM Configuration ====================
