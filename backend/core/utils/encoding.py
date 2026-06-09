@@ -46,7 +46,7 @@ def read_text_file_with_fallback(file_path: str | Path, encodings: list[str] | N
     last_error = None
     for encoding in encodings:
         try:
-            with open(file_path, "r", encoding=encoding) as f:
+            with open(file_path, encoding=encoding) as f:
                 content = f.read()
 
             # Log if non-UTF-8 encoding was used
@@ -63,7 +63,7 @@ def read_text_file_with_fallback(file_path: str | Path, encodings: list[str] | N
             logger.debug(f"Failed to decode {file_path.name} with {encoding}: {e}")
             continue
 
-        except Exception as e:
+        except Exception:
             # Unexpected error, don't try more encodings
             raise
 

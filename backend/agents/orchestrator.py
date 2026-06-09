@@ -11,7 +11,7 @@ Supports dual agent paths (v1 legacy + v2 LangGraph) via feature flag.
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,8 +55,7 @@ def assessment_to_scoring_result(assessment: AssessmentResult) -> ScoringResult:
 
     # Rebuild attribute_weights dict from attribute_scores
     attribute_weights = {
-        score.attribute_name.lower().replace(" ", "_"): score.weight
-        for score in assessment.attribute_scores
+        score.attribute_name.lower().replace(" ", "_"): score.weight for score in assessment.attribute_scores
     }
 
     # Derive effort from complexity tier (simplified — in future, use effort_table)
@@ -197,9 +196,7 @@ def _select_latest_input(
         candidates.append(("manual", ts, None, manual_bands))
 
     if not candidates:
-        raise AgentExecutionError(
-            "No input provided: must supply document, pasted text, or manual bands"
-        )
+        raise AgentExecutionError("No input provided: must supply document, pasted text, or manual bands")
 
     # Sort by timestamp descending, take most recent
     candidates.sort(key=lambda x: x[1], reverse=True)
@@ -286,9 +283,7 @@ async def run_s2_assessment(
         process_summary = getattr(bands_with_source, "_process_summary", None)
 
     else:
-        raise AgentExecutionError(
-            "No input provided: must supply document_path, pasted_text, or manual_bands"
-        )
+        raise AgentExecutionError("No input provided: must supply document_path, pasted_text, or manual_bands")
 
     # Convert to AttributeBands for scoring (drop source tags)
     bands = AttributeBands(
@@ -348,9 +343,7 @@ async def run_s2_assessment(
 
         raw_attributes = {
             "activities": band_to_raw_map.get(bands.activities, {}).get("activities", 0),
-            "business_rules": band_to_raw_map.get(bands.business_rules, {}).get(
-                "business_rules", 0
-            ),
+            "business_rules": band_to_raw_map.get(bands.business_rules, {}).get("business_rules", 0),
             "layouts": band_to_raw_map.get(bands.layouts, {}).get("layouts", 0),
             "interfaces": band_to_raw_map.get(bands.interfaces, {}).get("interfaces", 0),
             "technology": band_to_raw_map.get(bands.technology, {}).get("technology", 0),
@@ -415,9 +408,7 @@ async def run_s2_assessment(
             "process_summary": process_summary,  # NEW: include validated process summary
         }
 
-    logger.info(
-        f"S2 assessment complete: {scoring_result.complexity_class} class, {scoring_result.total_score} score"
-    )
+    logger.info(f"S2 assessment complete: {scoring_result.complexity_class} class, {scoring_result.total_score} score")
 
     return result_data
 
@@ -462,9 +453,7 @@ async def create_s2_run(
     await session.commit()
     await session.refresh(stage_run)
 
-    logger.info(
-        f"Created S2 StageRun {stage_run.id} (run #{run_number}) for use_case {use_case_id}"
-    )
+    logger.info(f"Created S2 StageRun {stage_run.id} (run #{run_number}) for use_case {use_case_id}")
     return stage_run
 
 
@@ -498,7 +487,7 @@ async def finalize_s2_run(
     use_case = uc_result.scalar_one_or_none()
     if use_case:
         use_case.s2_latest_run_id = run_id
-        use_case.updated_at = datetime.utcnow()
+        use_case.updated_at = datetime.now(UTC)
 
     await session.commit()
     logger.info(f"Finalized S2 StageRun {run_id} as complete")

@@ -4,10 +4,11 @@ Integration test for bulk upload flow.
 Tests the complete bulk upload workflow from file upload to processing.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from services.file_storage_service import file_storage_service
-from db.models import UploadSession
 
 
 @pytest.mark.asyncio

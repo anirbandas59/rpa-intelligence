@@ -28,7 +28,7 @@ Usage:
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,14 +83,12 @@ class EpisodicMemory:
             memory_type=memory_type,
             content=content,
             keywords=" ".join(keywords),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
         self.db.add(memory)
         await self.db.commit()
         await self.db.refresh(memory)
-        logger.info(
-            f"[memory] Stored {memory_type} memory for use_case={use_case_id} stage={stage}"
-        )
+        logger.info(f"[memory] Stored {memory_type} memory for use_case={use_case_id} stage={stage}")
         return memory
 
     async def retrieve_similar(
@@ -132,17 +130,13 @@ class EpisodicMemory:
         result = await self.db.execute(query)
         memories = result.scalars().all()
 
-        logger.info(
-            f"[memory] Retrieved {len(memories)} memories for keywords={query_keywords[:3]} stage={stage}"
-        )
+        logger.info(f"[memory] Retrieved {len(memories)} memories for keywords={query_keywords[:3]} stage={stage}")
         return list(memories)
 
     async def retrieve_for_use_case(self, use_case_id: str) -> list[AgentMemory]:
         """Get all memories for a specific use-case, most recent first."""
         result = await self.db.execute(
-            select(AgentMemory)
-            .where(AgentMemory.use_case_id == use_case_id)
-            .order_by(AgentMemory.created_at.desc())
+            select(AgentMemory).where(AgentMemory.use_case_id == use_case_id).order_by(AgentMemory.created_at.desc())
         )
         return list(result.scalars().all())
 

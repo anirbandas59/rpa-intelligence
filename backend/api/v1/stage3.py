@@ -25,7 +25,7 @@ Timeline flow:
 import hashlib
 import json
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -248,7 +248,7 @@ async def update_s3_inputs(
 
     use_case.s3_inputs = inputs
     flag_modified(use_case, "s3_inputs")
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(use_case)
 
@@ -342,7 +342,7 @@ async def create_s3_run(
     db.add(stage_run)
     await db.flush()  # populates stage_run.id (default=new_uuid fires at INSERT)
     use_case.s3_latest_run_id = stage_run.id
-    use_case.updated_at = datetime.now()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(stage_run)
 
@@ -552,7 +552,7 @@ async def adjust_phase(
 
     use_case.s3_inputs = inputs
     flag_modified(use_case, "s3_inputs")
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
 
     return {"phase_deltas": phase_deltas}
@@ -575,7 +575,7 @@ async def reset_phase_deltas(
         del inputs["phase_deltas"]
 
     use_case.s3_inputs = inputs
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
 
     return {"message": "Phase deltas cleared", "s3_inputs": inputs}
@@ -602,9 +602,7 @@ async def generate_narrative(
         raise HTTPException(status_code=400, detail="No S3 run found. Run timeline first.")
 
     # Fetch latest run
-    run_result = await db.execute(
-        select(StageRun).where(StageRun.id == use_case.s3_latest_run_id)
-    )
+    run_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s3_latest_run_id))
     latest_run = run_result.scalar_one_or_none()
     if not latest_run or latest_run.status != "complete":
         raise HTTPException(status_code=400, detail="Latest S3 run not complete")
@@ -614,10 +612,7 @@ async def generate_narrative(
     total_weeks = result_data.get("total_weeks", 0)
 
     # Get build phase weeks
-    build_weeks = next(
-        (p["weeks"] for p in phases if "build" in p["name"].lower()),
-        0
-    )
+    build_weeks = next((p["weeks"] for p in phases if "build" in p["name"].lower()), 0)
 
     # Get complexity class from inputs
     inputs = use_case.s3_inputs or {}
@@ -699,7 +694,7 @@ async def load_from_s2(
 
     use_case.s3_inputs = inputs
     flag_modified(use_case, "s3_inputs")
-    use_case.updated_at = datetime.now()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
 
     logger.info(f"Loaded S2 data into S3 inputs for use case {use_case_id}")

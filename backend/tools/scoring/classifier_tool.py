@@ -12,7 +12,7 @@ only generates the explanation, never changes the tier.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -40,9 +40,7 @@ class ReasoningResponse(BaseModel):
 
     reasoning: str = Field(..., description="Professional explanation of tier")
     key_drivers: list[str] = Field(default_factory=list, description="Main complexity drivers")
-    simplification_opportunities: list[str] = Field(
-        default_factory=list, description="Ways to reduce complexity"
-    )
+    simplification_opportunities: list[str] = Field(default_factory=list, description="Ways to reduce complexity")
     tech_lead_note: str = Field(default="", description="Note for Tech Lead review if needed")
 
     @field_validator("reasoning")
@@ -216,8 +214,7 @@ def generate_reasoning(
             session_id=session_id,
         )
         logger.info(
-            f"[{session_id}] Reasoning generated for {tier.value} tier, "
-            f"{len(result.key_drivers)} drivers identified"
+            f"[{session_id}] Reasoning generated for {tier.value} tier, {len(result.key_drivers)} drivers identified"
         )
         return result
     except LLMProviderError as e:
@@ -329,7 +326,7 @@ def classify_and_explain(
         confidence_score=confidence,
         reasoning=full_reasoning,
         requires_tech_lead_review=requires_review,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
 
     logger.info(

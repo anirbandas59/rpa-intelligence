@@ -14,7 +14,7 @@ Pure orchestration — all business logic lives in tools.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -115,9 +115,7 @@ def score_attributes(state: ComplexityAssessmentState) -> dict[str, Any]:
             score = score_attribute(attr_id, raw_value)
             attribute_scores.append(score)
 
-        logger.info(
-            f"[{session_id}] Attributes scored. Weights: {[s.weight for s in attribute_scores]}"
-        )
+        logger.info(f"[{session_id}] Attributes scored. Weights: {[s.weight for s in attribute_scores]}")
 
         return {"attribute_scores": attribute_scores}
 
@@ -201,7 +199,7 @@ def classify_complexity(state: ComplexityAssessmentState) -> dict[str, Any]:
         return {
             "assessment_result": result,
             "status": "success",
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
         }
 
     except Exception as e:

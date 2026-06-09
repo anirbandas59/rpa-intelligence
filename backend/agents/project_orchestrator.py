@@ -11,7 +11,7 @@ for planning and evaluation. It supports both autonomous and supervised modes.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -53,7 +53,7 @@ def _emit_event(state: OrchestratorState, event_type: str, content: str) -> None
         {
             "type": event_type,
             "content": content,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "session_id": state["session_id"],
         }
     )
@@ -109,9 +109,7 @@ async def plan_node(state: OrchestratorState) -> OrchestratorState:
         )
         plan_data = json.loads(_extract_json(response))
         plan = plan_data.get("plan", [])
-        logger.info(
-            f"[orchestrator] Plan generated: {len(plan)} steps, session={state['session_id']}"
-        )
+        logger.info(f"[orchestrator] Plan generated: {len(plan)} steps, session={state['session_id']}")
         _emit_event(state, "thinking", f"Plan generated: {len(plan)} steps")
         return {**state, "plan": plan, "current_step_index": 0}
     except Exception as e:
@@ -260,10 +258,7 @@ async def self_correct_node(state: OrchestratorState) -> OrchestratorState:
 
 async def await_input_node(state: OrchestratorState) -> OrchestratorState:
     """Pause execution waiting for user clarification. Persisted via checkpointer."""
-    logger.info(
-        f"[orchestrator] Awaiting user input: {state['pending_clarification']}, "
-        f"session={state['session_id']}"
-    )
+    logger.info(f"[orchestrator] Awaiting user input: {state['pending_clarification']}, session={state['session_id']}")
     _emit_event(state, "needs_input", state["pending_clarification"] or "")
     # Graph terminates here; resumed via /respond endpoint which re-invokes from checkpoint
     return state

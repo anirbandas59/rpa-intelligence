@@ -25,7 +25,7 @@ Complexity flow:
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
@@ -252,9 +252,9 @@ async def save_pasted_text(
         **use_case.s2_inputs,
         "pasted_text": request.pasted_text,
         "pasted_text_source": "manual",
-        "pasted_text_updated_at": datetime.utcnow().isoformat(),
+        "pasted_text_updated_at": datetime.now(UTC).isoformat(),
     }
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(use_case)
@@ -323,10 +323,10 @@ async def update_s2_inputs(
             request.technology,
         ]
     ):
-        updates["manual_bands_updated_at"] = datetime.utcnow().isoformat()
+        updates["manual_bands_updated_at"] = datetime.now(UTC).isoformat()
 
     use_case.s2_inputs = {**use_case.s2_inputs, **updates}
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(use_case)
@@ -537,9 +537,7 @@ async def get_s2_run(
         HTTPException: 404 if run not found or doesn't belong to this use case
     """
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id, StageRun.use_case_id == id, StageRun.stage == "s2"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == id, StageRun.stage == "s2")
     )
     run = result.scalar_one_or_none()
     if not run:

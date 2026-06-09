@@ -25,7 +25,7 @@ Tracker flow:
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -162,7 +162,7 @@ async def update_s4_inputs(
 
     use_case.s4_inputs = inputs
     flag_modified(use_case, "s4_inputs")
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(use_case)
 
@@ -232,9 +232,7 @@ async def create_s4_run(
 
     # Get build+SIT window from S3
     if not use_case.s3_latest_run_id:
-        raise HTTPException(
-            status_code=400, detail="Stage 3 must be complete before running Stage 4"
-        )
+        raise HTTPException(status_code=400, detail="Stage 3 must be complete before running Stage 4")
 
     s3_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s3_latest_run_id))
     s3_run = s3_result.scalar_one_or_none()
@@ -247,9 +245,7 @@ async def create_s4_run(
     sit_phase = next((p for p in s3_phases if p["name"].lower() == "sit"), None)
 
     if not build_phase or not sit_phase:
-        raise HTTPException(
-            status_code=400, detail="Build and SIT phases not found in Stage 3 result"
-        )
+        raise HTTPException(status_code=400, detail="Build and SIT phases not found in Stage 3 result")
 
     build_sit_window = {
         "start_date": build_phase["start_date"],
@@ -258,9 +254,7 @@ async def create_s4_run(
 
     # Compute run number
     count_result = await db.execute(
-        select(func.count(StageRun.id)).where(
-            StageRun.use_case_id == use_case_id, StageRun.stage == "s4"
-        )
+        select(func.count(StageRun.id)).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
     )
     run_number = count_result.scalar() + 1
 
@@ -279,7 +273,7 @@ async def create_s4_run(
 
     db.add(stage_run)
     use_case.s4_latest_run_id = stage_run.id
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(stage_run)
 
@@ -345,9 +339,7 @@ async def get_s4_run(
 ):
     """Get single Stage 4 run with full details."""
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
     )
     run = result.scalar_one_or_none()
     if not run:
@@ -399,9 +391,7 @@ async def export_s4_run(
 
     # Get S4 run
     s4_result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s4")
     )
     s4_run = s4_result.scalar_one_or_none()
     if not s4_run:
@@ -492,7 +482,7 @@ async def load_from_s2(
 
     use_case.s4_inputs = inputs
     flag_modified(use_case, "s4_inputs")
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
 
     logger.info(f"Loaded S2 data into S4 inputs for use case {use_case_id}")
@@ -541,7 +531,7 @@ async def load_from_s3(
 
     use_case.s4_inputs = inputs
     flag_modified(use_case, "s4_inputs")
-    use_case.updated_at = datetime.utcnow()
+    use_case.updated_at = datetime.now(UTC)
     await db.commit()
 
     logger.info(f"Loaded S3 data into S4 inputs for use case {use_case_id}")

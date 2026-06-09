@@ -1,7 +1,7 @@
 """Orchestrator API routes — start and monitor autonomous agent sessions."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -103,13 +103,11 @@ async def _run_orchestrator(
     # Update session status in DB (separate connection to avoid nested transactions)
     db_factory_inner = db_factory
     async with db_factory_inner() as update_db:
-        sess_result = await update_db.execute(
-            select(AgentSession).where(AgentSession.id == session_id)
-        )
+        sess_result = await update_db.execute(select(AgentSession).where(AgentSession.id == session_id))
         session = sess_result.scalar_one_or_none()
         if session:
             session.status = final_status
-            session.updated_at = datetime.utcnow()
+            session.updated_at = datetime.now(UTC)
             await update_db.commit()
 
     await publish_event(session_id, "complete", final_status)
@@ -148,7 +146,7 @@ async def start_orchestration(
         status="running",
         current_step=0,
         completed_stages={},
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
     )
     db.add(session)
     await db.commit()
@@ -226,7 +224,7 @@ async def respond_to_clarification(
 
     session.pending_clarification = None
     session.status = "running"
-    session.updated_at = datetime.utcnow()
+    session.updated_at = datetime.now(UTC)
     await db.commit()
 
     return {"resumed": True, "session_id": session_id}

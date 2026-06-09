@@ -9,11 +9,11 @@ Memory-efficient chunked parsing for large files (yields batches of 1000 rows).
 import csv
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from core.exceptions import DocumentProcessingError
-from core.utils.encoding import read_text_file_with_fallback, detect_encoding
+from core.utils.encoding import detect_encoding
 from db.models import UploadSession, UseCase
 
 try:
@@ -88,8 +88,8 @@ class FileStorageService:
             columns={"columns": columns},  # JSON array wrapper
             row_count=row_count,
             status="preview",
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(hours=24),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
 
         return session
@@ -153,14 +153,10 @@ class FileStorageService:
 
         try:
             if session.filename.endswith(".csv"):
-                async for batch in self._parse_csv_batches(
-                    file_path, session.project_id, column_mapping, batch_size
-                ):
+                async for batch in self._parse_csv_batches(file_path, session.project_id, column_mapping, batch_size):
                     yield batch
             elif session.filename.endswith(".xlsx"):
-                async for batch in self._parse_xlsx_batches(
-                    file_path, session.project_id, column_mapping, batch_size
-                ):
+                async for batch in self._parse_xlsx_batches(file_path, session.project_id, column_mapping, batch_size):
                     yield batch
             else:
                 raise DocumentProcessingError(f"Unsupported file type: {session.filename}")
@@ -206,9 +202,7 @@ class FileStorageService:
         elif filename.endswith(".xlsx"):
             return self._parse_xlsx_metadata(file_path)
         else:
-            raise DocumentProcessingError(
-                f"Unsupported file type: {filename}. Only .csv and .xlsx are supported."
-            )
+            raise DocumentProcessingError(f"Unsupported file type: {filename}. Only .csv and .xlsx are supported.")
 
     def _parse_csv_metadata(self, file_path: Path) -> tuple[list[str], int]:
         """Parse CSV column names and count rows."""
@@ -224,8 +218,7 @@ class FileStorageService:
             return columns, row_count
         except UnicodeDecodeError as e:
             raise DocumentProcessingError(
-                f"File encoding error. Failed to decode with detected encoding. "
-                f"Please re-save the file as UTF-8."
+                "File encoding error. Failed to decode with detected encoding. Please re-save the file as UTF-8."
             ) from e
 
     def _parse_xlsx_metadata(self, file_path: Path) -> tuple[list[str], int]:
@@ -283,9 +276,7 @@ class FileStorageService:
             if i >= limit:
                 break
             row_dict = {
-                columns[j]: str(val) if val is not None else ""
-                for j, val in enumerate(row)
-                if j < len(columns)
+                columns[j]: str(val) if val is not None else "" for j, val in enumerate(row) if j < len(columns)
             }
             preview.append(row_dict)
 
@@ -341,9 +332,7 @@ class FileStorageService:
         batch = []
         for row in ws.iter_rows(min_row=2, values_only=True):
             row_dict = {
-                columns[j]: str(val) if val is not None else ""
-                for j, val in enumerate(row)
-                if j < len(columns)
+                columns[j]: str(val) if val is not None else "" for j, val in enumerate(row) if j < len(columns)
             }
             use_case = self._row_to_use_case(row_dict, project_id, column_mapping)
             if use_case:

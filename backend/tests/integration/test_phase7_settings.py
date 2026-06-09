@@ -9,6 +9,7 @@ Verifies:
 5. User management works
 """
 
+from datetime import UTC
 from unittest.mock import patch
 
 import pytest
@@ -77,7 +78,7 @@ async def test_default_llm_configs_seeded(async_client, test_superuser_token, te
             temperature=0.3,
             max_tokens=1000,
             is_active=True,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(UTC),
         ),
         LLMConfig(
             stage="s1_followup",
@@ -85,7 +86,7 @@ async def test_default_llm_configs_seeded(async_client, test_superuser_token, te
             temperature=0.3,
             max_tokens=500,
             is_active=True,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(UTC),
         ),
         LLMConfig(
             stage="s2_extract",
@@ -93,7 +94,7 @@ async def test_default_llm_configs_seeded(async_client, test_superuser_token, te
             temperature=0.2,
             max_tokens=800,
             is_active=True,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(UTC),
         ),
         LLMConfig(
             stage="s3_narrative",
@@ -101,7 +102,7 @@ async def test_default_llm_configs_seeded(async_client, test_superuser_token, te
             temperature=0.5,
             max_tokens=1500,
             is_active=True,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(UTC),
         ),
         LLMConfig(
             stage="s4_decompose",
@@ -109,7 +110,7 @@ async def test_default_llm_configs_seeded(async_client, test_superuser_token, te
             temperature=0.4,
             max_tokens=2000,
             is_active=True,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(UTC),
         ),
     ]
     for cfg in default_configs:
@@ -179,18 +180,14 @@ async def test_create_prompt_variant(async_client, test_superuser_token):
         },
     }
 
-    response = await async_client.post(
-        "/api/v1/settings/prompts", json=create_payload, headers=headers
-    )
+    response = await async_client.post("/api/v1/settings/prompts", json=create_payload, headers=headers)
     assert response.status_code == 201
     data = response.json()
     variant_id = data["id"]
     assert data["is_active"] is False  # New variants start inactive
 
     # Activate the variant
-    activate_response = await async_client.put(
-        f"/api/v1/settings/prompts/{variant_id}/activate", headers=headers
-    )
+    activate_response = await async_client.put(f"/api/v1/settings/prompts/{variant_id}/activate", headers=headers)
     assert activate_response.status_code == 200
     activate_data = activate_response.json()
     assert activate_data["is_active"] is True
@@ -208,9 +205,7 @@ async def test_invite_user(async_client, test_superuser_token, test_db_session):
 
     # Mock hash_password to avoid bcrypt issues in tests
     with patch("api.v1.settings.hash_password", return_value="$2b$12$mocked_hash"):
-        response = await async_client.post(
-            "/api/v1/settings/users/invite", json=invite_payload, headers=headers
-        )
+        response = await async_client.post("/api/v1/settings/users/invite", json=invite_payload, headers=headers)
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "newuser@example.com"
@@ -234,9 +229,7 @@ async def test_update_user_role(async_client, test_superuser_token, test_user):
     # Promote user to superuser
     update_payload = {"role": "superuser"}
 
-    response = await async_client.patch(
-        f"/api/v1/settings/users/{test_user.id}", json=update_payload, headers=headers
-    )
+    response = await async_client.patch(f"/api/v1/settings/users/{test_user.id}", json=update_payload, headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["role"] == "superuser"
