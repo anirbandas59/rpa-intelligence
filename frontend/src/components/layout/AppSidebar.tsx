@@ -1,8 +1,9 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
-import Link from "next/link"
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
 import {
   Sidebar,
   SidebarContent,
@@ -17,38 +18,44 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-} from "@/components/ui/sidebar"
-import { ChevronRight, Settings, LogOut, Cpu } from "lucide-react"
-import { apiGet, clearAuthToken } from "@/lib/api"
-import type { Project, ReadinessResponse, ReadinessStatus, S3ReadinessDetail, UseCase } from "@/lib/types"
+} from "@/components/ui/sidebar";
+import { ChevronRight, Settings, LogOut, Cpu } from "lucide-react";
+import { apiGet, clearAuthToken } from "@/lib/api";
+import type {
+  Project,
+  ReadinessResponse,
+  ReadinessStatus,
+  S3ReadinessDetail,
+  UseCase,
+} from "@/lib/types";
 
 // ─── Stage config ────────────────────────────────────────────────────────────
 
 const STAGES = [
-  { id: "s1", label: "Assessment",    path: "stage1" },
-  { id: "s2", label: "Complexity",    path: "stage2" },
-  { id: "s3", label: "Timeline",      path: "stage3" },
+  { id: "s1", label: "Assessment", path: "stage1" },
+  { id: "s2", label: "Complexity", path: "stage2" },
+  { id: "s3", label: "Timeline", path: "stage3" },
   { id: "s4", label: "Sprint Tracker", path: "stage4" },
-] as const
+] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function statusDot(status: string) {
   const classes: Record<string, string> = {
     not_ready: "bg-muted-foreground/40",
-    ready:     "bg-blue-500",
-    running:   "bg-primary animate-pulse",
-    complete:  "bg-green-500",
-    stale:     "bg-amber-500",
-  }
-  return classes[status] ?? classes.not_ready
+    ready: "bg-blue-500",
+    running: "bg-primary animate-pulse",
+    complete: "bg-green-500",
+    stale: "bg-amber-500",
+  };
+  return classes[status] ?? classes.not_ready;
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ProjectWithUseCases extends Project {
-  loadedUseCases: UseCase[]
-  readiness: Record<string, ReadinessResponse>
+  loadedUseCases: UseCase[];
+  readiness: Record<string, ReadinessResponse>;
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -62,49 +69,64 @@ function ProjectSkeleton() {
         </SidebarMenuItem>
       ))}
     </>
-  )
+  );
 }
 
 // ─── ProjectItem ─────────────────────────────────────────────────────────────
 
 interface ProjectItemProps {
-  project: ProjectWithUseCases
-  pathname: string
-  onReadinessUpdate: (projectId: string, ucId: string, readiness: ReadinessResponse) => void
+  project: ProjectWithUseCases;
+  pathname: string;
+  onReadinessUpdate: (
+    projectId: string,
+    ucId: string,
+    readiness: ReadinessResponse,
+  ) => void;
 }
 
-function ProjectItem({ project, pathname, onReadinessUpdate }: ProjectItemProps) {
-  const isProjectActive = pathname.startsWith(`/projects/${project.id}`)
-  const [open, setOpen] = useState(isProjectActive)
-  const firstUc = project.loadedUseCases[0]
+function ProjectItem({
+  project,
+  pathname,
+  onReadinessUpdate,
+}: ProjectItemProps) {
+  const isProjectActive = pathname.startsWith(`/projects/${project.id}`);
+  const [open, setOpen] = useState(isProjectActive);
+  const firstUc = project.loadedUseCases[0];
 
   // Poll running stages every 5 s
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const runningUcs = project.loadedUseCases.filter((uc) => {
-      const r = project.readiness[uc.id]
-      if (!r) return false
-      return Object.values(r).some((s) => s === "running")
-    })
+      const r = project.readiness[uc.id];
+      if (!r) return false;
+      return Object.values(r).some((s) => s === "running");
+    });
 
     if (runningUcs.length > 0) {
       pollRef.current = setInterval(async () => {
         for (const uc of runningUcs) {
           try {
-            const r = await apiGet<ReadinessResponse>(`/api/v1/use-cases/${uc.id}/readiness`)
-            onReadinessUpdate(project.id, uc.id, r)
+            const r = await apiGet<ReadinessResponse>(
+              `/api/v1/use-cases/${uc.id}/readiness`,
+            );
+            onReadinessUpdate(project.id, uc.id, r);
           } catch {
             // silent — don't crash the sidebar on transient errors
           }
         }
-      }, 5000)
+      }, 5000);
     }
 
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
-    }
-  }, [project.loadedUseCases, project.readiness, project.id, onReadinessUpdate])
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [
+    project.loadedUseCases,
+    project.readiness,
+    project.id,
+    onReadinessUpdate,
+  ]);
 
   return (
     <SidebarMenuItem>
@@ -126,9 +148,7 @@ function ProjectItem({ project, pathname, onReadinessUpdate }: ProjectItemProps)
           {project.loadedUseCases.length === 0 ? (
             <SidebarMenuSubItem>
               <SidebarMenuSubButton
-                render={
-                  <Link href={`/projects/${project.id}`} />
-                }
+                render={<Link href={`/projects/${project.id}`} />}
                 className="italic text-muted-foreground"
               >
                 Add use-case
@@ -138,15 +158,23 @@ function ProjectItem({ project, pathname, onReadinessUpdate }: ProjectItemProps)
             STAGES.map((stage) => {
               const href = firstUc
                 ? `/projects/${project.id}/${stage.path}/${firstUc.id}`
-                : `/projects/${project.id}`
+                : `/projects/${project.id}`;
 
-              const stageKey = stage.id as keyof ReadinessResponse
-              const readinessForUc = firstUc ? project.readiness[firstUc.id] : undefined
-              const rawStatus = readinessForUc ? (readinessForUc[stageKey] ?? "not_ready") : "not_ready"
-              const status: ReadinessStatus = stage.id === "s3"
-                ? ((rawStatus as S3ReadinessDetail)?.phase_calculator ?? "not_ready")
-                : (rawStatus as ReadinessStatus)
-              const isActive = pathname.startsWith(`/projects/${project.id}/${stage.path}`)
+              const stageKey = stage.id as keyof ReadinessResponse;
+              const readinessForUc = firstUc
+                ? project.readiness[firstUc.id]
+                : undefined;
+              const rawStatus = readinessForUc
+                ? (readinessForUc[stageKey] ?? "not_ready")
+                : "not_ready";
+              const status: ReadinessStatus =
+                stage.id === "s3"
+                  ? ((rawStatus as S3ReadinessDetail)?.phase_calculator ??
+                    "not_ready")
+                  : (rawStatus as ReadinessStatus);
+              const isActive = pathname.startsWith(
+                `/projects/${project.id}/${stage.path}`,
+              );
 
               return (
                 <SidebarMenuSubItem key={stage.id}>
@@ -161,98 +189,100 @@ function ProjectItem({ project, pathname, onReadinessUpdate }: ProjectItemProps)
                     <span>{stage.label}</span>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
-              )
+              );
             })
           )}
         </SidebarMenuSub>
       )}
     </SidebarMenuItem>
-  )
+  );
 }
 
 // ─── AppSidebar ───────────────────────────────────────────────────────────────
 
 export function AppSidebar() {
-  const router   = useRouter()
-  const pathname = usePathname()
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const [projects, setProjects]   = useState<ProjectWithUseCases[]>([])
-  const [loading,  setLoading]    = useState(true)
-  const [userEmail, setUserEmail] = useState<string>("")
+  const [projects, setProjects] = useState<ProjectWithUseCases[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string>("");
 
   // Load user email from localStorage (stored at login)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setUserEmail(localStorage.getItem("user_email") ?? "")
+      setUserEmail(localStorage.getItem("user_email") ?? "");
     }
-  }, [])
+  }, []);
 
   // Load projects + use-cases + initial readiness
   useEffect(() => {
     const load = async () => {
       try {
-        const rawProjects = await apiGet<Project[]>("/api/v1/projects")
+        const rawProjects = await apiGet<Project[]>("/api/v1/projects");
 
         const enriched = await Promise.all(
           rawProjects.map(async (p) => {
-            let useCases: UseCase[] = []
+            let useCases: UseCase[] = [];
             try {
-              useCases = await apiGet<UseCase[]>(`/api/v1/projects/${p.id}/use-cases`)
+              useCases = await apiGet<UseCase[]>(
+                `/api/v1/projects/${p.id}/use-cases`,
+              );
             } catch {
               // project might have no use-cases endpoint yet
             }
 
-            const readiness: Record<string, ReadinessResponse> = {}
+            const readiness: Record<string, ReadinessResponse> = {};
             await Promise.all(
               useCases.map(async (uc) => {
                 try {
                   readiness[uc.id] = await apiGet<ReadinessResponse>(
-                    `/api/v1/use-cases/${uc.id}/readiness`
-                  )
+                    `/api/v1/use-cases/${uc.id}/readiness`,
+                  );
                 } catch {
                   // ignore
                 }
-              })
-            )
+              }),
+            );
 
-            return { ...p, loadedUseCases: useCases, readiness }
-          })
-        )
+            return { ...p, loadedUseCases: useCases, readiness };
+          }),
+        );
 
-        setProjects(enriched)
+        setProjects(enriched);
       } catch {
         // Auth error handled by page-level guards; sidebar stays empty
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    load()
-  }, [])
+    load();
+  }, []);
 
   const handleReadinessUpdate = (
     projectId: string,
     ucId: string,
-    readiness: ReadinessResponse
+    readiness: ReadinessResponse,
   ) => {
     setProjects((prev) =>
       prev.map((p) =>
         p.id === projectId
           ? { ...p, readiness: { ...p.readiness, [ucId]: readiness } }
-          : p
-      )
-    )
-  }
+          : p,
+      ),
+    );
+  };
 
   const handleLogout = () => {
-    clearAuthToken()
+    clearAuthToken();
     if (typeof window !== "undefined") {
-      localStorage.removeItem("user_email")
+      localStorage.removeItem("user_email");
     }
-    router.push("/auth/login")
-  }
+    router.push("/auth/login");
+  };
 
-  const isSettingsActive = pathname.startsWith("/settings")
+  const isSettingsActive = pathname.startsWith("/settings");
 
   return (
     <Sidebar collapsible="icon">
@@ -262,10 +292,13 @@ export function AppSidebar() {
           href="/projects"
           className="flex items-center gap-2.5 rounded-md px-1 py-1 transition-colors hover:bg-sidebar-accent"
         >
-          <Cpu className="size-5 shrink-0 text-primary" />
-          <span className="gradient-text truncate text-sm font-semibold leading-none">
-            RPA Intelligence
-          </span>
+          <Image
+            alt="VectorIQ"
+            src="/logo.png"
+            width={480}
+            height={80}
+            className="h-20 w-auto group-data-[collapsible=icon]:hidden"
+          />
         </Link>
       </SidebarHeader>
 
@@ -327,5 +360,5 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
-  )
+  );
 }

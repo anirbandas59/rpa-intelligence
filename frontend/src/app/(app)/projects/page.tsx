@@ -12,11 +12,10 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
-  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Btn, SectionLabel } from "@/components/rpa";
+import { Btn, Icon, SectionLabel } from "@/components/rpa";
 import { spacing } from "@/lib/design-tokens";
 import {
   Plus,
@@ -24,10 +23,11 @@ import {
   Loader2,
   LogOut,
   Settings,
-  Layers,
+  Diamond,
 } from "lucide-react";
 import { apiGet, apiPost, isAuthenticated, clearAuthToken } from "@/lib/api";
 import type { Project, CreateProjectRequest } from "@/lib/types";
+import Image from "next/image";
 
 function NewProjectSheet({
   onCreated,
@@ -78,9 +78,20 @@ function NewProjectSheet({
         New Project
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-md flex flex-col">
-        <SheetHeader style={{ marginTop: spacing.gapDefault, marginBottom: spacing.gapTight }}>
+        <SheetHeader
+          style={{
+            marginTop: spacing.gapDefault,
+            marginBottom: spacing.gapTight,
+          }}
+        >
           <SectionLabel>New Project</SectionLabel>
-          <p style={{ fontSize: 12.8, color: "var(--muted-foreground)", marginTop: 8 }}>
+          <p
+            style={{
+              fontSize: 12.8,
+              color: "var(--muted-foreground)",
+              marginTop: 8,
+            }}
+          >
             Create a new RPA migration and assessment project.
           </p>
         </SheetHeader>
@@ -91,7 +102,7 @@ function NewProjectSheet({
               display: "flex",
               flexDirection: "column",
               gap: spacing.gapDefault,
-              height: "100%"
+              height: "100%",
             }}
           >
             {error && (
@@ -133,7 +144,7 @@ function NewProjectSheet({
                 gap: spacing.gapTight,
                 marginTop: "auto",
                 paddingTop: spacing.gapDefault,
-                borderTop: "1px solid var(--border)"
+                borderTop: "1px solid var(--border)",
               }}
             >
               <Btn
@@ -218,12 +229,61 @@ export default function ProjectsPage() {
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex h-14 items-center justify-between px-6">
           <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-lg bg-primary/20 flex items-center justify-center">
+            <Image
+              alt="VectorIQ"
+              src="/logo-small.png"
+              width={480}
+              height={80}
+              className="h-5 w-auto group-data-[collapsible=icon]:hidden"
+            />
+            {/* <div className="h-7 w-7 rounded-lg bg-primary/20 flex items-center justify-center">
               <Layers className="h-4 w-4 text-primary" />
-            </div>
+            </div> */}
+            <span className="font-semibold text-sm tracking-tight">Assess</span>
+            <Icon
+              name="diamond"
+              size={15}
+              fill="url(#diamond-gradient)"
+              className="drop-shadow-[0_0_8px_oklch(0.66_0.20_264/0.6)]"
+            />
             <span className="font-semibold text-sm tracking-tight">
-              RPA Intelligence
+              Estmate
             </span>
+            <Icon
+              name="diamond"
+              size={15}
+              fill="url(#diamond-gradient)"
+              className="drop-shadow-[0_0_8px_oklch(0.66_0.20_264/0.6)]"
+            />
+            <span className="font-semibold text-sm tracking-tight">
+              Execute
+            </span>
+            <svg width="0" height="0" style={{ position: "absolute" }}>
+              <defs>
+                <linearGradient
+                  id="diamond-gradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <stop
+                    offset="0%"
+                    style={{
+                      stopColor: "oklch(0.86 0.12 264)",
+                      stopOpacity: 1,
+                    }}
+                  />
+                  <stop
+                    offset="100%"
+                    style={{
+                      stopColor: "oklch(0.74 0.20 292)",
+                      stopOpacity: 1,
+                    }}
+                  />
+                </linearGradient>
+              </defs>
+            </svg>
           </div>
           <div className="flex items-center gap-2">
             <Link href="/settings">

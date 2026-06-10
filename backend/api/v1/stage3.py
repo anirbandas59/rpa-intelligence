@@ -33,6 +33,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from agents.document_agent import process_document
 from api.dependencies import get_current_user, get_db
 from core.utils.encoding import read_text_file_with_fallback
 from db.models import StageRun, UploadedFile, UseCase, User
@@ -162,7 +163,8 @@ async def run_task_extraction_background(
     async with session_factory() as db:
         try:
             # Read document text from file with encoding fallback
-            doc_text = read_text_file_with_fallback(document_path)
+            # doc_text = read_text_file_with_fallback(document_path)
+            doc_text = process_document(document_path)
 
             # Run task extraction agent
             result = await run_task_extraction_agent(
