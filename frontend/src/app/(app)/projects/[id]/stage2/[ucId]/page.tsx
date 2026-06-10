@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,10 +11,10 @@ import { Card, Btn, SectionLabel, Pill } from "@/components/rpa";
 import { spacing } from "@/lib/design-tokens";
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator";
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress";
-import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer";
+import { StageHeader } from "@/components/shared/StageHeader";
 import { ComplexityChip, CLS_COLORS } from "@/components/shared/ComplexityChip";
 import { Icon } from "@/components/shared/icons";
-import { ArrowLeft, Upload, Play, Loader2 } from "lucide-react";
+import { Upload, Play, Loader2 } from "lucide-react";
 import {
   apiGet,
   apiGetRuns,
@@ -75,6 +74,7 @@ export default function Stage2Page() {
   const [error, setError] = useState("");
   const [weightMatrix, setWeightMatrix] = useState<any>(null);
   const [documentUploaded, setDocumentUploaded] = useState(false);
+  const [projectUseCases, setProjectUseCases] = useState<UseCase[]>([]);
 
   const liveScore = hasAllBands(bands as AttributeBands)
     ? scoreComplexity(bands as AttributeBands)
@@ -88,18 +88,21 @@ export default function Stage2Page() {
 
     const fetchData = async () => {
       try {
-        const [ucData, readinessData, runsData, matrixData] = await Promise.all(
-          [
+        const [ucData, readinessData, runsData, matrixData, useCasesData] =
+          await Promise.all([
             apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
             apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
             apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s2/runs`),
             apiGet<any>(`/api/v1/settings/weight-matrix`),
-          ],
-        );
+            apiGet<UseCase[]>(`/api/v1/projects/${projectId}/use-cases`).catch(
+              () => [] as UseCase[],
+            ),
+          ]);
         setUseCase(ucData);
         setReadiness(readinessData);
         setRuns(runsData);
         setWeightMatrix(matrixData);
+        setProjectUseCases(useCasesData);
 
         if (ucData.s2_inputs?.bands)
           setBands(ucData.s2_inputs.bands as Partial<AttributeBands>);
@@ -235,29 +238,19 @@ export default function Stage2Page() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Header ── */}
-      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex h-14 items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <Link href={`/projects/${projectId}`}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground -ml-2"
-              >
-                <ArrowLeft className="mr-1.5 h-4 w-4" />
-                Back
-              </Button>
-            </Link>
-            <div className="h-4 w-px bg-border/50" />
-            <div>
-              <p className="text-sm font-semibold">{useCase.name}</p>
-              <p className="text-xs text-muted-foreground">
-                Stage 2 — Complexity Analysis
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+      <StageHeader
+        projectId={projectId}
+        stageNumber={2}
+        stageName="Complexity Analysis"
+        stageId="s2"
+        ucId={ucId}
+        useCase={useCase}
+        useCases={[...projectUseCases].sort((a, b) => a.name.localeCompare(b.name))}
+        runs={runs}
+        currentRunId={useCase?.s2_latest_run_id}
+        isComplete={!!latestResult}
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {latestResult && (
               <span
                 style={{
@@ -270,20 +263,13 @@ export default function Stage2Page() {
                   fontSize: 11.5,
                   fontWeight: 600,
                   color: "var(--c-green)",
-                  background:
-                    "color-mix(in oklab, var(--c-green) 12%, transparent)",
-                  border:
-                    "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
+                  background: "color-mix(in oklab, var(--c-green) 12%, transparent)",
+                  border: "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
                 }}
               >
                 <Icon name="check" size={12} /> Complete · run #{runs.length}
               </span>
             )}
-            <RunHistoryDrawer
-              runs={runs}
-              stage="s2"
-              stageName="Stage 2 - Complexity"
-            />
             <Button
               size="sm"
               onClick={handleRunStage}
@@ -296,8 +282,8 @@ export default function Stage2Page() {
               {isRunning ? "Running…" : "Run Analysis"}
             </Button>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <div className="py-6 px-7 space-y-6">
         {error && (

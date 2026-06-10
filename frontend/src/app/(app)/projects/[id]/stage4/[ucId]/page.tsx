@@ -2,17 +2,16 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import Link from "next/link"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress"
-import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer"
+import { StageHeader } from "@/components/shared/StageHeader"
 import { CLS_COLORS } from "@/components/shared/ComplexityChip"
 import { Card, Btn, SectionLabel, Pill } from "@/components/rpa"
 import { Icon } from "@/components/shared/icons"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { spacing } from "@/lib/design-tokens"
 import { apiGet, apiGetRuns, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
@@ -84,20 +83,26 @@ export default function Stage4Page() {
   const [runningStage, setRunningStage] = useState(false)
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState<"board" | "features">("board")
+  const [projectUseCases, setProjectUseCases] = useState<UseCase[]>([])
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/auth/login"); return }
 
     const fetchData = async () => {
       try {
-        const [ucData, readinessData, runsData] = await Promise.all([
-          apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
-          apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
-          apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s4/runs`),
-        ])
+        const [ucData, readinessData, runsData, useCasesData] =
+          await Promise.all([
+            apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
+            apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
+            apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s4/runs`),
+            apiGet<UseCase[]>(`/api/v1/projects/${projectId}/use-cases`).catch(
+              () => [] as UseCase[],
+            ),
+          ])
         setUseCase(ucData)
         setReadiness(readinessData)
         setRuns(runsData)
+        setProjectUseCases(useCasesData)
 
         if (ucData.s4_inputs?.sprint_count)        setSprintCount(ucData.s4_inputs.sprint_count as number)
         if (ucData.s4_inputs?.sprint_length_weeks) setSprintLength(ucData.s4_inputs.sprint_length_weeks as number)
@@ -212,22 +217,19 @@ export default function Stage4Page() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Header ── */}
-      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex h-14 items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <Link href={`/projects/${projectId}`}>
-              <Btn variant="ghost" size="sm" style={{ marginLeft: -8 }}>
-                <ArrowLeft className="mr-1.5 h-4 w-4" />Back
-              </Btn>
-            </Link>
-            <div className="h-4 w-px bg-border/50" />
-            <div>
-              <p className="text-sm font-semibold">{useCase.name}</p>
-              <p className="text-xs text-muted-foreground">Stage 4 — Sprint Tracker</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+      <StageHeader
+        projectId={projectId}
+        stageNumber={4}
+        stageName="Sprint Tracker"
+        stageId="s4"
+        ucId={ucId}
+        useCase={useCase}
+        useCases={[...projectUseCases].sort((a, b) => a.name.localeCompare(b.name))}
+        runs={runs}
+        currentRunId={useCase?.s4_latest_run_id}
+        isComplete={!!latestResult}
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {latestResult && (
               <>
                 <Pill color="var(--c-green)">
@@ -238,13 +240,12 @@ export default function Stage4Page() {
                 </Btn>
               </>
             )}
-            <RunHistoryDrawer runs={runs} stage="s4" stageName="Stage 4 - Sprint Tracker" />
             <Btn size="sm" onClick={handleRunStage} disabled={!canRun || isRunning} icon="play">
               {isRunning ? "Running…" : "Decompose & Assign"}
             </Btn>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <div style={{ height: "calc(100vh - 56px)", overflow: "hidden", padding: "24px 28px", display: "flex", flexDirection: "column", gap: spacing.gapDefault }}>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}

@@ -297,7 +297,9 @@ export function AppSidebar() {
             src="/logo.png"
             width={480}
             height={80}
+            loading="eager"
             className="h-20 w-auto group-data-[collapsible=icon]:hidden"
+            style={{ width: "auto" }}
           />
         </Link>
       </SidebarHeader>

@@ -234,20 +234,15 @@ export default function ProjectsPage() {
               src="/logo-small.png"
               width={480}
               height={80}
+              loading="eager"
               className="h-5 w-auto group-data-[collapsible=icon]:hidden"
+              style={{ width: "auto" }}
             />
             {/* <div className="h-7 w-7 rounded-lg bg-primary/20 flex items-center justify-center">
               <Layers className="h-4 w-4 text-primary" />
             </div> */}
-            <span className="font-semibold text-sm tracking-tight">Assess</span>
-            <Icon
-              name="diamond"
-              size={15}
-              fill="url(#diamond-gradient)"
-              className="drop-shadow-[0_0_8px_oklch(0.66_0.20_264/0.6)]"
-            />
-            <span className="font-semibold text-sm tracking-tight">
-              Estmate
+            <span className="text-c-blue font-semibold text-xs uppercase tracking-widest">
+              Assess
             </span>
             <Icon
               name="diamond"
@@ -255,7 +250,16 @@ export default function ProjectsPage() {
               fill="url(#diamond-gradient)"
               className="drop-shadow-[0_0_8px_oklch(0.66_0.20_264/0.6)]"
             />
-            <span className="font-semibold text-sm tracking-tight">
+            <span className="text-c-amber font-semibold text-xs uppercase tracking-widest">
+              Estimate
+            </span>
+            <Icon
+              name="diamond"
+              size={15}
+              fill="url(#diamond-gradient)"
+              className="drop-shadow-[0_0_8px_oklch(0.66_0.20_264/0.6)]"
+            />
+            <span className="text-c-green font-semibold text-xs uppercase tracking-widest">
               Execute
             </span>
             <svg width="0" height="0" style={{ position: "absolute" }}>

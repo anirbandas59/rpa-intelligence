@@ -25,6 +25,13 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-c-green:  var(--c-green);
+  --color-c-teal:   var(--c-teal);
+  --color-c-blue:   var(--c-blue);
+  --color-c-violet: var(--c-violet);
+  --color-c-yellow: var(--c-yellow);
+  --color-c-amber:  var(--c-amber);
+  --color-c-red:    var(--c-red);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);

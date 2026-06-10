@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -15,10 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator";
-import { RunHistoryDrawer } from "@/components/shared/RunHistoryDrawer";
+import { StageHeader } from "@/components/shared/StageHeader";
 import { Card, Btn, SectionLabel, Pill } from "@/components/rpa";
 import { Icon } from "@/components/shared/icons";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { spacing } from "@/lib/design-tokens";
 import {
@@ -88,6 +87,7 @@ export default function Stage3Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
+  const [projectUseCases, setProjectUseCases] = useState<UseCase[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -97,14 +97,19 @@ export default function Stage3Page() {
 
     const fetchData = async () => {
       try {
-        const [ucData, readinessData, runsData] = await Promise.all([
-          apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
-          apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
-          apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s3/runs`),
-        ]);
+        const [ucData, readinessData, runsData, useCasesData] =
+          await Promise.all([
+            apiGet<UseCase>(`/api/v1/use-cases/${ucId}`),
+            apiGet<ReadinessResponse>(`/api/v1/use-cases/${ucId}/readiness`),
+            apiGetRuns<StageRun>(`/api/v1/use-cases/${ucId}/s3/runs`),
+            apiGet<UseCase[]>(`/api/v1/projects/${projectId}/use-cases`).catch(
+              () => [] as UseCase[],
+            ),
+          ]);
         setUseCase(ucData);
         setReadiness(readinessData);
         setRuns(runsData);
+        setProjectUseCases(useCasesData);
 
         if (ucData.s3_inputs?.effort_weeks)
           setEffortWeeks(ucData.s3_inputs.effort_weeks as number);
@@ -357,25 +362,19 @@ export default function Stage3Page() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Header ── */}
-      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex h-14 items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <Link href={`/projects/${projectId}`}>
-              <Btn variant="ghost" size="sm" style={{ marginLeft: -8 }}>
-                <ArrowLeft className="mr-1.5 h-4 w-4" />
-                Back
-              </Btn>
-            </Link>
-            <div className="h-4 w-px bg-border/50" />
-            <div>
-              <p className="text-sm font-semibold">{useCase.name}</p>
-              <p className="text-xs text-muted-foreground">
-                Stage 3 — Delivery Timeline
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+      <StageHeader
+        projectId={projectId}
+        stageNumber={3}
+        stageName="Delivery Timeline"
+        stageId="s3"
+        ucId={ucId}
+        useCase={useCase}
+        useCases={[...projectUseCases].sort((a, b) => a.name.localeCompare(b.name))}
+        runs={runs}
+        currentRunId={useCase?.s3_latest_run_id}
+        isComplete={!!latestResult}
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {latestResult && (
               <Pill color="var(--c-green)">
                 <Icon name="check" size={11} /> Complete · {totalWeeks}w total
@@ -397,25 +396,13 @@ export default function Stage3Page() {
               </Pill>
             )}
             {Object.keys(phaseDeltas).length > 0 && (
-              <Btn
-                variant="outline"
-                size="sm"
-                onClick={handleResetDeltas}
-                icon="refresh"
-              >
+              <Btn variant="outline" size="sm" onClick={handleResetDeltas} icon="refresh">
                 Reset
               </Btn>
             )}
-            <RunHistoryDrawer
-              runs={runs}
-              stage="s3"
-              stageName="Stage 3 - Timeline"
-              useCaseId={ucId}
-              currentRunId={useCase?.s3_latest_run_id}
-            />
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <div
         className="gantt-container"
