@@ -35,7 +35,6 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from agents.document_agent import process_document
 from api.dependencies import get_current_user, get_db
-from core.utils.encoding import read_text_file_with_fallback
 from db.models import StageRun, UploadedFile, UseCase, User
 from db.session import get_session_factory
 from llm.manager import LLMManager
@@ -132,13 +131,15 @@ async def generate_narrative_background(
 
 async def run_task_extraction_background(
     use_case_id: str,
-    document_path: str,
     process_name: str,
     total_effort_hours: float,
     session_id: str,
+    document_path: str | None = None,
+    pasted_text: str | None = None,
+    process_summary: dict | None = None,  # Process context from Stage 2
 ):
     """
-    Extract activity breakdown from document with hour-sum constraint using task extraction agent.
+    Extract activity breakdown from document/text with hour-sum constraint using task extraction agent.
 
     Runs task_extraction_agent (Sonnet + LangGraph) to decompose process into activities
     with hours and reusability tags. Enforces CRITICAL constraint: sum of non-reusable
@@ -146,13 +147,15 @@ async def run_task_extraction_background(
 
     Args:
         use_case_id: UseCase ID to update
-        document_path: Path to uploaded document (from S2)
         process_name: Process name for context
         total_effort_hours: Total effort constraint (effort_weeks * 40)
         session_id: Session ID for logging (typically run_id)
+        document_path: Path to uploaded document (from S2) - optional
+        pasted_text: Pasted process description (from S2) - optional
+        process_summary: Process context from Stage 2
 
     Flow:
-    1. Read document text from file
+    1. Read document text from file OR use pasted_text
     2. Run task_extraction_agent with hour constraint
     3. Update s3_inputs.task_extraction with result
     4. On failure: mark extraction_status as "failed"
@@ -162,9 +165,13 @@ async def run_task_extraction_background(
     session_factory = get_session_factory()
     async with session_factory() as db:
         try:
-            # Read document text from file with encoding fallback
-            # doc_text = read_text_file_with_fallback(document_path)
-            doc_text = process_document(document_path)
+            # Get document text from file or pasted text
+            if document_path:
+                doc_text = process_document(document_path)
+            elif pasted_text:
+                doc_text = pasted_text
+            else:
+                raise ValueError("Either document_path or pasted_text must be provided")
 
             # Run task extraction agent
             result = await run_task_extraction_agent(
@@ -173,6 +180,7 @@ async def run_task_extraction_background(
                 process_name=process_name,
                 total_effort_hours=total_effort_hours,
                 session_id=session_id,
+                process_summary=process_summary,  # NEW: Pass S2 context
             )
 
             # Update s3_inputs with result
@@ -297,6 +305,25 @@ async def create_s3_run(
     if "start_date" not in inputs:
         raise HTTPException(status_code=400, detail="start_date required in s3_inputs")
 
+    # CRITICAL PREREQUISITE CHECK (moved BEFORE run creation)
+    # S2 must be complete with process_summary before creating S3 run
+    if not use_case.s2_latest_run_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Stage 2 must be complete before running Stage 3. "
+                "S2 provides complexity and process summary required for task extraction."
+            ),
+        )
+
+    s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
+    s2_run = s2_result.scalar_one_or_none()
+    if not s2_run or not s2_run.result.get("process_summary"):
+        raise HTTPException(
+            status_code=400,
+            detail="Stage 2 process summary is required. Re-run S2 with updated extraction to capture process details.",
+        )
+
     effort_weeks = inputs["effort_weeks"]
     start_date_str = inputs["start_date"]
     complexity_class = inputs.get("complexity_class", "M")
@@ -348,24 +375,6 @@ async def create_s3_run(
     await db.commit()
     await db.refresh(stage_run)
 
-    # CRITICAL PREREQUISITE: S2 must be complete with process_summary
-    if not use_case.s2_latest_run_id:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Stage 2 must be complete before running Stage 3. "
-                "S2 provides complexity and process summary required for task extraction."
-            ),
-        )
-
-    s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
-    s2_run = s2_result.scalar_one_or_none()
-    if not s2_run or not s2_run.result.get("process_summary"):
-        raise HTTPException(
-            status_code=400,
-            detail="Stage 2 process summary is required. Re-run S2 with updated extraction to capture process details.",
-        )
-
     # Check if document exists for this use case (uploaded during S2)
     doc_result = await db.execute(
         select(UploadedFile)
@@ -376,31 +385,44 @@ async def create_s3_run(
     )
     uploaded_doc = doc_result.scalar_one_or_none()
 
+    # Also check for pasted text (used in E2E tests and manual entry)
+    pasted_text = use_case.s2_inputs.get("pasted_text") if use_case.s2_inputs else None
+
     total_effort_hours = effort_weeks * 40  # hours per week
 
-    if uploaded_doc:
-        # Path A: Document exists → run extraction from document (existing logic)
+    if uploaded_doc or pasted_text:
+        # Path A: Document OR pasted text exists → run extraction with S2 process context
+        if uploaded_doc:
+            document_path = uploaded_doc.stored_path
+            source = "document"
+        else:
+            # Use pasted text as document_text (will be read by background task)
+            document_path = None
+            source = "pasted_text"
+
         background_tasks.add_task(
             run_task_extraction_background,
             use_case_id=use_case_id,
-            document_path=uploaded_doc.stored_path,
+            document_path=document_path,
+            pasted_text=pasted_text if not uploaded_doc else None,
             process_name=use_case.name,
             total_effort_hours=total_effort_hours,
             session_id=stage_run.id,
+            process_summary=s2_run.result.get("process_summary"),  # Pass S2 context
         )
 
         task_extraction_status = "pending"
 
         inputs["task_extraction"] = {
             "extraction_status": "pending",
-            "source": "document",
+            "source": source,
             "activities": [],
             "total_net_hours": 0.0,
             "verification_passed": False,
         }
 
     else:
-        # Path B: No document → MANDATORY synthesis from S2 process_summary
+        # Path B: No document AND no pasted text → MANDATORY synthesis from S2 process_summary
         from agents.task_synthesis_agent import synthesize_task_extraction
 
         async def run_synthesis_background():

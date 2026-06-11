@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 class S4InputsUpdate(BaseModel):
     sprint_count: int | None = Field(None, ge=1, description="Number of sprints")
+    sprint_length_weeks: int | None = Field(None, ge=1, description="Sprint length in weeks")
     sprint_capacity: int | None = Field(None, ge=1, description="Story points per sprint")
     process_description_override: str | None = Field(None, description="Manual process description")
 
@@ -72,13 +73,14 @@ async def run_tracker_background(
     complexity_class: str,
     effort_weeks: int,
     sprint_count: int,
+    sprint_length_weeks: int,
     sprint_capacity: int,
 ):
     """
     Execute tracker agent in background with independent database session.
 
     Runs tracker_agent (Sonnet + LangGraph) to group S3 task extraction into WBS rows,
-    then deterministic bin-packing for sprint assignment within Build+SIT window.
+    then assigns sprint_number based on dates within Build+SIT window.
     Updates StageRun to "complete" or "failed" based on outcome.
 
     Args:
@@ -90,8 +92,9 @@ async def run_tracker_background(
         build_sit_window: Dict with start_date and end_date from S3
         complexity_class: Complexity class for context
         effort_weeks: Effort in weeks for context
-        sprint_count: Number of sprints for bin-packing
-        sprint_capacity: Story points per sprint
+        sprint_count: Number of sprints for assignment
+        sprint_length_weeks: Sprint length in weeks
+        sprint_capacity: Story points per sprint (deprecated, kept for compat)
     """
     session_factory = get_session_factory()
     async with session_factory() as db:
@@ -108,6 +111,7 @@ async def run_tracker_background(
                 effort_weeks=effort_weeks,
                 session_id=run_id,
                 sprint_count=sprint_count,
+                sprint_length_weeks=sprint_length_weeks,  # NEW
                 sprint_capacity=sprint_capacity,
             )
 
@@ -223,6 +227,7 @@ async def create_s4_run(
         )
 
     sprint_count = inputs["sprint_count"]
+    sprint_length_weeks = inputs.get("sprint_length_weeks", 2)  # Default 2-week sprints
     sprint_capacity = inputs.get("sprint_capacity", 8)
 
     # Get complexity and effort (prefer from inputs, fallback to S3 or S2)
@@ -289,6 +294,7 @@ async def create_s4_run(
         complexity_class=complexity_class,
         effort_weeks=effort_weeks,
         sprint_count=sprint_count,
+        sprint_length_weeks=sprint_length_weeks,  # NEW
         sprint_capacity=sprint_capacity,
     )
 

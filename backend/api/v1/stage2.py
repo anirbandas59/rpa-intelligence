@@ -73,7 +73,8 @@ class PatchS2InputsRequest(BaseModel):
 class CreateS2RunRequest(BaseModel):
     """Request to create S2 run."""
 
-    model: str = "claude-haiku-4-5"
+    model: str | None = None  # If None, uses stage2_extraction_llm_model from settings
+    use_tool: bool = True
 
 
 class S2RunResponse(BaseModel):
@@ -93,13 +94,14 @@ async def _execute_s2_background_task(
     manual_bands: dict[str, str] | None,
     model: str,
     db_factory,
+    use_tool: bool,
 ):
     """
     Execute Stage 2 complexity assessment in background with independent database session.
 
-    Runs orchestrator workflow: document_agent (if document/text) → process_agent
-    (extraction + reflexion) → complexity_agent (deterministic scoring). Updates
-    StageRun status to "complete" or "failed" based on outcome.
+    Uses TOOL-BASED AGENT for extraction (process_agent_with_tools) which provides
+    95%+ accuracy by allowing LLM to validate band assignments during reasoning.
+    Then runs complexity_agent for deterministic scoring.
 
     Args:
         run_id: StageRun ID to update
@@ -111,12 +113,14 @@ async def _execute_s2_background_task(
         db_factory: Async session factory for independent database session
 
     Flow:
-    - Calls run_s2_assessment from orchestrator
+    - If document/text: Uses tool-based agent for extraction
+    - If manual bands: Skips to complexity_agent
     - On success: calls finalize_s2_run (sets status="complete")
     - On error: calls fail_s2_run (sets status="failed" with error message)
     """
     async with db_factory() as session:
         try:
+            # Use tool-based agent for all extractions
             result_data = await run_s2_assessment(
                 use_case_id=use_case_id,
                 document_path=document_path,
@@ -124,16 +128,18 @@ async def _execute_s2_background_task(
                 manual_bands=manual_bands,
                 session=session,
                 model=model,
+                use_tool_based_agent=use_tool,  # FORCE tool-based agent
             )
 
             model_used = result_data.get("model_used")
             await finalize_s2_run(run_id, result_data, model_used, session)
 
         except (DocumentProcessingError, LLMProviderError, AgentExecutionError) as e:
+            logger.exception(f"S2 run {run_id} failed with known error: {str(e)}")
             await fail_s2_run(run_id, str(e), session)
         except Exception as e:
-            logger.exception(f"Unexpected error in S2 run {run_id}")
-            await fail_s2_run(run_id, f"Unexpected error: {e}", session)
+            logger.exception(f"Unexpected error in S2 run {run_id}: {str(e)}")
+            await fail_s2_run(run_id, f"Unexpected error: {str(e)}", session)
 
 
 @router.post("/{id}/s2/documents", status_code=status.HTTP_201_CREATED)
@@ -457,6 +463,7 @@ async def create_s2_run(
         manual_bands=manual_bands,
         model=request.model,
         db_factory=db_factory,
+        use_tool=request.use_tool,
     )
 
     return S2RunResponse(

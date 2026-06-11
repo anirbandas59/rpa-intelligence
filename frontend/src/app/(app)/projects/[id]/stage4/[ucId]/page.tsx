@@ -1,40 +1,38 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress"
 import { StageHeader } from "@/components/shared/StageHeader"
 import { CLS_COLORS } from "@/components/shared/ComplexityChip"
 import { Card, Btn, SectionLabel, Pill } from "@/components/rpa"
 import { Icon } from "@/components/shared/icons"
-import { Loader2 } from "lucide-react"
+import { Loader2, CheckCircle, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 import { spacing } from "@/lib/design-tokens"
 import { apiGet, apiGetRuns, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
-import type { UseCase, StageRun, S4Result, SprintPlan, ReadinessResponse, Band } from "@/lib/types"
-
-// Story points mapping (from exploration stage4.jsx line 6)
-const SIZE_POINTS: Record<Band, number> = {
-  XS: 1,
-  S: 2,
-  M: 3,
-  L: 5,
-  XL: 8,
-}
+import type { UseCase, StageRun, S4Result, SequencedRow, ReadinessResponse } from "@/lib/types"
 
 /* FeatureCard */
 interface FeatureCardProps {
-  sp: SprintPlan
+  row: SequencedRow
   compact?: boolean
 }
 
-function FeatureCard({ sp, compact }: FeatureCardProps) {
-  const { feature } = sp
-  const color = CLS_COLORS[feature.size] || "var(--primary)"
+function FeatureCard({ row, compact }: FeatureCardProps) {
+  // Estimate priority color
+  const priorityColors: Record<string, string> = {
+    high: "var(--c-red)",
+    medium: "var(--c-amber)",
+    low: "var(--c-green)",
+  }
+  const color = priorityColors[row.priority?.toLowerCase() || "medium"] || "var(--primary)"
+
   return (
     <div className="rpa-card-hover" style={{
       borderRadius: 10, border: "1px solid var(--border)",
@@ -43,24 +41,19 @@ function FeatureCard({ sp, compact }: FeatureCardProps) {
       borderLeft: `3px solid ${color}`,
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3 }}>{feature.name}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3 }}>{row.feature}</span>
         <span style={{
           flexShrink: 0, fontFamily: "var(--mono)", fontSize: 10, fontWeight: 700,
           color, background: `color-mix(in oklab, ${color} 15%, transparent)`,
           border: `1px solid color-mix(in oklab, ${color} 32%, transparent)`,
           borderRadius: 5, padding: "2px 6px",
         }}>
-          {feature.size}
+          {row.hours}h
         </span>
       </div>
-      {!compact && feature.description && (
+      {!compact && (
         <div style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 5, lineHeight: 1.4 }}>
-          {feature.description}
-        </div>
-      )}
-      {feature.dependencies.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 7, fontSize: 10, color: "var(--muted-fg)" }}>
-          <Icon name="link" size={10} /> depends on {feature.dependencies[0].split(" ").slice(0, 2).join(" ")}…
+          {row.start_date} to {row.end_date}
         </div>
       )}
     </div>
@@ -84,6 +77,14 @@ export default function Stage4Page() {
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState<"board" | "features">("board")
   const [projectUseCases, setProjectUseCases] = useState<UseCase[]>([])
+
+  // Auto-run state (when navigating from S3 with ?autoRun=true)
+  const searchParams = useSearchParams()
+  const shouldAutoRun = searchParams?.get('autoRun') === 'true'
+  const [s3DataLoaded, setS3DataLoaded] = useState(false)
+  const [s4RunTriggered, setS4RunTriggered] = useState(false)
+  const [isAutoRunning, setIsAutoRunning] = useState(false)
+  const [autoRunError, setAutoRunError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/auth/login"); return }
@@ -123,6 +124,51 @@ export default function Stage4Page() {
     }
     fetchData()
   }, [ucId, router])
+
+  // Auto-load S3 data when navigating from S3
+  useEffect(() => {
+    if (!shouldAutoRun || s3DataLoaded || loading) return
+
+    async function autoLoadFromS3() {
+      try {
+        console.log('[S4] Auto-loading data from S3...')
+        await apiPost(`/api/v1/use-cases/${ucId}/s4/load-from-s3`, {})
+        console.log('[S4] S3 data loaded successfully')
+        setS3DataLoaded(true)
+      } catch (error) {
+        console.error('[S4] Auto-load failed:', error)
+        setAutoRunError(error instanceof Error ? error.message : 'Failed to load S3 data')
+      }
+    }
+
+    autoLoadFromS3()
+  }, [ucId, shouldAutoRun, s3DataLoaded, loading])
+
+  // Auto-trigger S4 run after S3 data loaded
+  useEffect(() => {
+    if (!s3DataLoaded || !shouldAutoRun || s4RunTriggered || isAutoRunning) return
+
+    async function autoTriggerS4Run() {
+      try {
+        console.log('[S4] Auto-triggering S4 run...')
+        setIsAutoRunning(true)
+        setS4RunTriggered(true)
+        setRunningStage(true)
+
+        await apiPost(`/api/v1/use-cases/${ucId}/s4/runs`, {})
+        console.log('[S4] Run triggered successfully')
+
+        // Polling will be handled by AsyncRunProgress component
+      } catch (error) {
+        console.error('[S4] Auto-run failed:', error)
+        setAutoRunError(error instanceof Error ? error.message : 'Failed to trigger S4 run')
+        setIsAutoRunning(false)
+        setRunningStage(false)
+      }
+    }
+
+    autoTriggerS4Run()
+  }, [s3DataLoaded, shouldAutoRun, s4RunTriggered, isAutoRunning, ucId])
 
   const handleLoadFromS2 = async () => {
     try {
@@ -206,13 +252,17 @@ export default function Stage4Page() {
   const isRunning = readiness?.s4 === "running" || runningStage
   const canRun = sprintCount > 0
 
-  const sprintGroups = latestResult?.sprint_plan.reduce<Record<number, SprintPlan[]>>(
-    (acc, sp) => { if (!acc[sp.sprint_number]) acc[sp.sprint_number] = []; acc[sp.sprint_number].push(sp); return acc },
+  const sprintGroups = latestResult?.sequenced_rows.reduce<Record<number, SequencedRow[]>>(
+    (acc, row) => {
+      if (!acc[row.sprint_number]) acc[row.sprint_number] = []
+      acc[row.sprint_number].push(row)
+      return acc
+    },
     {}
   ) || {}
   const sprintNumbers = Object.keys(sprintGroups).map(Number).sort((a, b) => a - b)
 
-  /* Pts per sprint (count features as capacity proxy) */
+  /* Max rows per sprint (capacity proxy) */
   const maxFeaturesInSprint = Math.max(...sprintNumbers.map((n) => sprintGroups[n].length), 1)
 
   return (
@@ -233,7 +283,7 @@ export default function Stage4Page() {
             {latestResult && (
               <>
                 <Pill color="var(--c-green)">
-                  <Icon name="check" size={11} /> {latestResult.features.length} features · {sprintNumbers.length} sprints
+                  <Icon name="check" size={11} /> {latestResult.wbs_rows.length} tasks · {sprintNumbers.length} sprints
                 </Pill>
                 <Btn variant="outline" size="sm" onClick={handleExport} icon="download">
                   Export XLSX
@@ -250,6 +300,67 @@ export default function Stage4Page() {
       <div style={{ height: "calc(100vh - 56px)", overflow: "hidden", padding: "24px 28px", display: "flex", flexDirection: "column", gap: spacing.gapDefault }}>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {isStale && <StalenessIndicator isStale stageName="Stage 4" />}
+
+        {/* Auto-run Loading State */}
+        {shouldAutoRun && isAutoRunning && (
+          <Card style={{ padding: "24px" }}>
+            <div style={{ display: "flex", alignItems: "start", gap: "16px" }}>
+              <Loader2 style={{ height: "24px", width: "24px", flexShrink: 0, marginTop: "4px" }} className="animate-spin text-primary" />
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontWeight: 600, fontSize: "18px", marginBottom: "4px" }}>
+                  Generating Sprint Plan...
+                </h3>
+                <p style={{ fontSize: "14px", color: "var(--muted-fg)", marginBottom: "16px" }}>
+                  Analyzing tasks and assigning to sprints. This may take 30-60 seconds.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
+                    <CheckCircle style={{ height: "16px", width: "16px", color: "var(--c-green)" }} />
+                    <span>Loaded S3 timeline data</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
+                    <Loader2 style={{ height: "16px", width: "16px" }} className="animate-spin" />
+                    <span>Grouping tasks into work breakdown structure...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Auto-run Error State */}
+        {shouldAutoRun && autoRunError && (
+          <Alert variant="destructive">
+            <AlertCircle style={{ height: "16px", width: "16px" }} />
+            <AlertTitle>Auto-run Failed</AlertTitle>
+            <AlertDescription>
+              {autoRunError}
+              <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAutoRunError(null)
+                    setS4RunTriggered(false)
+                    setS3DataLoaded(false)
+                  }}
+                >
+                  Retry Auto-run
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    router.replace(`/projects/${projectId}/stage4/${ucId}`)
+                  }}
+                >
+                  Switch to Manual Mode
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {isRunning && (
           <AsyncRunProgress useCaseId={ucId} stage="s4" onComplete={handleRunComplete} onError={(e) => setError(e)} />
         )}
@@ -291,8 +402,8 @@ export default function Stage4Page() {
                 </h2>
                 <p style={{ fontSize: 12.5, color: "var(--muted-fg)", margin: "4px 0 0" }}>
                   {activeTab === "board"
-                    ? `${latestResult.features.length} features · ${sprintNumbers.length} sprints × ${sprintLength} weeks · bin-packed by size after AI decomposition`
-                    : "AI read the S2 documents and split the process into deliverables."}
+                    ? `${latestResult.wbs_rows.length} tasks · ${sprintNumbers.length} sprints × ${sprintLength} weeks · assigned by date from timeline`
+                    : "AI groups Stage 3 tasks into WBS rows and assigns to sprints."}
                 </p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -336,7 +447,7 @@ export default function Stage4Page() {
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
                           <span style={{ fontSize: 13, fontWeight: 700 }}>Sprint {sprintNum}</span>
                           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-fg)" }}>
-                            {items.length} features
+                            {items.length} tasks
                           </span>
                         </div>
                         <div style={{ height: 6, borderRadius: 99, background: "var(--track)", overflow: "hidden" }}>
@@ -351,8 +462,8 @@ export default function Stage4Page() {
                         background: "color-mix(in oklab, var(--surface) 50%, transparent)",
                         border: "1px dashed var(--border)",
                       }}>
-                        {items.map((sp) => (
-                          <FeatureCard key={sp.feature.name} sp={sp} />
+                        {items.map((row, idx) => (
+                          <FeatureCard key={`${row.feature}-${idx}`} row={row} />
                         ))}
                         {items.length < 2 && (
                           <div style={{
@@ -385,19 +496,23 @@ export default function Stage4Page() {
                   color: "var(--muted-fg)",
                   textTransform: "uppercase",
                 }}>
-                  <span>Feature</span>
-                  <span style={{ textAlign: "center" }}>Size</span>
-                  <span style={{ textAlign: "center" }}>Pts</span>
-                  <span style={{ textAlign: "center" }}>Deps</span>
+                  <span>Task</span>
+                  <span style={{ textAlign: "center" }}>Priority</span>
+                  <span style={{ textAlign: "center" }}>Hours</span>
+                  <span style={{ textAlign: "center" }}>Start</span>
                   <span style={{ textAlign: "center" }}>Status</span>
                   <span style={{ textAlign: "right" }}>Sprint</span>
                 </div>
 
                 {/* Table rows */}
                 <div style={{ flex: 1, overflow: "auto" }}>
-                  {latestResult.sprint_plan.map((sp, idx) => {
-                    const points = SIZE_POINTS[sp.feature.size] || 0
-                    const color = CLS_COLORS[sp.feature.size] || "var(--primary)"
+                  {latestResult.sequenced_rows.map((row, idx) => {
+                    const priorityColors: Record<string, string> = {
+                      high: "var(--c-red)",
+                      medium: "var(--c-amber)",
+                      low: "var(--c-green)",
+                    }
+                    const color = priorityColors[row.priority?.toLowerCase() || "medium"] || "var(--primary)"
                     return (
                       <div
                         key={idx}
@@ -407,26 +522,22 @@ export default function Stage4Page() {
                           gridTemplateColumns: "2.2fr 0.6fr 0.5fr 0.7fr 0.6fr 0.7fr",
                           padding: "12px 16px",
                           alignItems: "center",
-                          borderBottom: idx < latestResult.sprint_plan.length - 1 ? "1px solid var(--border)" : "none",
+                          borderBottom: idx < latestResult.sequenced_rows.length - 1 ? "1px solid var(--border)" : "none",
                         }}
                       >
-                        {/* Feature name + description */}
+                        {/* Task name */}
                         <div style={{ minWidth: 0, paddingRight: 8 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{sp.feature.name}</div>
-                          {sp.feature.description && (
-                            <div style={{
-                              fontSize: 10.5,
-                              color: "var(--muted-fg)",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}>
-                              {sp.feature.description}
-                            </div>
-                          )}
+                          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{row.feature}</div>
+                          <div style={{
+                            fontSize: 10.5,
+                            color: "var(--muted-fg)",
+                            marginTop: 2
+                          }}>
+                            {row.start_date} to {row.end_date}
+                          </div>
                         </div>
 
-                        {/* Size chip */}
+                        {/* Priority */}
                         <span style={{ textAlign: "center", display: "flex", justifyContent: "center" }}>
                           <span style={{
                             fontFamily: "var(--mono)",
@@ -437,26 +548,26 @@ export default function Stage4Page() {
                             borderRadius: 5,
                             padding: "2px 7px",
                           }}>
-                            {sp.feature.size}
+                            {row.priority}
                           </span>
                         </span>
 
-                        {/* Story points */}
+                        {/* Hours */}
                         <span style={{
                           textAlign: "center",
                           fontFamily: "var(--mono)",
                           fontSize: 12,
                           color: "var(--fg-2)",
                         }}>
-                          {points}
+                          {row.hours}h
                         </span>
 
-                        {/* Dependencies */}
+                        {/* Start Date */}
                         <span style={{ textAlign: "center", fontSize: 11.5, color: "var(--muted-fg)" }}>
-                          {sp.feature.dependencies.length || "—"}
+                          {row.start_date || "—"}
                         </span>
 
-                        {/* Status (placeholder - from tracker export) */}
+                        {/* Status (placeholder) */}
                         <span style={{ textAlign: "center" }}>
                           <span style={{
                             fontSize: 9.5,
@@ -479,7 +590,7 @@ export default function Stage4Page() {
                           fontWeight: 700,
                           color: "var(--primary)",
                         }}>
-                          S{sp.sprint_number}
+                          S{row.sprint_number}
                         </span>
                       </div>
                     )
@@ -488,20 +599,24 @@ export default function Stage4Page() {
               </Card>
             )}
 
-            {/* Size legend */}
+            {/* Priority legend */}
             <Card style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <SectionLabel>Feature size</SectionLabel>
+              <SectionLabel>Task Priority</SectionLabel>
               <div style={{ display: "flex", gap: 13 }}>
-                {(["XS", "S", "M", "L", "XL"] as Band[]).map((b) => (
-                  <span key={b} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--fg-2)" }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 2, background: CLS_COLORS[b] }} />
-                    {b} = {b === "XS" ? "1wk" : b === "S" ? "2–4wk" : b === "M" ? "5wk" : b === "L" ? "6wk" : "8wk"}
+                {[
+                  { label: "High", color: "var(--c-red)" },
+                  { label: "Medium", color: "var(--c-amber)" },
+                  { label: "Low", color: "var(--c-green)" }
+                ].map((p) => (
+                  <span key={p.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--fg-2)" }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: p.color }} />
+                    {p.label}
                   </span>
                 ))}
               </div>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 11, color: "var(--muted-fg)", display: "flex", alignItems: "center", gap: 6 }}>
-                <Icon name="refresh" size={12} /> Change sprint length → re-run redistributes features · each run versioned
+                <Icon name="refresh" size={12} /> Change sprint config → re-run assigns tasks to sprints · each run versioned
               </span>
             </Card>
           </>

@@ -156,8 +156,18 @@ function ProjectItem({
             </SidebarMenuSubItem>
           ) : (
             STAGES.map((stage) => {
-              const href = firstUc
-                ? `/projects/${project.id}/${stage.path}/${firstUc.id}`
+              // Extract current project and UC from pathname
+              const pathMatch = pathname.match(/^\/projects\/([^/]+)\/stage\d+\/([^/]+)/);
+              const currentProjectId = pathMatch?.[1];
+              const currentUcId = pathMatch?.[2];
+
+              // Preserve UC context: if we're in the same project, keep current UC; else use first UC
+              const targetUcId = currentProjectId === project.id
+                ? (currentUcId ?? firstUc?.id)
+                : firstUc?.id;
+
+              const href = targetUcId
+                ? `/projects/${project.id}/${stage.path}/${targetUcId}`
                 : `/projects/${project.id}`;
 
               const stageKey = stage.id as keyof ReadinessResponse;

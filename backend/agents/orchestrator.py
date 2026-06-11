@@ -218,7 +218,8 @@ async def run_s2_assessment(
     pasted_text: str | None,
     manual_bands: dict | None,
     session: AsyncSession,
-    model: str = "claude-haiku-4-5",
+    model: str | None = None,
+    use_tool_based_agent: bool = False,
 ) -> dict:
     """
     Run Stage 2 complexity assessment.
@@ -230,7 +231,8 @@ async def run_s2_assessment(
         pasted_text: User-pasted text (or None)
         manual_bands: Manual band entry dict (or None)
         session: Async DB session
-        model: LLM model for extraction (default claude-haiku-4-5)
+        model: LLM model for extraction (if None, uses stage2_extraction_llm_model from settings)
+        use_tool_based_agent: Use tool-based agent for 95%+ accuracy (default False)
 
     Returns:
         Result dict with bands, scoring, and metadata
@@ -238,7 +240,12 @@ async def run_s2_assessment(
     Raises:
         DocumentProcessingError, LLMProviderError, AgentExecutionError
     """
-    logger.info(f"Starting S2 assessment for use_case {use_case_id}")
+    # Use stage-specific model if not provided
+    if model is None:
+        settings = get_settings()
+        model = settings.stage2_extraction_llm_model
+
+    logger.info(f"Starting S2 assessment for use_case {use_case_id} (tool_based={use_tool_based_agent}, model={model})")
 
     # Fetch use case
     result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
@@ -265,22 +272,60 @@ async def run_s2_assessment(
 
     elif pasted_text:
         # Path 2: Pasted text → extraction
-        logger.info("Extracting bands from pasted text")
-        bands_with_source = await extract_bands_from_text(pasted_text, model=model)
-        extraction_notes = "Extracted from pasted text"
-        # Extract process_summary from result
-        process_summary = getattr(bands_with_source, "_process_summary", None)
+        if use_tool_based_agent:
+            logger.info("Extracting bands from pasted text (TOOL-BASED AGENT)")
+            from agents.process_agent_with_tools import extract_bands_with_tools
+            # Tool-based agent returns (AttributeBandsWithSource, dict, str)
+            bands_with_source, process_summary, extraction_notes = await extract_bands_with_tools(
+                document_text=pasted_text,
+                model=model
+            )
+            # bands_with_source is already AttributeBandsWithSource - use directly!
+        else:
+            logger.info("Extracting bands from pasted text (prompt-based)")
+            bands_with_source = await extract_bands_from_text(pasted_text, model=model)
+            extraction_notes = "Extracted from pasted text"
+            # Extract process_summary from result (attached as private attribute)
+            process_summary = getattr(bands_with_source, "_process_summary", None)
+            # Ensure process_summary is a dict (fallback for older runs without process_summary)
+            if not process_summary:
+                process_summary = {
+                    "key_activities": [],
+                    "key_logical_points": [],
+                    "key_applications": [],
+                    "key_layouts": [],
+                    "key_additional_technologies": [],
+                }
 
     elif document_path:
         # Path 1: Document → text → extraction
         logger.info(f"Processing document: {document_path}")
         document_text = process_document(document_path)
 
-        logger.info("Extracting bands from document text")
-        bands_with_source = await extract_bands_from_text(document_text, model=model)
-        extraction_notes = f"Extracted from {document_path}"
-        # Extract process_summary from result
-        process_summary = getattr(bands_with_source, "_process_summary", None)
+        if use_tool_based_agent:
+            logger.info("Extracting bands from document text (TOOL-BASED AGENT)")
+            from agents.process_agent_with_tools import extract_bands_with_tools
+            # Tool-based agent returns (AttributeBandsWithSource, dict, str)
+            bands_with_source, process_summary, extraction_notes = await extract_bands_with_tools(
+                document_text=document_text,
+                model=model
+            )
+            # bands_with_source is already AttributeBandsWithSource - use directly!
+        else:
+            logger.info("Extracting bands from document text (prompt-based)")
+            bands_with_source = await extract_bands_from_text(document_text, model=model)
+            extraction_notes = f"Extracted from {document_path}"
+            # Extract process_summary from result (attached as private attribute)
+            process_summary = getattr(bands_with_source, "_process_summary", None)
+            # Ensure process_summary is a dict (fallback for older runs without process_summary)
+            if not process_summary:
+                process_summary = {
+                    "key_activities": [],
+                    "key_logical_points": [],
+                    "key_applications": [],
+                    "key_layouts": [],
+                    "key_additional_technologies": [],
+                }
 
     else:
         raise AgentExecutionError("No input provided: must supply document_path, pasted_text, or manual_bands")

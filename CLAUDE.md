@@ -102,7 +102,7 @@ Stage N = input contract (minimum fields)
 | S2: deterministic scorer | No LLM | Pure Python weight matrix |
 | S3: phase calculator | No LLM | Pure Python date arithmetic |
 | S3: narrative summary | `claude-sonnet-4-5` | Background task, non-blocking |
-| S4: feature decomposition | `claude-sonnet-4-5` | One call per run, async |
+| S3: task decomposition | `claude-sonnet-4-5` | One call per run, async |
 | S4: sprint assignment | No LLM | Deterministic bin-packing |
 
 ---

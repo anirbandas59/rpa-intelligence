@@ -270,17 +270,6 @@ export default function Stage2Page() {
                 <Icon name="check" size={12} /> Complete · run #{runs.length}
               </span>
             )}
-            <Button
-              size="sm"
-              onClick={handleRunStage}
-              disabled={
-                isRunning ||
-                (!hasAllBands(bands as AttributeBands) && !documentUploaded)
-              }
-            >
-              <Play className="mr-1.5 h-3.5 w-3.5" />
-              {isRunning ? "Running…" : "Run Analysis"}
-            </Button>
           </div>
         }
       />
@@ -477,6 +466,22 @@ export default function Stage2Page() {
               )}
             </div>
 
+            {/* Run Analysis Button - moved from header actions */}
+            {(documentUploaded || hasAllBands(bands as AttributeBands)) && (
+              <Button
+                size="sm"
+                onClick={handleRunStage}
+                disabled={
+                  isRunning ||
+                  (!hasAllBands(bands as AttributeBands) && !documentUploaded)
+                }
+                style={{ width: "fit-content" }}
+              >
+                <Play className="mr-1.5 h-3.5 w-3.5" />
+                {isRunning ? "Running…" : "Run Analysis"}
+              </Button>
+            )}
+
             {/* 5×5 band grid */}
             <Card pad={0} style={{ overflow: "hidden" }}>
               <div
@@ -621,7 +626,27 @@ export default function Stage2Page() {
                     marginBottom: 12,
                   }}
                 >
-                  <SectionLabel>Process Summary</SectionLabel>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <SectionLabel>Process Summary</SectionLabel>
+                    <Pill
+                      color="var(--primary)"
+                      mono
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <Icon name="bot" size={10} />
+                      Generated
+                    </Pill>
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
@@ -1022,45 +1047,32 @@ export default function Stage2Page() {
                   </div>
                 </Card>
 
-                {/* AI Analysis section - show only if we have completed result with analysis */}
-                {latestResult &&
-                  (latestResult._assessment_result?.reasoning ||
-                    latestResult.extraction_notes) && (
-                    <Card style={{ display: "flex", flexDirection: "column" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          marginBottom: 12,
-                        }}
-                      >
-                        <SectionLabel>AI Analysis</SectionLabel>
-                        <Pill
-                          color="var(--primary)"
-                          mono
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          <Icon name="bot" size={10} />
-                          Generated
-                        </Pill>
-                      </div>
+                {/* Source section - show document info if available */}
+                {latestResult?.document_metadata && (
+                  <Card style={{ display: "flex", flexDirection: "column" }}>
+                    <div style={{ marginBottom: 12 }}>
+                      <SectionLabel>Source</SectionLabel>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <Icon name="layers" size={16} style={{ color: "var(--primary)" }} />
                       <div
                         style={{
                           fontSize: 12.5,
-                          lineHeight: 1.62,
-                          color: "var(--fg-2)",
+                          fontWeight: 500,
+                          color: "var(--fg)",
                         }}
                       >
-                        {latestResult._assessment_result?.reasoning ||
-                          latestResult.extraction_notes}
+                        {latestResult.document_metadata.original_filename}
                       </div>
-                    </Card>
-                  )}
+                    </div>
+                  </Card>
+                )}
               </>
             ) : (
               <div

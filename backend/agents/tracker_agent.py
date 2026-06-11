@@ -14,7 +14,7 @@ from typing import TypedDict
 from langgraph.graph import END, StateGraph
 
 from core.exceptions import AgentExecutionError, LLMProviderError
-from llm.manager import get_default_manager
+from llm.manager import get_stage_manager
 from prompts.tracker_prompts import S4_GROUP_STEPS_SYSTEM, S4_GROUP_STEPS_USER
 from tools.output.tracker_sequencer import SequencerInput, TrackerRow, sequence_dates
 
@@ -32,7 +32,8 @@ class TrackerState(TypedDict):
     complexity_class: str
     effort_weeks: int
     build_sit_window: dict  # {"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD"}
-    sprint_count: int  # KEEP for backward compat (tool registry still uses it)
+    sprint_count: int  # Number of sprints for assignment
+    sprint_length_weeks: int  # Sprint length in weeks
     sprint_capacity: int  # KEEP for backward compat
     raw_llm_response: str
     wbs_rows: list[dict]  # Replaced extracted_features
@@ -56,7 +57,7 @@ async def group_steps_node(state: TrackerState) -> dict:
     )
 
     try:
-        llm = get_default_manager()
+        llm = get_stage_manager("s4")
 
         # Convert task_extraction dict to JSON string for prompt
         task_extraction_json = json.dumps(state["task_extraction"], indent=2)
@@ -259,6 +260,75 @@ def sequence_dates_node(state: TrackerState) -> dict:
         return {"error": error_msg}
 
 
+def assign_sprints_node(state: TrackerState) -> dict:
+    """
+    Node 3.5: Assign sprint_number to each sequenced row based on start_date.
+    Calculates sprint windows from Build+SIT window and sprint_length_weeks.
+    """
+    session_id = state["session_id"]
+    logger.info(
+        "assign_sprints_node entered",
+        extra={"session_id": session_id, "node": "assign_sprints"},
+    )
+
+    try:
+        from datetime import timedelta
+
+        sprint_count = state["sprint_count"]
+        sprint_length_weeks = state["sprint_length_weeks"]
+        build_sit_start = date.fromisoformat(state["build_sit_window"]["start_date"])
+
+        if sprint_count <= 0:
+            # No sprints configured, assign all to sprint 1
+            logger.warning(
+                "sprint_count is 0 or negative, assigning all rows to sprint 1",
+                extra={"session_id": session_id},
+            )
+            sequenced_rows = [
+                {**row, "sprint_number": 1} for row in state["sequenced_rows"]
+            ]
+            return {"sequenced_rows": sequenced_rows}
+
+        # Calculate sprint windows
+        sprint_windows = []
+        current_start = build_sit_start
+        for i in range(sprint_count):
+            window_end = current_start + timedelta(weeks=sprint_length_weeks)
+            sprint_windows.append({
+                "sprint_number": i + 1,
+                "start_date": current_start,
+                "end_date": window_end
+            })
+            current_start = window_end
+
+        # Assign sprint_number based on task start_date
+        sequenced_rows_with_sprint = []
+        for row in state["sequenced_rows"]:
+            task_start = date.fromisoformat(row["start_date"])
+
+            # Find which sprint window contains this task's start date
+            assigned_sprint = sprint_count  # Default to last sprint
+            for window in sprint_windows:
+                if window["start_date"] <= task_start < window["end_date"]:
+                    assigned_sprint = window["sprint_number"]
+                    break
+
+            row_with_sprint = {**row, "sprint_number": assigned_sprint}
+            sequenced_rows_with_sprint.append(row_with_sprint)
+
+        logger.info(
+            f"Sprint assignment complete: {len(sequenced_rows_with_sprint)} rows across {sprint_count} sprints",
+            extra={"session_id": session_id},
+        )
+
+        return {"sequenced_rows": sequenced_rows_with_sprint}
+
+    except Exception as e:
+        error_msg = f"Sprint assignment failed: {e}"
+        logger.error(error_msg, extra={"session_id": session_id})
+        return {"error": error_msg}
+
+
 def store_result_node(state: TrackerState) -> dict:
     """
     Node 4: Result stored successfully (actual DB write happens in API handler).
@@ -282,6 +352,7 @@ def build_tracker_graph() -> StateGraph:
     workflow.add_node("group_steps", group_steps_node)
     workflow.add_node("validate_sum", validate_sum_node)
     workflow.add_node("sequence_dates", sequence_dates_node)
+    workflow.add_node("assign_sprints", assign_sprints_node)  # NEW
     workflow.add_node("store_result", store_result_node)
 
     # Define edges
@@ -296,7 +367,8 @@ def build_tracker_graph() -> StateGraph:
             "end": END,
         },
     )
-    workflow.add_edge("sequence_dates", "store_result")
+    workflow.add_edge("sequence_dates", "assign_sprints")  # NEW edge
+    workflow.add_edge("assign_sprints", "store_result")    # NEW edge
     workflow.add_edge("store_result", END)
 
     return workflow.compile()
@@ -315,7 +387,8 @@ async def run_tracker_agent(
     complexity_class: str,
     effort_weeks: int,
     session_id: str,
-    sprint_count: int = 0,  # DEPRECATED but kept for backward compat
+    sprint_count: int = 0,
+    sprint_length_weeks: int = 2,  # NEW parameter
     sprint_capacity: int = 8,  # DEPRECATED but kept for backward compat
 ) -> dict:
     """
@@ -330,11 +403,12 @@ async def run_tracker_agent(
         complexity_class: Complexity classification
         effort_weeks: Total effort in weeks
         session_id: Session ID for logging
-        sprint_count: DEPRECATED - kept for backward compat
+        sprint_count: Number of sprints for assignment
+        sprint_length_weeks: Sprint length in weeks (default 2)
         sprint_capacity: DEPRECATED - kept for backward compat
 
     Returns:
-        dict with wbs_rows, sequenced_rows, and metadata
+        dict with wbs_rows, sequenced_rows (with sprint_number), and metadata
     """
     logger.info(
         f"Starting tracker agent for use case {use_case_id}", extra={"session_id": session_id}
@@ -350,6 +424,7 @@ async def run_tracker_agent(
         "effort_weeks": effort_weeks,
         "build_sit_window": build_sit_window,
         "sprint_count": sprint_count,
+        "sprint_length_weeks": sprint_length_weeks,  # NEW
         "sprint_capacity": sprint_capacity,
         "raw_llm_response": "",
         "wbs_rows": [],

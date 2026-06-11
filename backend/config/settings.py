@@ -55,6 +55,36 @@ class Settings(BaseSettings):
         description="Model name for the chosen provider",
     )
 
+    # Stage-Specific LLM Models (per CLAUDE.md AI Model Assignments)
+    stage1_llm_model: str = Field(
+        default="claude-haiku-4-5",
+        description="Stage 1 (Migration Assessment): Haiku for parallel per-use-case scoring",
+    )
+    stage2_extraction_llm_model: str = Field(
+        default="claude-sonnet-4-5",
+        description="Stage 2 (Band Extraction): Sonnet for accurate complexity band extraction",
+    )
+    stage2_scoring_llm_model: str = Field(
+        default="claude-sonnet-4-5",
+        description="Stage 2 (Complexity Scoring): Sonnet for LangGraph complexity assessment",
+    )
+    stage3_task_extraction_llm_model: str = Field(
+        default="claude-sonnet-4-5",
+        description="Stage 3 (Task Extraction): Sonnet for task decomposition with hour validation",
+    )
+    stage3_task_synthesis_llm_model: str = Field(
+        default="claude-sonnet-4-5",
+        description="Stage 3 (Task Synthesis): Sonnet for synthesizing tasks without document",
+    )
+    stage3_narrative_llm_model: str = Field(
+        default="claude-sonnet-4-5",
+        description="Stage 3 (Narrative Summary): Sonnet for executive timeline narrative",
+    )
+    stage4_tracker_llm_model: str = Field(
+        default="claude-sonnet-4-5",
+        description="Stage 4 (Sprint Tracker): Sonnet for WBS grouping and sprint assignment",
+    )
+
     # Provider API Keys
     anthropic_api_key: str = Field(
         default="",
@@ -135,6 +165,12 @@ class Settings(BaseSettings):
     redis_url: str = Field(
         default="redis://localhost:6379/0",
         description="Redis connection URL for session storage",
+    )
+
+    # LangSmith Tracing
+    langsmith_api_key: str | None = Field(
+        default=None,
+        description="LangSmith API key for LLM call tracing (optional)",
     )
 
     # LLM Manager Behaviour

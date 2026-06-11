@@ -13,7 +13,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from core.exceptions import AgentExecutionError
-from llm.manager import get_default_manager
+from llm.manager import get_stage_manager
 from prompts.task_extraction_prompts import TASK_EXTRACTION_SYSTEM, TASK_EXTRACTION_USER
 from tools.analysis.task_extraction_tool import (
     TaskExtractionResult,
@@ -30,6 +30,7 @@ class TaskExtractionState(TypedDict):
     session_id: str
     use_case_id: str
     document_text: str
+    process_summary: dict | None  # NEW: Full process context from Stage 2
     total_effort_hours: float
     process_name: str
     raw_llm_response: str
@@ -56,14 +57,33 @@ async def extract_tasks_node(state: TaskExtractionState) -> dict:
     )
 
     try:
-        llm = get_default_manager()
+        llm = get_stage_manager("s3_task_extraction")
 
         system_prompt = TASK_EXTRACTION_SYSTEM.format(
             total_effort_hours=state["total_effort_hours"]
         )
 
+        # Build context from process_summary if available
+        process_context = ""
+        if state.get("process_summary"):
+            ps = state["process_summary"]
+            process_context = "\n\nPROCESS CONTEXT FROM STAGE 2:\n"
+            if ps.get("overall_summary"):
+                process_context += f"Summary: {ps['overall_summary']}\n"
+            if ps.get("key_activities"):
+                process_context += f"Key Activities: {', '.join(ps['key_activities'])}\n"
+            if ps.get("key_logical_points"):
+                process_context += f"Business Rules: {', '.join(ps['key_logical_points'])}\n"
+            if ps.get("key_applications"):
+                process_context += f"Applications: {', '.join(ps['key_applications'])}\n"
+            if ps.get("key_layouts"):
+                process_context += f"UI Screens: {', '.join(ps['key_layouts'])}\n"
+            if ps.get("key_additional_technologies"):
+                process_context += f"Technologies: {', '.join(ps['key_additional_technologies'])}\n"
+
         user_prompt = TASK_EXTRACTION_USER.format(
             document_text=state["document_text"],
+            process_context=process_context,
             total_effort_hours=state["total_effort_hours"],
             process_name=state["process_name"],
         )
@@ -146,20 +166,29 @@ def validate_sum_node(state: TaskExtractionState) -> dict:
             return {"task_extraction": task_extraction_dict, "error": None}
 
         else:
-            # Validation failed
+            # Validation failed - calculate actual_sum for accurate error reporting
+            actual_sum = sum(
+                step.weight_hours
+                for activity in result.activities
+                for step in activity.steps
+                if step.reusability != "full"
+            )
+
             attempts = state.get("validation_attempts", 0) + 1
 
             if attempts >= 2:
                 error_msg = (
                     f"Hour sum validation failed after {attempts} attempts. "
-                    f"Expected {budget:.2f}h but got {result.total_net_hours:.2f}h"
+                    f"Expected {budget:.2f}h but got {actual_sum:.2f}h "
+                    f"(step-level sum). LLM reported total_net_hours: {result.total_net_hours:.2f}h"
                 )
                 logger.error(error_msg, extra={"session_id": session_id})
                 return {"error": error_msg, "validation_attempts": attempts}
             else:
                 retry_hint = (
-                    f"The total_net_hours was {result.total_net_hours:.2f} "
-                    f"but must equal {budget:.2f}. Rebalance step weights."
+                    f"The step-level hour sum was {actual_sum:.2f}h "
+                    f"but must equal {budget:.2f}h. Ensure each step has weight_hours assigned "
+                    f"and the sum of all steps (where reusability != 'full') equals the budget."
                 )
                 logger.warning(
                     f"Retrying task extraction (attempt {attempts}/2)",
@@ -243,6 +272,7 @@ async def run_task_extraction_agent(
     process_name: str,
     total_effort_hours: float,
     session_id: str,
+    process_summary: dict | None = None,  # NEW: Process context from Stage 2
 ) -> dict:
     """
     Entry point called by background task in stage3.py.
@@ -260,6 +290,7 @@ async def run_task_extraction_agent(
         "session_id": session_id,
         "use_case_id": use_case_id,
         "document_text": document_text,
+        "process_summary": process_summary,  # NEW
         "total_effort_hours": total_effort_hours,
         "process_name": process_name,
         "raw_llm_response": "",

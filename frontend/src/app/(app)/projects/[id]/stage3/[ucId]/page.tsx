@@ -5,7 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -17,7 +19,7 @@ import { StalenessIndicator } from "@/components/shared/StalenessIndicator";
 import { StageHeader } from "@/components/shared/StageHeader";
 import { Card, Btn, SectionLabel, Pill } from "@/components/rpa";
 import { Icon } from "@/components/shared/icons";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { spacing } from "@/lib/design-tokens";
 import {
@@ -36,6 +38,7 @@ import type {
   S3ReadinessDetail,
   ComplexityClass,
   S3LoadedResponse,
+  TaskExtraction,
 } from "@/lib/types";
 
 const PHASE_CSS: Record<string, string> = {
@@ -88,6 +91,7 @@ export default function Stage3Page() {
   const [error, setError] = useState("");
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
   const [projectUseCases, setProjectUseCases] = useState<UseCase[]>([]);
+  const [taskExtraction, setTaskExtraction] = useState<TaskExtraction | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -177,7 +181,19 @@ export default function Stage3Page() {
           status === "failed"
         ) {
           clearInterval(pollInterval);
-          toast.success("Task extraction complete");
+
+          // Fetch full use-case to get task extraction details
+          if (status === "complete" || status === "synthesized") {
+            try {
+              const ucData = await apiGet<UseCase>(`/api/v1/use-cases/${ucId}`);
+              setTaskExtraction(ucData.s3_inputs?.task_extraction as TaskExtraction | null);
+              toast.success("Task extraction complete");
+            } catch (err) {
+              console.error("Failed to fetch task extraction:", err);
+            }
+          } else if (status === "failed") {
+            toast.error("Task extraction failed");
+          }
         }
       } catch (err) {
         console.error("Polling error:", err);
@@ -895,6 +911,134 @@ export default function Stage3Page() {
                 );
               })}
             </div>
+
+            {/* ── Task Extraction Results ── */}
+            {extractionComplete && taskExtraction && (
+              <Card style={{ marginTop: spacing.gapDefault }}>
+                <SectionLabel style={{ marginBottom: 14 }}>
+                  Task Breakdown
+                </SectionLabel>
+
+                {/* Status Banner */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  marginBottom: "16px",
+                  padding: "16px",
+                  background: "var(--muted)",
+                  borderRadius: "8px"
+                }}>
+                  <Badge style={{ background: "var(--c-green)", color: "white" }}>
+                    <CheckCircle style={{ height: "14px", width: "14px", marginRight: "4px" }} />
+                    Extraction Complete
+                  </Badge>
+                  <span style={{ fontSize: "14px", color: "var(--muted-fg)" }}>
+                    {taskExtraction.total_net_hours}h total effort
+                  </span>
+                  {taskExtraction.verification_passed && (
+                    <Badge variant="outline" style={{ borderColor: "var(--c-green)", color: "var(--c-green)" }}>
+                      Verified ✓
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Activities List */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {taskExtraction.activities.map((activity, idx) => (
+                    <div key={idx} style={{
+                      border: "1px solid var(--border)",
+                      borderRadius: "8px",
+                      padding: "16px",
+                      transition: "background 0.2s",
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--muted)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                    >
+                      <h4 style={{ fontWeight: 600, marginBottom: "12px", fontSize: "16px" }}>
+                        {activity.name}
+                      </h4>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {activity.steps.map((step, stepIdx) => (
+                          <div key={stepIdx} style={{
+                            display: "flex",
+                            alignItems: "start",
+                            justifyContent: "space-between",
+                            fontSize: "14px",
+                            gap: "16px"
+                          }}>
+                            <span style={{ color: "var(--muted-fg)", flex: 1 }}>
+                              {step.description}
+                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                              <span style={{ fontFamily: "monospace", fontWeight: 500 }}>
+                                {step.weight_hours}h
+                              </span>
+                              <Badge
+                                variant={
+                                  step.reusability === "full" ? "secondary" :
+                                  step.reusability === "partial" ? "outline" : "default"
+                                }
+                                style={{ fontSize: "11px" }}
+                              >
+                                {step.reusability}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Total Hours Summary */}
+                <div style={{
+                  marginTop: "24px",
+                  paddingTop: "16px",
+                  borderTop: "1px solid var(--border)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Total Net Hours</span>
+                  <span style={{ fontSize: "32px", fontWeight: 700, color: "var(--primary)" }}>
+                    {taskExtraction.total_net_hours}h
+                  </span>
+                </div>
+
+                {/* Continue to S4 Button */}
+                {taskExtraction.verification_passed && (
+                  <div style={{ marginTop: "16px" }}>
+                    <Button
+                      onClick={() => router.push(`/projects/${projectId}/stage4/${ucId}?autoRun=true`)}
+                      style={{ width: "100%", height: "48px", fontSize: "16px" }}
+                    >
+                      Continue to Stage 4: Sprint Planning
+                      <ChevronRight style={{ marginLeft: "8px", height: "16px", width: "16px" }} />
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* Error State */}
+            {extractionFailed && (
+              <Alert variant="destructive" style={{ marginTop: spacing.gapDefault }}>
+                <AlertCircle style={{ height: "16px", width: "16px" }} />
+                <AlertTitle>Task Extraction Failed</AlertTitle>
+                <AlertDescription>
+                  {taskExtraction?.error || "An error occurred during task extraction"}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    style={{ marginTop: "8px" }}
+                    onClick={() => window.location.reload()}
+                  >
+                    Retry Extraction
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* ── Narrative card ── */}
             {(latestResult.narrative || generatingNarrative) && (

@@ -112,6 +112,21 @@ class LLMManager:
         self._call_count = 0
         self._total_tokens = 0
 
+        # Initialize LangSmith tracing if API key is configured
+        self._langsmith_enabled = False
+        if settings.langsmith_api_key:
+            try:
+                import os
+                os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
+                os.environ["LANGCHAIN_TRACING_V2"] = "true"
+                os.environ["LANGCHAIN_PROJECT"] = "rpa-intelligence"
+                self._langsmith_enabled = True
+                self.logger.info("LangSmith tracing enabled")
+            except Exception as e:
+                self.logger.warning(f"Failed to enable LangSmith tracing: {e}")
+        else:
+            self.logger.info("LangSmith tracing disabled (no API key configured)")
+
         # Build the provider
         self._provider = self._build_provider()
 
@@ -424,3 +439,43 @@ def get_default_manager() -> LLMManager:
     if _default_manager is None:
         _default_manager = LLMManager.create_default()
     return _default_manager
+
+
+# Stage-specific manager cache
+_stage_managers: dict[str, LLMManager] = {}
+
+
+def get_stage_manager(stage: str) -> LLMManager:
+    """
+    Get or create a stage-specific LLMManager with appropriate model.
+
+    Uses stage-specific model settings from config (e.g., stage2_extraction_llm_model).
+    Managers are cached per stage to avoid recreating providers.
+
+    Args:
+        stage: Stage identifier (e.g., "s1", "s2_extraction", "s2_scoring",
+               "s3_task_extraction", "s3_task_synthesis", "s3_narrative", "s4")
+
+    Returns:
+        LLMManager: Manager instance configured for the specified stage.
+    """
+    global _stage_managers
+
+    if stage not in _stage_managers:
+        settings = get_settings()
+
+        # Map stage to model setting
+        model_map = {
+            "s1": settings.stage1_llm_model,
+            "s2_extraction": settings.stage2_extraction_llm_model,
+            "s2_scoring": settings.stage2_scoring_llm_model,
+            "s3_task_extraction": settings.stage3_task_extraction_llm_model,
+            "s3_task_synthesis": settings.stage3_task_synthesis_llm_model,
+            "s3_narrative": settings.stage3_narrative_llm_model,
+            "s4": settings.stage4_tracker_llm_model,
+        }
+
+        model = model_map.get(stage, settings.default_llm_model)
+        _stage_managers[stage] = LLMManager(model_name=model)
+
+    return _stage_managers[stage]

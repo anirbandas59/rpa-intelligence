@@ -31,6 +31,10 @@ class UseCaseResponse(BaseModel):
     s2_latest_run_id: str | None = None
     s3_latest_run_id: str | None = None
     s4_latest_run_id: str | None = None
+    # Stage inputs (mutable data layers)
+    s2_inputs: dict = {}
+    s3_inputs: dict = {}
+    s4_inputs: dict = {}
 
 
 @router.post("", response_model=UseCaseResponse)

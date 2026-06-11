@@ -190,6 +190,11 @@ export interface S2Result {
   attribute_weights: Record<string, number>;
   bands: AttributeBands;
   extraction_notes?: string;
+  document_metadata?: {
+    original_filename?: string;
+    stored_path?: string;
+    file_type?: string;
+  };
   process_summary?: {
     key_activities?: string[];
     key_logical_points?: string[];
@@ -217,11 +222,33 @@ export interface Phase {
   is_delta?: boolean;
 }
 
+// Task Extraction (Stage 3 Job A)
+export interface TaskStep {
+  description: string;
+  weight_hours: number;
+  reusability: "none" | "partial" | "full";
+}
+
+export interface TaskActivity {
+  name: string;
+  steps: TaskStep[];
+}
+
+export interface TaskExtraction {
+  extraction_status: "pending" | "complete" | "failed" | "synthesized";
+  source?: "document" | "pasted_text" | "s2_summary";
+  activities: TaskActivity[];
+  total_net_hours: number;
+  verification_passed: boolean;
+  error?: string;
+}
+
 export interface S3Inputs {
   effort_weeks: number;
   start_date: string;
   complexity_class: ComplexityClass;
   phase_deltas?: Record<string, number>;
+  task_extraction?: TaskExtraction;
 }
 
 export interface S3LoadedResponse {
@@ -235,6 +262,8 @@ export interface S3LoadedResponse {
 
 export interface S3Result {
   phases: Phase[];
+  total_weeks: number;
+  project_end_date: string;
   narrative?: string;
 }
 
@@ -242,27 +271,38 @@ export interface S3Result {
 // Stage 4 (Sprint Tracker)
 // ============================================================================
 
-export interface Feature {
-  name: string;
-  description: string;
-  size: Band;
-  dependencies: string[];
+export interface WBSRow {
+  feature: string;
+  description?: string;
+  hours: number;
+  priority?: string;
 }
 
-export interface SprintPlan {
-  feature: Feature;
+export interface SequencedRow {
+  feature: string;
+  hours: number;
+  priority: string;
+  start_date: string;
+  end_date: string;
   sprint_number: number;
 }
 
 export interface S4Inputs {
   sprint_count: number;
   sprint_length_weeks: number;
-  features_override?: Feature[];
+  features_override?: WBSRow[];
 }
 
 export interface S4Result {
-  features: Feature[];
-  sprint_plan: SprintPlan[];
+  wbs_rows: WBSRow[];
+  sequenced_rows: SequencedRow[];
+  metadata: {
+    complexity_class: string;
+    effort_weeks: number;
+    total_hours: number;
+    total_rows: number;
+    retry_count: number;
+  };
 }
 
 // ============================================================================

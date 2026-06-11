@@ -14,9 +14,11 @@ Key components:
 All API routes are mounted under /api/v1 prefix.
 """
 
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,10 +27,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_db
 from api.v1 import v1_router
+from config.logging_config import setup_logging
 from core.scoring.effort_table import load_effort_table
 from core.scoring.weight_matrix import load_weight_matrix
 from db.session import get_engine
 from tools.registrations import register_all_tools
+
+logger = logging.getLogger("rpa_agent.main")
 
 # Context variable for tracking request IDs across async operations
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
@@ -50,16 +55,30 @@ async def lifespan(app: FastAPI):
     Yields:
         Control to application during runtime
     """
+    # Initialize logging FIRST
+    setup_logging()
+    logger.info("Application startup - logging initialized")
+
+    # Create logs directory
+    Path("logs").mkdir(exist_ok=True)
+
     # Startup: Initialize resources
     get_engine()  # Initialize async database connection pool
+    logger.info("Database connection pool initialized")
+
     load_weight_matrix()  # Warm cache with weight matrix from JSON
     load_effort_table()  # Warm cache with effort estimates from JSON
+    logger.info("Scoring reference data loaded")
+
     register_all_tools()  # Register all agentic tools for LangGraph
+    logger.info("Agent tools registered")
 
     yield
 
     # Shutdown: Cleanup resources
+    logger.info("Application shutdown initiated")
     await get_engine().dispose()  # Close all database connections
+    logger.info("Database connections closed")
 
 
 app = FastAPI(title="RPA Intelligence API", version="0.1.0", lifespan=lifespan)
