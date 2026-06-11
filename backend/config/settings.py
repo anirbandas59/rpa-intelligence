@@ -192,6 +192,16 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Task Decomposition Validation
+    hour_tolerance_percentage: float = Field(
+        default=30.0,
+        description=(
+            "Hour sum tolerance percentage for task decomposition validation. "
+            "Default: 30% allows ±30% variance from target effort_hours. "
+            "Example: For 200h budget, tolerance = ±60h (acceptable: 140-260h)"
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_production_guards(self) -> "Settings":
         """

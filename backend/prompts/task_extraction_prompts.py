@@ -24,6 +24,7 @@ TASK_EXTRACTION_USER = """Process document:
 {process_context}
 
 Total effort budget: {total_effort_hours} hours
+Hour tolerance: {hour_tolerance}h (±{hour_tolerance_percentage}%)
 Process name: {process_name}
 
 TASK:
@@ -40,13 +41,37 @@ ALIGNMENT RULES:
 - You may add logical support activities (login, error handling, logging) if they relate to the identified applications/technologies
 - Do NOT invent entirely new business processes not mentioned in the Stage 2 context
 
-HOUR ASSIGNMENT PROCESS:
+HOUR ASSIGNMENT PROCESS (MANDATORY):
 1. First, list all activities and steps
 2. Calculate: total_steps_count = count of steps where reusability != "full"
-3. Assign hours to each step proportionally: weight_hours = {total_effort_hours} / total_steps_count
-4. Adjust individual steps based on complexity (some may be 1.5x, others 0.5x the average)
-5. Verify final sum: sum(weight_hours for steps where reusability != "full") == {total_effort_hours}
-6. If sum is off, rebalance until exact match (within 0.1h tolerance)
+3. Assign hours proportionally: base_hours = {total_effort_hours} / total_steps_count
+4. Adjust individual steps based on complexity:
+   - Simple steps: 0.5x base_hours
+   - Medium steps: 1.0x base_hours
+   - Complex steps: 1.5-2.0x base_hours
+5. **REASONABLENESS CHECK**: For each step, ask: "Can a developer complete this in the allocated hours?"
+   - Hours must be REALISTIC — not too short to be rushed, not too inflated to be rejected
+   - If a step seems under-budgeted, increase it; if over-budgeted, reduce it
+6. Verify sum: Σ(weight_hours where reusability != "full") should equal {total_effort_hours}
+7. **TOLERANCE**: Acceptable range is {total_effort_hours} ± {hour_tolerance}h ({hour_tolerance_min}h to {hour_tolerance_max}h)
+8. If sum is outside tolerance, rebalance steps proportionally until within range
+
+VERIFICATION:
+Include these fields in your JSON response:
+{{
+  "total_net_hours": <sum of hours where reusability != "full">,
+  "verification_passed": <true if sum within tolerance range>,
+  "verification_notes": "<explain any adjustments made>"
+}}
+
+CONTEXT ALIGNMENT RULES (MANDATORY):
+- Your activities MUST directly relate to the key_activities in Stage 2 process summary
+- Do NOT invent business processes not mentioned in process_summary
+- You MAY add technical support activities (login, error handling, logging) IF:
+  * They relate to identified key_applications or key_additional_technologies
+  * Example: If key_applications includes "SAP ERP", login to SAP is valid
+  * Example: If key_applications is ["Microsoft Excel"], do NOT add web login
+- Activities must be LOGICALLY RELEVANT to the process domain
 
 Required JSON structure:
 {{
@@ -68,13 +93,19 @@ Required JSON structure:
     }}
   ],
   "total_net_hours": 27.5,
-  "verification_passed": true
+  "verification_passed": true,
+  "verification_notes": "Adjusted hours to ensure realistic developer estimates"
 }}
 
-EXAMPLE (for budget of 200 hours):
-If you have 10 steps with reusability "none", average is 200/10 = 20h per step.
-Then adjust based on complexity:
-- Simple steps: 10-15h
-- Medium steps: 20-25h
-- Complex steps: 30-40h
-Ensure final sum = exactly 200.0h"""
+EXAMPLE 1 (Budget: 160h, tolerance: ±48h, acceptable range: 112-208h):
+If you have 10 steps with reusability "none", average is 160/10 = 16h per step.
+Adjusted distribution:
+- Simple steps (×3): 10h, 12h, 10h = 32h
+- Medium steps (×5): 16h, 18h, 15h, 17h, 16h = 82h
+- Complex steps (×2): 24h, 22h = 46h
+Total: 32 + 82 + 46 = 160h ✓ (within tolerance)
+
+EXAMPLE 2 (Budget: 200h, tolerance: ±60h, 15 steps mixed reusability):
+5 "full" reusability (0h counted) + 10 "none" (200h total)
+Average: 200/10 = 20h per step (only for "none" steps)
+Adjusted distribution ensures total within 140-260h range"""

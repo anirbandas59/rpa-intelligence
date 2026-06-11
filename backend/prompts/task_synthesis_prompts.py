@@ -103,9 +103,11 @@ Process Summary:
 
 Budget Constraints:
 - Total effort hours: {total_effort_hours}
+- Hour tolerance: {hour_tolerance}h (±{hour_tolerance_percentage}%)
+- Acceptable range: {hour_tolerance_min}h to {hour_tolerance_max}h
 - Complexity class: {complexity_class}
 
-Generate detailed automation steps with hour allocations that sum to exactly {total_effort_hours} hours.
+Generate detailed automation steps with hour allocations within the tolerance range.
 """
 
 
@@ -115,16 +117,37 @@ Your previous synthesis had these VALIDATION ERRORS:
 {validation_errors}
 
 REFLECT on what went wrong:
-1. **Hour sum mismatch**: Did you forget to account for reusability percentages? Did you allocate too many/few hours?
-2. **Context irrelevance**: Did you include activities that don't match the process domain? (e.g., web login for Excel automation)
-3. **Incompleteness**: Did you miss representing some key_activities from the process summary?
-4. **Incorrect reusability**: Did you mark too many steps as "full" or "partial" reusability?
+1. **Hour sum mismatch**:
+   - Did you forget to account for reusability percentages correctly?
+   - Formula: net_hours = Σ(weight_hours where reusability="none") + Σ(weight_hours × 0.5 where reusability="partial")
+   - Did you allocate too many/few hours to individual steps?
+
+2. **Context irrelevance**:
+   - Did you include activities that don't match the process domain?
+   - Example error: Adding web login for Excel-only automation
+   - Check: Do all activities align with key_applications and key_activities?
+
+3. **Incompleteness**:
+   - Did you miss representing some key_activities from the process summary?
+   - Each key_activity should map to at least 1-2 detailed steps
+
+4. **Incorrect reusability**:
+   - Did you mark too many steps as "full" or "partial" reusability?
+   - Guideline: Most steps should be "none" (conservative estimate)
+   - "full" should only be login frameworks, error handling wrappers
+   - "partial" should only be shared components like file readers
 
 CORRECT your synthesis:
-- If hour sum is wrong, adjust step hours proportionally to hit the target
-- If context is wrong, remove irrelevant activities and redistribute hours
-- If incomplete, add missing activities
-- If reusability is wrong, change reusability tags (most steps should be "none")
+- **Hour sum mismatch**: Ask yourself: "Can this task complete if I reduce it by 1 hour? If yes, reduce it."
+  * Hours must be REASONABLE — not too short for developer to complete, not too inflated for business to reject
+  * Adjust step hours proportionally to hit the target
+  * Check each step: is the allocated time realistic for implementation?
+
+- **Context irrelevance**: Remove irrelevant activities and redistribute hours to relevant ones
+
+- **Incompleteness**: Add missing activities and rebalance hours across all steps
+
+- **Incorrect reusability**: Change tags and recalculate net hours (most steps should be "none")
 
 Return ONLY valid JSON with the corrected synthesis.
 """
