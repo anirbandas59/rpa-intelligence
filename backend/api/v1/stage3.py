@@ -28,6 +28,7 @@ import logging
 from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from langsmith import traceable
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,6 +66,20 @@ class LoadFromS2Request(BaseModel):
     """Request model for loading Stage 2 complexity data into Stage 3 inputs."""
 
     prefer_max: bool = Field(True, description="Use max_weeks if true, else min_weeks from S2 effort range")
+
+
+class TaskDecompositionRequest(BaseModel):
+    """Request model for triggering task decomposition."""
+
+    force_regenerate: bool = Field(False, description="Force regeneration even if decomposition already complete")
+
+
+class TaskDecompositionManualEdit(BaseModel):
+    """Request model for manually editing task decomposition results."""
+
+    activities: list[dict] = Field(..., description="Manually edited activities list")
+    total_net_hours: float = Field(..., description="Total net hours (sum verification)")
+    verification_notes: str | None = Field(None, description="Notes about manual edits")
 
 
 def compute_inputs_hash(inputs: dict) -> str:
@@ -265,6 +280,7 @@ async def update_s3_inputs(
     return {"s3_inputs": use_case.s3_inputs}
 
 
+@traceable
 @router.post("/{use_case_id}/s3/runs")
 async def create_s3_run(
     use_case_id: str,
@@ -276,8 +292,8 @@ async def create_s3_run(
     Create Stage 3 timeline run - synchronous calculation, returns timeline immediately.
 
     Calculates 6-phase delivery timeline (Define/Design/Build/SIT/UAT/Deploy) using pure
-    Python date arithmetic. Returns result synchronously in response. Optionally triggers
-    background tasks for task extraction (if document exists) and narrative generation.
+    Python date arithmetic. Returns result synchronously in response. Task decomposition
+    is now decoupled and triggered via separate endpoint POST /s3/task-decomposition.
 
     Args:
         use_case_id: UseCase ID to create run for
@@ -286,10 +302,10 @@ async def create_s3_run(
         current_user: Authenticated user (injected)
 
     Returns:
-        Dict with run_id, status="complete", result (timeline with phases), and task_extraction_status
+        Dict with run_id, status="complete", result (timeline with phases), and task_decomposition_required flag
 
     Raises:
-        HTTPException: 404 if use case not found, 400 if required inputs missing or S2 prerequisite not met,
+        HTTPException: 404 if use case not found, 400 if required inputs missing,
                       500 if timeline calculation fails
     """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
@@ -304,25 +320,6 @@ async def create_s3_run(
         raise HTTPException(status_code=400, detail="effort_weeks required in s3_inputs")
     if "start_date" not in inputs:
         raise HTTPException(status_code=400, detail="start_date required in s3_inputs")
-
-    # CRITICAL PREREQUISITE CHECK (moved BEFORE run creation)
-    # S2 must be complete with process_summary before creating S3 run
-    if not use_case.s2_latest_run_id:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Stage 2 must be complete before running Stage 3. "
-                "S2 provides complexity and process summary required for task extraction."
-            ),
-        )
-
-    s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
-    s2_run = s2_result.scalar_one_or_none()
-    if not s2_run or not s2_run.result.get("process_summary"):
-        raise HTTPException(
-            status_code=400,
-            detail="Stage 2 process summary is required. Re-run S2 with updated extraction to capture process details.",
-        )
 
     effort_weeks = inputs["effort_weeks"]
     start_date_str = inputs["start_date"]
@@ -375,106 +372,13 @@ async def create_s3_run(
     await db.commit()
     await db.refresh(stage_run)
 
-    # Check if document exists for this use case (uploaded during S2)
-    doc_result = await db.execute(
-        select(UploadedFile)
-        .where(UploadedFile.use_case_id == use_case_id)
-        .where(UploadedFile.stage == "s2")
-        .order_by(UploadedFile.created_at.desc())
-        .limit(1)
+    # Check if task decomposition is needed
+    task_extraction = inputs.get("task_extraction")
+    decomposition_required = (
+        not task_extraction
+        or task_extraction.get("extraction_status") != "complete"
+        or not task_extraction.get("verification_passed")
     )
-    uploaded_doc = doc_result.scalar_one_or_none()
-
-    # Also check for pasted text (used in E2E tests and manual entry)
-    pasted_text = use_case.s2_inputs.get("pasted_text") if use_case.s2_inputs else None
-
-    total_effort_hours = effort_weeks * 40  # hours per week
-
-    if uploaded_doc or pasted_text:
-        # Path A: Document OR pasted text exists → run extraction with S2 process context
-        if uploaded_doc:
-            document_path = uploaded_doc.stored_path
-            source = "document"
-        else:
-            # Use pasted text as document_text (will be read by background task)
-            document_path = None
-            source = "pasted_text"
-
-        background_tasks.add_task(
-            run_task_extraction_background,
-            use_case_id=use_case_id,
-            document_path=document_path,
-            pasted_text=pasted_text if not uploaded_doc else None,
-            process_name=use_case.name,
-            total_effort_hours=total_effort_hours,
-            session_id=stage_run.id,
-            process_summary=s2_run.result.get("process_summary"),  # Pass S2 context
-        )
-
-        task_extraction_status = "pending"
-
-        inputs["task_extraction"] = {
-            "extraction_status": "pending",
-            "source": source,
-            "activities": [],
-            "total_net_hours": 0.0,
-            "verification_passed": False,
-        }
-
-    else:
-        # Path B: No document AND no pasted text → MANDATORY synthesis from S2 process_summary
-        from agents.task_synthesis_agent import synthesize_task_extraction
-
-        async def run_synthesis_background():
-            """Background task for synthesis."""
-            from db.session import get_session_factory
-
-            session_factory = get_session_factory()
-            async with session_factory() as session:
-                try:
-                    synthesis_result = await synthesize_task_extraction(
-                        use_case_id=use_case_id,
-                        process_summary=s2_run.result["process_summary"],
-                        total_effort_hours=total_effort_hours,
-                        complexity_class=complexity_class,
-                        session_id=stage_run.id,
-                    )
-
-                    # Update s3_inputs with synthesis result
-                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
-                    uc = uc_result.scalar_one_or_none()
-                    if uc:
-                        uc.s3_inputs["task_extraction"] = synthesis_result
-                        flag_modified(uc, "s3_inputs")
-                        await session.commit()
-
-                    logger.info(f"Task synthesis complete for use case {use_case_id}")
-
-                except Exception as e:
-                    logger.error(f"Task synthesis failed for use case {use_case_id}: {e}")
-                    # Update status to failed
-                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
-                    uc = uc_result.scalar_one_or_none()
-                    if uc and "task_extraction" in uc.s3_inputs:
-                        uc.s3_inputs["task_extraction"]["extraction_status"] = "failed"
-                        uc.s3_inputs["task_extraction"]["error"] = str(e)
-                        flag_modified(uc, "s3_inputs")
-                        await session.commit()
-
-        background_tasks.add_task(run_synthesis_background)
-        task_extraction_status = "synthesizing"
-
-        inputs["task_extraction"] = {
-            "extraction_status": "pending",
-            "source": "s2_summary",
-            "activities": [],
-            "total_net_hours": 0.0,
-            "verification_passed": False,
-        }
-
-    use_case.s3_inputs = inputs
-    flag_modified(use_case, "s3_inputs")
-    await db.commit()
 
     # Fire narrative generation in background (optional)
     background_tasks.add_task(
@@ -493,7 +397,8 @@ async def create_s3_run(
         "run_id": stage_run.id,
         "status": stage_run.status,
         "result": stage_run.result,
-        "task_extraction_status": task_extraction_status,
+        "task_decomposition_required": decomposition_required,
+        "message": "Timeline calculated. Trigger task decomposition separately if needed." if decomposition_required else "Timeline calculated.",
     }
 
 
@@ -656,6 +561,293 @@ async def generate_narrative(
     return {"status": "generating", "message": "Narrative generation started"}
 
 
+@router.post("/{use_case_id}/s3/task-decomposition")
+async def trigger_task_decomposition(
+    use_case_id: str,
+    request: TaskDecompositionRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Trigger task decomposition for Stage 3 - independent from timeline calculation.
+
+    Runs task_decomposition_agent (unified extraction + synthesis) in background with
+    hour-sum constraint enforcement. This endpoint decouples task decomposition from
+    timeline calculation, allowing users to regenerate task breakdown without recalculating timeline.
+
+    Args:
+        use_case_id: UseCase ID to decompose tasks for
+        request: Request with force_regenerate flag
+        background_tasks: FastAPI background task scheduler (injected)
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        Dict with status="running" and message
+
+    Raises:
+        HTTPException: 404 if use case not found, 400 if prerequisites missing (S2, S3 timeline)
+    """
+    result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+    use_case = result.scalar_one_or_none()
+    if not use_case:
+        raise HTTPException(status_code=404, detail="Use case not found")
+
+    # Validate prerequisites
+    if not use_case.s3_latest_run_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Stage 3 timeline must be calculated first. Run POST /s3/runs before task decomposition.",
+        )
+
+    if not use_case.s2_latest_run_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Stage 2 must be complete before task decomposition. S2 provides process summary.",
+        )
+
+    # Fetch S2 run for process_summary
+    s2_result = await db.execute(select(StageRun).where(StageRun.id == use_case.s2_latest_run_id))
+    s2_run = s2_result.scalar_one_or_none()
+    if not s2_run or not s2_run.result.get("process_summary"):
+        raise HTTPException(
+            status_code=400,
+            detail="Stage 2 process summary is required. Re-run S2 to capture process details.",
+        )
+
+    # Check if already complete and not forcing regeneration
+    s3_inputs = use_case.s3_inputs or {}
+    task_extraction = s3_inputs.get("task_extraction")
+    if not request.force_regenerate and task_extraction:
+        if task_extraction.get("extraction_status") == "complete" and task_extraction.get("verification_passed"):
+            return {
+                "status": "already_complete",
+                "message": "Task decomposition already complete. Use force_regenerate=true to regenerate.",
+                "task_extraction": task_extraction,
+            }
+
+    # Calculate total effort hours from S3 inputs
+    effort_weeks = s3_inputs.get("effort_weeks")
+    if not effort_weeks:
+        raise HTTPException(status_code=400, detail="effort_weeks not found in S3 inputs")
+
+    total_effort_hours = effort_weeks * 40
+    complexity_class = s3_inputs.get("complexity_class", "M")
+
+    # Check data sources
+    doc_result = await db.execute(
+        select(UploadedFile)
+        .where(UploadedFile.use_case_id == use_case_id)
+        .where(UploadedFile.stage == "s2")
+        .order_by(UploadedFile.created_at.desc())
+        .limit(1)
+    )
+    uploaded_doc = doc_result.scalar_one_or_none()
+    pasted_text = use_case.s2_inputs.get("pasted_text") if use_case.s2_inputs else None
+
+    if not uploaded_doc and not pasted_text:
+        # Fall back to synthesis from S2 summary
+        source_type = "s2_summary"
+        document_path = None
+        pasted_text_data = None
+    elif uploaded_doc:
+        source_type = "document"
+        document_path = uploaded_doc.stored_path
+        pasted_text_data = None
+    else:
+        source_type = "pasted_text"
+        document_path = None
+        pasted_text_data = pasted_text
+
+    # Mark as running
+    s3_inputs["task_extraction"] = {
+        "extraction_status": "running",
+        "source": source_type,
+        "activities": [],
+        "total_net_hours": 0.0,
+        "verification_passed": False,
+    }
+    use_case.s3_inputs = s3_inputs
+    flag_modified(use_case, "s3_inputs")
+    await db.commit()
+
+    # Dispatch background task
+    if source_type == "s2_summary":
+        # Use synthesis agent
+        from agents.task_synthesis_agent import synthesize_task_extraction
+
+        async def run_synthesis_background():
+            """Background task for synthesis."""
+            from db.session import get_session_factory
+
+            session_factory = get_session_factory()
+            async with session_factory() as session:
+                try:
+                    synthesis_result = await synthesize_task_extraction(
+                        use_case_id=use_case_id,
+                        process_summary=s2_run.result["process_summary"],
+                        total_effort_hours=total_effort_hours,
+                        complexity_class=complexity_class,
+                        session_id=use_case.s3_latest_run_id,
+                    )
+
+                    # Update s3_inputs with synthesis result
+                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
+                    uc = uc_result.scalar_one_or_none()
+                    if uc:
+                        uc.s3_inputs["task_extraction"] = synthesis_result
+                        flag_modified(uc, "s3_inputs")
+                        await session.commit()
+
+                    logger.info(f"Task synthesis complete for use case {use_case_id}")
+
+                except Exception as e:
+                    logger.error(f"Task synthesis failed for use case {use_case_id}: {e}")
+                    # Update status to failed
+                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
+                    uc = uc_result.scalar_one_or_none()
+                    if uc and "task_extraction" in uc.s3_inputs:
+                        uc.s3_inputs["task_extraction"]["extraction_status"] = "failed"
+                        uc.s3_inputs["task_extraction"]["error"] = str(e)
+                        flag_modified(uc, "s3_inputs")
+                        await session.commit()
+
+        background_tasks.add_task(run_synthesis_background)
+    else:
+        # Use extraction agent
+        background_tasks.add_task(
+            run_task_extraction_background,
+            use_case_id=use_case_id,
+            document_path=document_path,
+            pasted_text=pasted_text_data,
+            process_name=use_case.name,
+            total_effort_hours=total_effort_hours,
+            session_id=use_case.s3_latest_run_id,
+            process_summary=s2_run.result.get("process_summary"),
+        )
+
+    logger.info(f"Task decomposition triggered for use case {use_case_id} (source: {source_type})")
+
+    return {
+        "status": "running",
+        "message": f"Task decomposition started in background (source: {source_type})",
+        "source": source_type,
+    }
+
+
+@router.patch("/{use_case_id}/s3/task-decomposition/manual-edit")
+async def manual_edit_task_decomposition(
+    use_case_id: str,
+    edit: TaskDecompositionManualEdit,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Manually edit task decomposition results.
+
+    Allows users to fix validation errors by directly editing activities and hours.
+    Updates s3_inputs.task_extraction with manual edits and marks as manually_corrected.
+
+    Args:
+        use_case_id: UseCase ID to update
+        edit: Manual edit request with activities, hours, and notes
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        Updated task_extraction dict
+
+    Raises:
+        HTTPException: 404 if use case not found, 400 if task_extraction not found
+    """
+    result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+    use_case = result.scalar_one_or_none()
+    if not use_case:
+        raise HTTPException(status_code=404, detail="Use case not found")
+
+    s3_inputs = use_case.s3_inputs or {}
+    if "task_extraction" not in s3_inputs:
+        raise HTTPException(status_code=400, detail="No task decomposition found to edit")
+
+    # Verify hour sum
+    calculated_hours = sum(
+        step.get("weight_hours", 0)
+        for activity in edit.activities
+        for step in activity.get("steps", [])
+        if step.get("reusability") != "full"
+    )
+
+    verification_passed = abs(calculated_hours - edit.total_net_hours) < 0.5
+
+    # Update task_extraction with manual edits
+    s3_inputs["task_extraction"] = {
+        "extraction_status": "complete",
+        "source": s3_inputs["task_extraction"].get("source", "manual"),
+        "source_modified": "manually_corrected",
+        "activities": edit.activities,
+        "total_net_hours": edit.total_net_hours,
+        "verification_passed": verification_passed,
+        "verification_notes": edit.verification_notes or "Manually corrected by user",
+        "edited_by": current_user.id,
+        "edited_at": datetime.now(UTC).isoformat(),
+    }
+
+    use_case.s3_inputs = s3_inputs
+    flag_modified(use_case, "s3_inputs")
+    use_case.updated_at = datetime.now(UTC)
+    await db.commit()
+
+    logger.info(f"Task decomposition manually edited for use case {use_case_id}")
+
+    return {
+        "message": "Task decomposition updated with manual edits",
+        "task_extraction": s3_inputs["task_extraction"],
+    }
+
+
+@router.get("/{use_case_id}/s3/task-decomposition")
+async def get_task_decomposition_status(
+    use_case_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get current task decomposition status and result.
+
+    Returns the latest task_extraction data from s3_inputs with status information.
+
+    Args:
+        use_case_id: UseCase ID to query
+        db: Database session (injected)
+        current_user: Authenticated user (injected)
+
+    Returns:
+        Dict with status and task_extraction data
+
+    Raises:
+        HTTPException: 404 if use case not found
+    """
+    result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
+    use_case = result.scalar_one_or_none()
+    if not use_case:
+        raise HTTPException(status_code=404, detail="Use case not found")
+
+    s3_inputs = use_case.s3_inputs or {}
+    task_extraction = s3_inputs.get("task_extraction")
+
+    if not task_extraction:
+        return {
+            "status": "not_started",
+            "message": "Task decomposition not started yet",
+        }
+
+    return {
+        "status": task_extraction.get("extraction_status", "unknown"),
+        "task_extraction": task_extraction,
+    }
+
+
 @router.post("/{use_case_id}/s3/load-from-s2")
 async def load_from_s2(
     use_case_id: str,
@@ -699,9 +891,16 @@ async def load_from_s2(
     s2_output = s2_run.result
     # S2 result may store scoring data at top level or nested under "scoring"
     scoring = s2_output.get("scoring", s2_output)
+    process_summary = s2_output.get("process_summary", {})
     effort_min = scoring.get("effort_min_weeks")
     effort_max = scoring.get("effort_max_weeks")
     complexity_class = scoring.get("complexity_class")
+    summary = process_summary.get("overall_summary")
+    activities = process_summary.get("key_activities")
+    business_rules = process_summary.get("key_logical_points")
+    target_applications = process_summary.get("key_applications")
+    layouts = process_summary.get("key_layouts")
+    technologies = process_summary.get("key_additional_technologies")
 
     if effort_min is None or complexity_class is None:
         raise HTTPException(status_code=400, detail="Stage 2 result incomplete")
@@ -715,6 +914,12 @@ async def load_from_s2(
     inputs["effort_weeks_source"] = "from_s2"
     inputs["complexity_class"] = complexity_class
     inputs["complexity_class_source"] = "from_s2"
+    inputs["summary"] = summary
+    inputs["activities"] = activities
+    inputs["business_rules"] = business_rules
+    inputs["target_applications"] = target_applications
+    inputs["layouts"] = layouts
+    inputs["technologies"] = technologies
 
     use_case.s3_inputs = inputs
     flag_modified(use_case, "s3_inputs")

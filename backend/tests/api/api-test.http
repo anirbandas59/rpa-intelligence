@@ -346,6 +346,51 @@ Content-Type: application/json
 
 {}
 
+### Trigger Task Decomposition
+# NEW: Decoupled task decomposition - runs in background
+# Extracts activities/steps from document or synthesizes from S2 summary
+POST {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/task-decomposition
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "force_regenerate": false
+}
+
+### Get Task Decomposition Status
+# Poll this endpoint to check completion status
+GET {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/task-decomposition
+Authorization: Bearer {{access_token}}
+
+### Manual Edit Task Decomposition
+# Fix validation errors by manually editing activities and hours
+PATCH {{baseUrl}}/api/{{apiVersion}}/stage3/{{use_case_id}}/s3/task-decomposition/manual-edit
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
+{
+  "activities": [
+    {
+      "name": "User Authentication",
+      "steps": [
+        {
+          "description": "Login to web application",
+          "weight_hours": 8.0,
+          "reusability": "partial"
+        },
+        {
+          "description": "Handle authentication errors",
+          "weight_hours": 4.0,
+          "reusability": "partial"
+        }
+      ],
+      "total_hours": 12.0
+    }
+  ],
+  "total_net_hours": 12.0,
+  "verification_notes": "Manually corrected hour allocation"
+}
+
 #############################################
 # STAGE 4: SPRINT TRACKER
 #############################################

@@ -237,16 +237,32 @@ async def get_readiness(
     s3_phase_calc_status = await check_stage("s3", "s3_inputs", "s3_latest_run_id")
     s4_status = await check_stage("s4", "s4_inputs", "s4_latest_run_id")
 
-    # Stage 3 two-job pattern: separate status for phase_calculator and task_extraction
+    # Stage 3 two-job pattern: nested status for phase_calculator and task_decomposition
     s3_inputs = use_case.s3_inputs or {}
     task_extraction_data = s3_inputs.get("task_extraction", {})
-    task_extraction_status = task_extraction_data.get("extraction_status", "not_ready")
+    task_decomposition_status = task_extraction_data.get("extraction_status", "pending")
+
+    # Map extraction_status to frontend-friendly status
+    if not task_extraction_data:
+        task_decomposition_status = "pending"
+    elif task_decomposition_status == "pending":
+        task_decomposition_status = "pending"
+    elif task_decomposition_status == "running":
+        task_decomposition_status = "running"
+    elif task_decomposition_status == "complete":
+        task_decomposition_status = "complete"
+    elif task_decomposition_status == "failed":
+        task_decomposition_status = "failed"
+    else:
+        task_decomposition_status = "not_required"
 
     return {
         "s1": s1_status,
         "s2": s2_status,
-        "s3": s3_phase_calc_status,
-        "s3_phase_calculator": s3_phase_calc_status,
-        "s3_task_extraction": task_extraction_status,
+        "s3": {
+            "overall": s3_phase_calc_status,
+            "phase_calculator": s3_phase_calc_status,
+            "task_decomposition": task_decomposition_status,
+        },
         "s4": s4_status,
     }
