@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
-S2 → S3 Task Breakdown Flow Test
+S2 → S3 Task Breakdown Flow Test (with Decoupled Task Decomposition)
 
-Validates complete S2 → S3 data flow including task extraction.
+Validates complete S2 → S3 data flow with new decoupled task decomposition endpoint.
+Tests the following workflow:
+1. Verify S2 completion
+2. Load S2 data into S3 inputs
+3. Set timeline parameters
+4. Trigger S3 timeline calculation (synchronous)
+5. Trigger task decomposition (decoupled, asynchronous)
+6. Wait for task decomposition completion
+7. Verify task breakdown constraints
+
 Reuses existing S2 run results from a use-case.
 """
 
@@ -184,8 +193,8 @@ def set_timeline_params():
 
 
 def trigger_s3_run():
-    """Trigger S3 run (timeline + task extraction)"""
-    print_header("STEP 4: Trigger S3 Run (Timeline + Task Extraction)")
+    """Trigger S3 run (timeline calculation only - decoupled from task extraction)"""
+    print_header("STEP 4: Trigger S3 Run (Timeline Calculation)")
 
     resp = requests.post(f"{USE_CASES_BASE}/{UC_ID}/s3/runs", json={}, headers=get_headers())
 
@@ -196,9 +205,11 @@ def trigger_s3_run():
     run_data = resp.json()
     s3_run_id = run_data["run_id"]
     status = run_data["status"]
+    task_decomposition_required = run_data.get("task_decomposition_required", False)
 
     print(f"✓ S3 run created: {s3_run_id}")
     print(f"✓ Status: {status}")
+    print(f"✓ Task decomposition required: {task_decomposition_required}")
 
     if status != "complete":
         print(f"✗ Expected status 'complete', got '{status}'")
@@ -222,15 +233,44 @@ def trigger_s3_run():
     build_sit = result.get("build_sit_window", {})
     print(f"\n✓ Build+SIT Window: {build_sit.get('start_date')} to {build_sit.get('end_date')}")
 
-    results["s3_run"] = {"run_id": s3_run_id, "result": result}
+    results["s3_run"] = {"run_id": s3_run_id, "result": result, "task_decomposition_required": task_decomposition_required}
 
     return s3_run_id
 
 
-def wait_for_task_extraction():
-    """Wait for task extraction background job to complete"""
-    print_header("STEP 5: Wait for Task Extraction (Background Job)")
-    print("Task extraction runs asynchronously (30-120 seconds)...")
+def trigger_task_decomposition():
+    """Trigger task decomposition (NEW decoupled endpoint)"""
+    print_header("STEP 5: Trigger Task Decomposition")
+
+    resp = requests.post(
+        f"{USE_CASES_BASE}/{UC_ID}/s3/task-decomposition",
+        json={"force_regenerate": False},
+        headers=get_headers()
+    )
+
+    if resp.status_code != 200:
+        print(f"✗ Task decomposition trigger failed: {resp.text}")
+        return False
+
+    decomp_data = resp.json()
+    status = decomp_data.get("status")
+    source = decomp_data.get("source")
+
+    print(f"✓ Task decomposition triggered")
+    print(f"✓ Status: {status}")
+    print(f"✓ Source: {source}")
+
+    if status == "already_complete":
+        print("  ℹ️  Task decomposition already complete, using existing result")
+        return True
+
+    return True
+
+
+def wait_for_task_decomposition():
+    """Wait for task decomposition background job to complete"""
+    print_header("STEP 6: Wait for Task Decomposition (Background Job)")
+    print("Task decomposition runs asynchronously (30-120 seconds)...")
     print("Polling readiness endpoint every 5 seconds...\n")
 
     elapsed = 0
@@ -240,29 +280,38 @@ def wait_for_task_extraction():
         time.sleep(POLL_INTERVAL)
         elapsed += POLL_INTERVAL
 
+        # Check nested S3 readiness
         resp = requests.get(f"{BASE_URL}/use-cases/{UC_ID}/readiness", headers=get_headers())
 
         if resp.status_code == 200:
             readiness = resp.json()
-            task_status = readiness.get("s3_task_extraction", "unknown")
-            print(f"  [{elapsed:3d}s] Task extraction status: {task_status}")
+            s3_status = readiness.get("s3", {})
+
+            # Handle both flat and nested structure for backward compatibility
+            if isinstance(s3_status, dict):
+                task_status = s3_status.get("task_decomposition", "unknown")
+            else:
+                # Fallback to old structure
+                task_status = readiness.get("s3_task_extraction", "unknown")
+
+            print(f"  [{elapsed:3d}s] Task decomposition status: {task_status}")
 
             if task_status == "complete":
-                print("\n✓ Task extraction complete!")
+                print("\n✓ Task decomposition complete!")
                 return True
             elif task_status == "failed":
-                print("\n✗ Task extraction failed")
+                print("\n✗ Task decomposition failed")
                 return False
         else:
             print(f"  [{elapsed:3d}s] Readiness check failed: {resp.status_code}")
 
-    print(f"\n✗ Task extraction did not complete within {MAX_WAIT_TIME}s (status: {task_status})")
+    print(f"\n✗ Task decomposition did not complete within {MAX_WAIT_TIME}s (status: {task_status})")
     return False
 
 
 def verify_task_breakdown():
     """Verify task breakdown meets constraints"""
-    print_header("STEP 6: Verify Task Breakdown")
+    print_header("STEP 7: Verify Task Breakdown")
 
     resp = requests.get(f"{USE_CASES_BASE}/{UC_ID}", headers=get_headers())
     if resp.status_code != 200:
@@ -388,17 +437,22 @@ def main():
         if not set_timeline_params():
             sys.exit(1)
 
-        # Step 4: Trigger S3 run
+        # Step 4: Trigger S3 run (timeline calculation only)
         s3_run_id = trigger_s3_run()
         if not s3_run_id:
             sys.exit(1)
 
-        # Step 5: Wait for task extraction
-        if not wait_for_task_extraction():
-            print("\n⚠️  Task extraction did not complete - partial test results")
+        # Step 5: Trigger task decomposition (NEW decoupled endpoint)
+        if not trigger_task_decomposition():
+            print("\n⚠️  Task decomposition trigger failed - partial test results")
+            sys.exit(1)
+
+        # Step 6: Wait for task decomposition
+        if not wait_for_task_decomposition():
+            print("\n⚠️  Task decomposition did not complete - partial test results")
             # Continue to show what we have
         else:
-            # Step 6: Verify task breakdown
+            # Step 7: Verify task breakdown
             if not verify_task_breakdown():
                 sys.exit(1)
 
