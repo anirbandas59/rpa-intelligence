@@ -233,7 +233,10 @@ async def create_s4_run(
     # Get complexity and effort (prefer from inputs, fallback to S3 or S2)
     complexity_class = inputs.get("complexity_class") or s3_inputs.get("complexity_class", "M")
     effort_weeks = inputs.get("effort_weeks") or s3_inputs.get("effort_weeks", 6)
-    total_effort_hours = effort_weeks * 40
+
+    # Use actual task_extraction total_net_hours (not effort_weeks * 40)
+    # This ensures S4 hour sum matches S3 task breakdown
+    total_effort_hours = task_extraction.get("total_net_hours", effort_weeks * 40)
 
     # Get build+SIT window from S3
     if not use_case.s3_latest_run_id:
@@ -519,6 +522,25 @@ async def load_from_s3(
         raise HTTPException(status_code=404, detail="Stage 3 run not found")
 
     s3_output = s3_run.result
+    s3_inputs = use_case.s3_inputs or {}
+
+    # Validate S3 task_extraction prerequisite
+    task_extraction = s3_inputs.get("task_extraction")
+    if not task_extraction:
+        raise HTTPException(
+            status_code=400,
+            detail="No task extraction found in Stage 3. Please complete Stage 3 task decomposition first."
+        )
+    if task_extraction.get("extraction_status") != "complete":
+        raise HTTPException(
+            status_code=400,
+            detail="Task decomposition not complete. Please complete Stage 3 task breakdown first."
+        )
+    if not task_extraction.get("verification_passed"):
+        raise HTTPException(
+            status_code=400,
+            detail="Task decomposition verification failed. Please fix hour sum validation in Stage 3."
+        )
 
     # Update s4_inputs
     inputs = use_case.s4_inputs or {}
@@ -540,10 +562,13 @@ async def load_from_s3(
     use_case.updated_at = datetime.now(UTC)
     await db.commit()
 
-    logger.info(f"Loaded S3 data into S4 inputs for use case {use_case_id}")
+    logger.info(f"Loaded S3 data into S4 inputs for use case {use_case_id} (task_extraction remains in s3_inputs)")
 
     return {
         "message": "Stage 3 data loaded into Stage 4 inputs",
         "s4_inputs": inputs,
         "derived_sprint_count": sprint_count,
+        "task_extraction_status": "ready" if task_extraction.get("verification_passed") else "failed",
+        "task_activities": len(task_extraction.get("activities", [])),
+        "task_total_hours": task_extraction.get("total_net_hours", 0),
     }

@@ -59,8 +59,18 @@ async def group_steps_node(state: TrackerState) -> dict:
     try:
         llm = get_stage_manager("s4")
 
+        # Pre-calculate net_hours for each step (apply reusability factors)
+        # This makes it easier for LLM to group correctly without calculation errors
+        task_extraction_with_net = state["task_extraction"].copy()
+        for activity in task_extraction_with_net.get("activities", []):
+            for step in activity.get("steps", []):
+                weight = step.get("weight_hours", 0)
+                reusability = step.get("reusability", "none")
+                factor = 0 if reusability == "full" else 0.5 if reusability == "partial" else 1
+                step["net_hours"] = round(weight * factor, 2)
+
         # Convert task_extraction dict to JSON string for prompt
-        task_extraction_json = json.dumps(state["task_extraction"], indent=2)
+        task_extraction_json = json.dumps(task_extraction_with_net, indent=2)
 
         system_prompt = S4_GROUP_STEPS_SYSTEM.format(total_effort_hours=state["total_effort_hours"])
 
@@ -111,19 +121,42 @@ def validate_sum_node(state: TrackerState) -> dict:
     )
 
     try:
-        # Parse JSON response
+        # Parse JSON response - handle markdown code blocks and extra text
         cleaned = state["raw_llm_response"].strip()
-        if cleaned.startswith("```"):
+
+        # Remove markdown code blocks
+        if "```json" in cleaned:
+            # Extract content between ```json and ```
+            start_marker = cleaned.find("```json") + 7
+            end_marker = cleaned.find("```", start_marker)
+            if end_marker != -1:
+                cleaned = cleaned[start_marker:end_marker].strip()
+        elif cleaned.startswith("```"):
+            # Generic code block
             lines = cleaned.split("\n")
             cleaned = "\n".join(lines[1:])
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3].strip()
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3].strip()
 
-        # Find JSON object
+        # Find JSON object with brace counting for nested objects
         start_idx = cleaned.find("{")
-        end_idx = cleaned.rfind("}") + 1
-        if start_idx == -1 or end_idx == 0:
+        if start_idx == -1:
             raise LLMProviderError("No JSON object found in LLM response")
+
+        # Count braces to find matching closing brace
+        brace_count = 0
+        end_idx = start_idx
+        for i in range(start_idx, len(cleaned)):
+            if cleaned[i] == "{":
+                brace_count += 1
+            elif cleaned[i] == "}":
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i + 1
+                    break
+
+        if brace_count != 0:
+            raise LLMProviderError("Unmatched braces in JSON response")
 
         json_str = cleaned[start_idx:end_idx]
         parsed = json.loads(json_str)
