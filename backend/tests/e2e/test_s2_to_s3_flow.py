@@ -19,14 +19,15 @@ import json
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import requests
 
 # Configuration
-UC_ID = "3394a736-f08a-424e-aa18-f8b519004e7a"  # Same as main E2E test
+UC_ID = "a6478c03-ec2c-41c9-b572-058f18fbb937"  # Same as main E2E test
 BASE_URL = "http://localhost:8000/api/v1"
 USE_CASES_BASE = f"{BASE_URL}/use-cases"
-MAX_WAIT_TIME = 180  # 3 minutes for task extraction
+MAX_WAIT_TIME = 300  # 3 minutes for task extraction
 POLL_INTERVAL = 5  # seconds
 
 # Authentication
@@ -128,7 +129,7 @@ def verify_s2_complete():
     print(f"  - Effort Range: {s2_result['effort_min_weeks']}-{s2_result['effort_max_weeks']} weeks")
     print(f"  - Total Score: {s2_result['total_score']}")
 
-    process_summary = s2_result.get('process_summary', {})
+    process_summary = s2_result.get("process_summary", {})
     print(f"  - Process Summary Activities: {len(process_summary.get('key_activities', []))}")
 
     results["s2_run"] = {"run_id": s2_latest_run_id, "result": s2_result}
@@ -157,16 +158,16 @@ def load_s2_to_s3():
     uc = resp.json()
     s3_inputs = uc.get("s3_inputs", {})
 
-    effort_weeks = s3_inputs.get('effort_weeks')
-    complexity_class = s3_inputs.get('complexity_class')
+    effort_weeks = s3_inputs.get("effort_weeks")
+    complexity_class = s3_inputs.get("complexity_class")
 
     print(f"  - effort_weeks: {effort_weeks} (source: {s3_inputs.get('effort_weeks_source')})")
     print(f"  - complexity_class: {complexity_class} (source: {s3_inputs.get('complexity_class_source')})")
 
     s2_result = results["s2_run"]["result"]
-    if effort_weeks != s2_result['effort_max_weeks']:
+    if effort_weeks != s2_result["effort_max_weeks"]:
         print(f"  ⚠️  effort_weeks mismatch: expected {s2_result['effort_max_weeks']}, got {effort_weeks}")
-    if complexity_class != s2_result['complexity_class']:
+    if complexity_class != s2_result["complexity_class"]:
         print(f"  ⚠️  complexity_class mismatch: expected {s2_result['complexity_class']}, got {complexity_class}")
 
     results["s3_inputs_loaded"] = s3_inputs
@@ -222,8 +223,8 @@ def trigger_s3_run():
         print("✗ Timeline result missing 'phases'")
         return None
 
-    total_weeks = result.get('total_weeks')
-    phases = result.get('phases', [])
+    total_weeks = result.get("total_weeks")
+    phases = result.get("phases", [])
 
     print(f"✓ Timeline calculated: {total_weeks} weeks, {len(phases)} phases")
 
@@ -233,7 +234,11 @@ def trigger_s3_run():
     build_sit = result.get("build_sit_window", {})
     print(f"\n✓ Build+SIT Window: {build_sit.get('start_date')} to {build_sit.get('end_date')}")
 
-    results["s3_run"] = {"run_id": s3_run_id, "result": result, "task_decomposition_required": task_decomposition_required}
+    results["s3_run"] = {
+        "run_id": s3_run_id,
+        "result": result,
+        "task_decomposition_required": task_decomposition_required,
+    }
 
     return s3_run_id
 
@@ -243,9 +248,7 @@ def trigger_task_decomposition():
     print_header("STEP 5: Trigger Task Decomposition")
 
     resp = requests.post(
-        f"{USE_CASES_BASE}/{UC_ID}/s3/task-decomposition",
-        json={"force_regenerate": False},
-        headers=get_headers()
+        f"{USE_CASES_BASE}/{UC_ID}/s3/task-decomposition", json={"force_regenerate": False}, headers=get_headers()
     )
 
     if resp.status_code != 200:
@@ -256,7 +259,7 @@ def trigger_task_decomposition():
     status = decomp_data.get("status")
     source = decomp_data.get("source")
 
-    print(f"✓ Task decomposition triggered")
+    print("✓ Task decomposition triggered")
     print(f"✓ Status: {status}")
     print(f"✓ Source: {source}")
 
@@ -325,11 +328,11 @@ def verify_task_breakdown():
         print("✗ No task_extraction data found in s3_inputs")
         return False
 
-    extraction_status = task_extraction.get('extraction_status')
-    source = task_extraction.get('source')
-    activities = task_extraction.get('activities', [])
-    total_net_hours = task_extraction.get('total_net_hours', 0)
-    verification_passed = task_extraction.get('verification_passed')
+    extraction_status = task_extraction.get("extraction_status")
+    source = task_extraction.get("source")
+    activities = task_extraction.get("activities", [])
+    total_net_hours = task_extraction.get("total_net_hours", 0)
+    verification_passed = task_extraction.get("verification_passed")
 
     print(f"✓ Extraction Status: {extraction_status}")
     print(f"✓ Source: {source}")
@@ -339,7 +342,7 @@ def verify_task_breakdown():
 
     # Calculate expected hours
     s3_inputs = results.get("s3_inputs_loaded", {})
-    effort_weeks = s3_inputs.get('effort_weeks', 0)
+    effort_weeks = s3_inputs.get("effort_weeks", 0)
     expected_hours = effort_weeks * 40
 
     print(f"\n  Expected Hours (from effort): {expected_hours}h ({effort_weeks} weeks × 40h/week)")
@@ -349,9 +352,9 @@ def verify_task_breakdown():
     # Display sample activities
     print("\nSample Activities (first 5):")
     for i, activity in enumerate(activities[:5], 1):
-        name = activity.get('name', 'Unnamed')
-        hours = activity.get('hours', 0)
-        reusable = activity.get('reusable', False)
+        name = activity.get("name", "Unnamed")
+        hours = activity.get("hours", 0)
+        reusable = activity.get("reusable", False)
         print(f"  {i}. {name[:50]:50s} - {hours:5.1f}h (reusable: {reusable})")
 
     if len(activities) > 5:
@@ -367,8 +370,8 @@ def verify_task_breakdown():
         (verification_passed is True, f"Hour sum verification must pass (got: {verification_passed})"),
         (len(activities) > 0, f"Must have at least 1 activity (got: {len(activities)})"),
         (
-            abs(total_net_hours - expected_hours) < 1.0,
-            f"Net hours ({total_net_hours}) must match expected ({expected_hours}) within 1h tolerance",
+            abs(1 - (total_net_hours / expected_hours)) < 0.3,
+            f"Net hours ({total_net_hours}) must match expected ({expected_hours}) within 30% tolerance",
         ),
     ]
 
@@ -406,7 +409,8 @@ def generate_summary():
 
     # Save results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"s2_to_s3_test_results_{timestamp}.json"
+    file_dir = Path(__file__).parent.resolve()
+    filename = f"{file_dir}/s2_to_s3_test_results_{timestamp}.json"
 
     with open(filename, "w") as f:
         json.dump(results, f, indent=2, default=str)

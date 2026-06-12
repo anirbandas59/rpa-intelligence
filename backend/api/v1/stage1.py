@@ -36,6 +36,7 @@ from api.dependencies import get_current_user, get_db, get_redis, get_session_ma
 from core.batch_scorer import BatchScorer
 from core.exceptions import ScoringValidationError
 from db.models import StageRun, UseCase, User
+from llm.manager import get_model, get_stage_manager
 from services.assessment_service import AssessmentService
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,7 @@ async def create_s1_run(
     """
     result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
     use_case = result.scalar_one_or_none()
+    s1_model = get_stage_manager("s1")
 
     if not use_case:
         raise HTTPException(status_code=404, detail="UseCase not found")
@@ -206,9 +208,7 @@ async def create_s1_run(
     inputs_hash = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
 
     # Count existing runs for run_number
-    count_result = await db.execute(
-        select(StageRun).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s1")
-    )
+    count_result = await db.execute(select(StageRun).where(StageRun.use_case_id == use_case_id, StageRun.stage == "s1"))
     run_number = len(count_result.scalars().all()) + 1
 
     # Create StageRun record immediately (before background task)
@@ -219,7 +219,7 @@ async def create_s1_run(
         inputs_snapshot=inputs,
         inputs_hash=inputs_hash,
         result={},
-        model_used=request.model,
+        model_used=get_model(s1_model)["name"],
         status="running",
     )
 
@@ -316,9 +316,7 @@ async def get_s1_run(
         HTTPException: 404 if run not found or doesn't belong to this use case
     """
     result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1")
     )
     run = result.scalar_one_or_none()
 
@@ -521,8 +519,7 @@ async def backfill_from_s2(
         return {
             "status": "suggestions_generated",
             "suggestions": suggestions,
-            "note": "Review and manually apply these suggestions via the"
-            " override endpoint if appropriate.",
+            "note": "Review and manually apply these suggestions via the override endpoint if appropriate.",
         }
 
     except Exception as e:
@@ -609,9 +606,7 @@ async def batch_score_use_cases(
         model=request.model,
     )
 
-    logger.info(
-        f"Batch {batch_id}: Queued {len(request.use_case_ids)} use cases for project {project_id}"
-    )
+    logger.info(f"Batch {batch_id}: Queued {len(request.use_case_ids)} use cases for project {project_id}")
 
     return BatchScoreResponse(
         batch_id=batch_id,
@@ -702,16 +697,12 @@ async def set_current_run(
 
     # Verify run exists and belongs to this use case
     run_result = await db.execute(
-        select(StageRun).where(
-            StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1"
-        )
+        select(StageRun).where(StageRun.id == run_id, StageRun.use_case_id == use_case_id, StageRun.stage == "s1")
     )
     stage_run = run_result.scalar_one_or_none()
 
     if not stage_run:
-        raise HTTPException(
-            status_code=404, detail="Run not found or does not belong to this use case"
-        )
+        raise HTTPException(status_code=404, detail="Run not found or does not belong to this use case")
 
     # Update latest_run_id pointer
     use_case.s1_latest_run_id = run_id
@@ -788,17 +779,17 @@ Return ONLY the explanation text - no JSON, no markdown, no preamble."""
     user_prompt = f"""Explain this override:
 
 Use Case: {use_case.name}
-Description: {use_case.description or 'N/A'}
+Description: {use_case.description or "N/A"}
 
 Override Reason: {override_reason}
 
 Scores After Override:
-- Technical Feasibility: {result_data.get('technical_feasibility', 0)}/40
-- Migration Effort: {result_data.get('migration_effort', 0)}/25
-- Platform Suitability: {result_data.get('platform_suitability', 0)}/20
-- Risk: {result_data.get('risk', 0)}/15
-- Total: {result_data.get('total_score', 0)}/100
-- Decision: {result_data.get('migration_decision', 'N/A')}
+- Technical Feasibility: {result_data.get("technical_feasibility", 0)}/40
+- Migration Effort: {result_data.get("migration_effort", 0)}/25
+- Platform Suitability: {result_data.get("platform_suitability", 0)}/20
+- Risk: {result_data.get("risk", 0)}/15
+- Total: {result_data.get("total_score", 0)}/100
+- Decision: {result_data.get("migration_decision", "N/A")}
 
 Write a clear explanation combining the context, reason, and resulting decision."""
 

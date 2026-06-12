@@ -280,9 +280,11 @@ async def create_s4_run(
     )
 
     db.add(stage_run)
-    use_case.s4_latest_run_id = stage_run.id
+    await db.flush()  # Generate stage_run.id without committing transaction
+    use_case.s4_latest_run_id = stage_run.id  # Now ID exists
     use_case.updated_at = datetime.now(UTC)
-    await db.commit()
+    await db.commit()  # Commit both stage_run AND updated use_case
+    await db.refresh(use_case)  # Refresh use_case to ensure in-memory matches DB
     await db.refresh(stage_run)
 
     # Fire background task

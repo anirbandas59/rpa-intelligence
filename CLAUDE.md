@@ -70,6 +70,34 @@ cd backend && uv run alembic upgrade head
 
 ---
 
+## Hour Constraint Semantics
+
+### Reusability Factor
+Task extraction applies reusability multipliers to step hours:
+
+| Reusability | Factor | Meaning | Example |
+|-------------|--------|---------|---------|
+| `"none"` | 1.0 (100%) | Fully custom work | Building new API integration from scratch |
+| `"partial"` | 0.5 (50%) | Adapted from reusable component | Customizing existing login module for new system |
+| `"full"` | 0.0 (0%) | Existing reusable component | Using standard logging library as-is |
+
+### Calculation Formula
+```
+total_net_hours = Σ(step.weight_hours × reusability_factor)
+```
+
+### Hour Constraint
+- **Target:** `total_net_hours ≈ effort_weeks × 40`
+- **Tolerance:** ±30% (configurable via `HOUR_TOLERANCE_PERCENTAGE` env var)
+- **Example:** 5 weeks → 200h target → acceptable range: 140h-260h
+
+### Enforcement
+- **Location:** `backend/agents/task_decomposition_agent.py` (validate_hour_sum_node)
+- **Retries:** Max 2 attempts if constraint violated
+- **Failure:** If >2 retries, task extraction fails and marks status as "failed"
+
+---
+
 ## Stage Architecture
 
 Each stage is an **independent state machine**. Stages do not gate each other.

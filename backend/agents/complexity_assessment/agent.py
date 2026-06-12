@@ -20,6 +20,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langsmith import traceable
 
 from config.logging_config import get_logger
 from core.constants import RPATool
@@ -240,6 +241,7 @@ _graph = _build_graph()
 # ==================== PUBLIC FUNCTION ====================
 
 
+@traceable
 def run(
     process_analysis_state: dict,
     session_id: str | None = None,

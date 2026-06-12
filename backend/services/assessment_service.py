@@ -28,6 +28,7 @@ import hashlib
 import json
 import logging
 
+from langsmith import traceable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -185,6 +186,7 @@ class AssessmentService:
             logger.debug(f"[memory] Context retrieval skipped: {e}")
             return ""
 
+    @traceable
     async def _score_single_use_case(self, use_case_data: dict) -> dict:
         """Score a single use-case asynchronously with memory-augmented prompts."""
         name = use_case_data.get("name", "")
@@ -209,9 +211,7 @@ class AssessmentService:
             parsed = self._parse_json_response(raw_response)
             result = self._safe_defaults(parsed)
 
-            logger.info(
-                f"Scored use-case: {use_case_data.get('name')} → {result['migration_decision']}"
-            )
+            logger.info(f"Scored use-case: {use_case_data.get('name')} → {result['migration_decision']}")
             return result
 
         except Exception as e:
@@ -399,9 +399,7 @@ class AssessmentService:
         if not use_case or not use_case.s1_latest_run_id:
             return []
 
-        run_result = await self.db.execute(
-            select(StageRun).where(StageRun.id == use_case.s1_latest_run_id)
-        )
+        run_result = await self.db.execute(select(StageRun).where(StageRun.id == use_case.s1_latest_run_id))
         stage_run = run_result.scalar_one_or_none()
 
         if not stage_run:

@@ -8,7 +8,7 @@ Create Date: 2026-05-28 15:54:23.503544
 
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -44,7 +44,7 @@ def upgrade() -> None:
             "temperature": 0.3,
             "max_tokens": 1000,
             "is_active": True,
-            "updated_at": datetime.now(UTC),
+            "updated_at": datetime.utcnow(),
         },
         {
             "id": str(uuid.uuid4()),
@@ -53,7 +53,7 @@ def upgrade() -> None:
             "temperature": 0.3,
             "max_tokens": 500,
             "is_active": True,
-            "updated_at": datetime.now(UTC),
+            "updated_at": datetime.utcnow(),
         },
         {
             "id": str(uuid.uuid4()),
@@ -62,7 +62,7 @@ def upgrade() -> None:
             "temperature": 0.2,
             "max_tokens": 800,
             "is_active": True,
-            "updated_at": datetime.now(UTC),
+            "updated_at": datetime.utcnow(),
         },
         {
             "id": str(uuid.uuid4()),
@@ -71,7 +71,7 @@ def upgrade() -> None:
             "temperature": 0.5,
             "max_tokens": 1500,
             "is_active": True,
-            "updated_at": datetime.now(UTC),
+            "updated_at": datetime.utcnow(),
         },
         {
             "id": str(uuid.uuid4()),
@@ -80,7 +80,7 @@ def upgrade() -> None:
             "temperature": 0.4,
             "max_tokens": 2000,
             "is_active": True,
-            "updated_at": datetime.now(UTC),
+            "updated_at": datetime.utcnow(),
         },
     ]
 

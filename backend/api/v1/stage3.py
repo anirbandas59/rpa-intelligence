@@ -144,58 +144,58 @@ async def generate_narrative_background(
             logger.error(f"Failed to generate narrative for run {run_id}: {e}")
 
 
-async def run_task_extraction_background(
+async def run_task_decomposition_background(
     use_case_id: str,
-    process_name: str,
     total_effort_hours: float,
+    complexity_class: str,
     session_id: str,
     document_path: str | None = None,
     pasted_text: str | None = None,
-    process_summary: dict | None = None,  # Process context from Stage 2
+    process_summary: dict | None = None,
 ):
     """
-    Extract activity breakdown from document/text with hour-sum constraint using task extraction agent.
+    Run unified task decomposition agent (extraction OR synthesis) in background.
 
-    Runs task_extraction_agent (Sonnet + LangGraph) to decompose process into activities
-    with hours and reusability tags. Enforces CRITICAL constraint: sum of non-reusable
-    hours must equal total_effort_hours. Updates s3_inputs.task_extraction on completion.
+    Runs the unified task_decomposition_agent (Sonnet + LangGraph) to decompose process
+    into activities with hours and reusability tags. Automatically chooses extraction
+    (if document_text available) or synthesis (from process_summary). Enforces hour-sum
+    constraint with configurable tolerance.
 
     Args:
         use_case_id: UseCase ID to update
-        process_name: Process name for context
         total_effort_hours: Total effort constraint (effort_weeks * 40)
+        complexity_class: Complexity class from S2 (XS/S/M/L/XL)
         session_id: Session ID for logging (typically run_id)
         document_path: Path to uploaded document (from S2) - optional
         pasted_text: Pasted process description (from S2) - optional
-        process_summary: Process context from Stage 2
+        process_summary: Process context from Stage 2 - required
 
     Flow:
-    1. Read document text from file OR use pasted_text
-    2. Run task_extraction_agent with hour constraint
+    1. Read document text from file OR use pasted_text (if available)
+    2. Run unified task_decomposition_agent with hour constraint
     3. Update s3_inputs.task_extraction with result
     4. On failure: mark extraction_status as "failed"
     """
-    from agents.task_extraction_agent import run_task_extraction_agent
+    from agents.task_decomposition_agent import run_task_decomposition
 
     session_factory = get_session_factory()
     async with session_factory() as db:
         try:
-            # Get document text from file or pasted text
+            # Get document text from file or pasted text (optional)
+            doc_text = None
             if document_path:
                 doc_text = process_document(document_path)
             elif pasted_text:
                 doc_text = pasted_text
-            else:
-                raise ValueError("Either document_path or pasted_text must be provided")
 
-            # Run task extraction agent
-            result = await run_task_extraction_agent(
+            # Run unified task decomposition agent
+            result = await run_task_decomposition(
                 use_case_id=use_case_id,
-                document_text=doc_text,
-                process_name=process_name,
                 total_effort_hours=total_effort_hours,
+                complexity_class=complexity_class,
                 session_id=session_id,
-                process_summary=process_summary,  # NEW: Pass S2 context
+                document_text=doc_text,
+                process_summary=process_summary,
             )
 
             # Update s3_inputs with result
@@ -207,10 +207,10 @@ async def run_task_extraction_background(
                 use_case.s3_inputs = inputs
                 flag_modified(use_case, "s3_inputs")
                 await db.commit()
-                logger.info(f"Task extraction completed for use case {use_case_id}")
+                logger.info(f"Task decomposition completed for use case {use_case_id}")
 
         except Exception as e:
-            logger.error(f"Task extraction failed for use case {use_case_id}: {e}")
+            logger.error(f"Task decomposition failed for use case {use_case_id}: {e}")
             # Mark as failed in s3_inputs
             uc_result = await db.execute(select(UseCase).where(UseCase.id == use_case_id))
             use_case = uc_result.scalar_one_or_none()
@@ -672,60 +672,17 @@ async def trigger_task_decomposition(
     flag_modified(use_case, "s3_inputs")
     await db.commit()
 
-    # Dispatch background task
-    if source_type == "s2_summary":
-        # Use synthesis agent
-        from agents.task_synthesis_agent import synthesize_task_extraction
-
-        async def run_synthesis_background():
-            """Background task for synthesis."""
-            from db.session import get_session_factory
-
-            session_factory = get_session_factory()
-            async with session_factory() as session:
-                try:
-                    synthesis_result = await synthesize_task_extraction(
-                        use_case_id=use_case_id,
-                        process_summary=s2_run.result["process_summary"],
-                        total_effort_hours=total_effort_hours,
-                        complexity_class=complexity_class,
-                        session_id=use_case.s3_latest_run_id,
-                    )
-
-                    # Update s3_inputs with synthesis result
-                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
-                    uc = uc_result.scalar_one_or_none()
-                    if uc:
-                        uc.s3_inputs["task_extraction"] = synthesis_result
-                        flag_modified(uc, "s3_inputs")
-                        await session.commit()
-
-                    logger.info(f"Task synthesis complete for use case {use_case_id}")
-
-                except Exception as e:
-                    logger.error(f"Task synthesis failed for use case {use_case_id}: {e}")
-                    # Update status to failed
-                    uc_result = await session.execute(select(UseCase).where(UseCase.id == use_case_id))
-                    uc = uc_result.scalar_one_or_none()
-                    if uc and "task_extraction" in uc.s3_inputs:
-                        uc.s3_inputs["task_extraction"]["extraction_status"] = "failed"
-                        uc.s3_inputs["task_extraction"]["error"] = str(e)
-                        flag_modified(uc, "s3_inputs")
-                        await session.commit()
-
-        background_tasks.add_task(run_synthesis_background)
-    else:
-        # Use extraction agent
-        background_tasks.add_task(
-            run_task_extraction_background,
-            use_case_id=use_case_id,
-            document_path=document_path,
-            pasted_text=pasted_text_data,
-            process_name=use_case.name,
-            total_effort_hours=total_effort_hours,
-            session_id=use_case.s3_latest_run_id,
-            process_summary=s2_run.result.get("process_summary"),
-        )
+    # Dispatch background task - unified agent handles both extraction and synthesis
+    background_tasks.add_task(
+        run_task_decomposition_background,
+        use_case_id=use_case_id,
+        total_effort_hours=total_effort_hours,
+        complexity_class=complexity_class,
+        session_id=use_case.s3_latest_run_id,
+        document_path=document_path,
+        pasted_text=pasted_text_data,
+        process_summary=s2_run.result.get("process_summary"),
+    )
 
     logger.info(f"Task decomposition triggered for use case {use_case_id} (source: {source_type})")
 

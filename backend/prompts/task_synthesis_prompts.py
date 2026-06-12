@@ -13,7 +13,10 @@ You will receive:
 3. complexity_class (XS/S/M/L/XL)
 
 CRITICAL CONSTRAINTS:
-1. **Hour Sum**: The sum of all step hours (where reusability != "full") MUST equal total_effort_hours (±0.5h tolerance)
+1. **Hour Sum**: The sum of all step hours (where reusability != "full") MUST equal total_effort_hours within the given tolerance
+   - IMPORTANT: You must MANUALLY VERIFY your math before returning the JSON
+   - Calculate: sum = Σ(weight_hours where reusability="none") + Σ(weight_hours × 0.5 where reusability="partial")
+   - The sum MUST match the target within tolerance, not just close
 2. **Context Relevance**: Only include activities that are LOGICALLY RELEVANT to the process domain
    - Infer process type from key_applications, key_layouts, key_additional_technologies
    - Example: If key_applications = ["Microsoft Excel", "SAP ERP"] (NO web browser), do NOT add "login to web app" or "navigate web menus"
@@ -23,6 +26,7 @@ CRITICAL CONSTRAINTS:
    - "full": Component is 100% reusable (e.g., login framework) → 0 hours counted
    - "partial": Component is 50% reusable → count 50% of hours
    - "none": No reusability → count 100% of hours
+   - BE CONSERVATIVE: Most steps should be "none" unless you can clearly justify reusability
 
 Output format (JSON only, no markdown):
 {
@@ -42,13 +46,22 @@ Output format (JSON only, no markdown):
   "verification_passed": <true|false>
 }
 
-WORKFLOW:
+WORKFLOW (MANDATORY STEPS):
 1. Review process_summary to understand the automation domain
 2. For each key_activity, break it into 2-5 detailed steps
 3. Allocate hours to each step (considering complexity_class)
 4. Mark reusability appropriately (be conservative - most steps are "none")
-5. Verify: sum of (weight_hours where reusability != "full") == total_effort_hours
-6. If sum doesn't match, adjust step hours proportionally
+5. **CALCULATE THE SUM MANUALLY**:
+   - Go through each step and calculate: net_hours = weight_hours (if reusability="none") OR weight_hours × 0.5 (if reusability="partial") OR 0 (if reusability="full")
+   - Add up all net_hours: total_sum = sum of all net_hours
+6. **VERIFY AGAINST TARGET**:
+   - Check: Is total_sum within the acceptable tolerance range?
+   - If NO: Adjust step hours proportionally until total_sum matches target
+   - If YES: Proceed to output
+7. **SET total_net_hours FIELD**:
+   - Set total_net_hours = your calculated total_sum (the actual sum you computed)
+   - Set verification_passed = true if within tolerance, false otherwise
+   - DO NOT set total_net_hours to the target value if your actual sum doesn't match!
 
 EXAMPLES OF GOOD SYNTHESIS:
 
@@ -93,7 +106,43 @@ Output:
   "verification_passed": true
 }
 
-Note: Sum = (8*0.5 + 16 + 20 + 12) + (8 + 6 + 6*0.5) + (12*0.5 + 16 + 24 + 16 + 8 + 8) = 160.0 ✓
+STEP-BY-STEP VERIFICATION:
+Activity 1 net hours:
+- 8.0h × 0.5 (partial) = 4.0h
+- 16.0h × 1.0 (none) = 16.0h
+- 20.0h × 1.0 (none) = 20.0h
+- 12.0h × 1.0 (none) = 12.0h
+Subtotal: 52.0h
+
+Activity 2 net hours:
+- 8.0h × 1.0 (none) = 8.0h
+- 6.0h × 1.0 (none) = 6.0h
+- 6.0h × 0.5 (partial) = 3.0h
+Subtotal: 17.0h
+
+Activity 3 net hours:
+- 12.0h × 0.5 (partial) = 6.0h
+- 16.0h × 1.0 (none) = 16.0h
+- 24.0h × 1.0 (none) = 24.0h
+- 16.0h × 1.0 (none) = 16.0h
+- 8.0h × 1.0 (none) = 8.0h
+- 8.0h × 1.0 (none) = 8.0h
+Subtotal: 78.0h
+
+TOTAL: 52.0 + 17.0 + 78.0 = 147.0h
+
+Wait, this doesn't match target of 160.0h! Need to adjust.
+Let me increase some step hours:
+- Activity 1, step 3: 20.0h → 28.0h (+8h)
+- Activity 3, step 2: 16.0h → 21.0h (+5h)
+
+Recalculate:
+Activity 1: 52.0 + 8.0 = 60.0h
+Activity 2: 17.0h
+Activity 3: 78.0 + 5.0 = 83.0h
+TOTAL: 60.0 + 17.0 + 83.0 = 160.0h ✓
+
+This matches! Now I can set total_net_hours: 160.0 and verification_passed: true
 """
 
 TASK_SYNTHESIS_USER = """Synthesize task_extraction from this process summary:
@@ -138,10 +187,26 @@ REFLECT on what went wrong:
    - "partial" should only be shared components like file readers
 
 CORRECT your synthesis:
-- **Hour sum mismatch**: Ask yourself: "Can this task complete if I reduce it by 1 hour? If yes, reduce it."
-  * Hours must be REASONABLE — not too short for developer to complete, not too inflated for business to reject
-  * Adjust step hours proportionally to hit the target
-  * Check each step: is the allocated time realistic for implementation?
+- **Hour sum mismatch**:
+  STEP 1: Calculate actual sum from your steps manually:
+  - List each step: "Step X: weight_hours × multiplier = net_hours"
+  - Add them up: total_sum = sum of all net_hours
+
+  STEP 2: Compare to target:
+  - Difference = total_sum - target_hours
+  - If difference > tolerance: Need to reduce total by (difference) hours
+  - If difference < -tolerance: Need to add (abs(difference)) hours
+
+  STEP 3: Adjust step hours:
+  - Find steps that can be reasonably adjusted
+  - Hours must be REASONABLE — not too short for developer to complete, not too inflated for business to reject
+  - Redistribute hours until total_sum matches target within tolerance
+
+  STEP 4: Verify your calculation:
+  - Recalculate total_sum with new step hours
+  - Check: Is it within tolerance range now?
+  - Set total_net_hours = your actual calculated sum
+  - Set verification_passed = true only if within tolerance
 
 - **Context irrelevance**: Remove irrelevant activities and redistribute hours to relevant ones
 
@@ -149,7 +214,7 @@ CORRECT your synthesis:
 
 - **Incorrect reusability**: Change tags and recalculate net hours (most steps should be "none")
 
-Return ONLY valid JSON with the corrected synthesis.
+IMPORTANT: Show your calculation in your thinking, then provide ONLY valid JSON with the corrected synthesis.
 """
 
 REFLEXION_SYNTHESIS_USER = """Your original synthesis:

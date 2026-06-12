@@ -48,6 +48,7 @@ import time
 from collections.abc import Callable
 from typing import TypeVar
 
+from langsmith import traceable
 from pydantic import BaseModel
 
 from config import get_settings
@@ -103,9 +104,7 @@ class LLMManager:
         settings = get_settings()
 
         # Use provided names or fall back to settings defaults
-        self._provider_name = (
-            provider_name.lower() if provider_name else settings.default_llm_provider.lower()
-        )
+        self._provider_name = provider_name.lower() if provider_name else settings.default_llm_provider.lower()
         self._model_name = model_name if model_name else settings.default_llm_model
 
         # Initialize tracking
@@ -116,10 +115,10 @@ class LLMManager:
         self._langsmith_enabled = False
         if settings.langsmith_api_key:
             try:
-                import os
-                os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
-                os.environ["LANGCHAIN_TRACING_V2"] = "true"
-                os.environ["LANGCHAIN_PROJECT"] = "rpa-intelligence"
+                # import os
+                # os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
+                # os.environ["LANGCHAIN_TRACING_V2"] = "true"
+                # os.environ["LANGCHAIN_PROJECT"] = "rpa-intelligence"
                 self._langsmith_enabled = True
                 self.logger.info("LangSmith tracing enabled")
             except Exception as e:
@@ -130,9 +129,7 @@ class LLMManager:
         # Build the provider
         self._provider = self._build_provider()
 
-        self.logger.debug(
-            f"LLMManager initialized | provider={self._provider_name} | model={self._model_name}"
-        )
+        self.logger.debug(f"LLMManager initialized | provider={self._provider_name} | model={self._model_name}")
 
     def _build_provider(self) -> BaseLLMProvider:
         """
@@ -174,8 +171,7 @@ class LLMManager:
 
         else:
             raise LLMProviderError(
-                f"Unknown LLM provider: {self._provider_name}. "
-                "Valid options: anthropic | openai | watsonx | ollama"
+                f"Unknown LLM provider: {self._provider_name}. Valid options: anthropic | openai | watsonx | ollama"
             )
 
     def _execute_with_retry(
@@ -295,6 +291,7 @@ class LLMManager:
             raise last_error
         raise LLMProviderError(f"Failed to execute LLM operation after {max_retries} retries")
 
+    @traceable(run_type="llm")
     async def complete_async(
         self,
         prompt: str,
@@ -318,6 +315,7 @@ class LLMManager:
             )
         return response.content
 
+    @traceable(run_type="llm")
     def complete(
         self,
         prompt: str,
@@ -348,6 +346,7 @@ class LLMManager:
         )
         return response.content
 
+    @traceable(run_type="llm")
     def complete_structured(
         self,
         prompt: str,
@@ -479,3 +478,7 @@ def get_stage_manager(stage: str) -> LLMManager:
         _stage_managers[stage] = LLMManager(model_name=model)
 
     return _stage_managers[stage]
+
+
+def get_model(mgr: LLMManager) -> dict[str, str]:
+    return {"name": mgr._model_name, "provider": mgr._provider_name}

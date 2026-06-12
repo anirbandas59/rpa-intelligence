@@ -19,6 +19,7 @@ import { StalenessIndicator } from "@/components/shared/StalenessIndicator";
 import { StageHeader } from "@/components/shared/StageHeader";
 import { Card, Btn, SectionLabel, Pill } from "@/components/rpa";
 import { Icon } from "@/components/shared/icons";
+import { TaskEditModal } from "@/components/stage3/TaskEditModal";
 import { Loader2, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { spacing } from "@/lib/design-tokens";
@@ -92,6 +93,9 @@ export default function Stage3Page() {
   const [generatingNarrative, setGeneratingNarrative] = useState(false);
   const [projectUseCases, setProjectUseCases] = useState<UseCase[]>([]);
   const [taskExtraction, setTaskExtraction] = useState<TaskExtraction | null>(null);
+  const [isDecomposing, setIsDecomposing] = useState(false);
+  const [decompositionRunId, setDecompositionRunId] = useState<string | null>(null);
+  const [showManualEditModal, setShowManualEditModal] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -310,6 +314,44 @@ export default function Stage3Page() {
     } catch (err) {
       setGeneratingNarrative(false);
       setError(err instanceof Error ? err.message : "Failed to generate narrative");
+    }
+  };
+
+  const handleRegenerateTaskBreakdown = async () => {
+    setIsDecomposing(true);
+    try {
+      // POST /s3/runs again to regenerate task decomposition
+      const response = await apiPost<{ run_id: string }>(`/api/v1/use-cases/${ucId}/s3/runs`, {});
+
+      setDecompositionRunId(response.run_id);
+      toast.success("Task decomposition restarted");
+
+      // Poll for completion (reuse existing readiness polling)
+      setTimeout(() => setIsDecomposing(false), 30000); // Timeout after 30s
+    } catch (err: any) {
+      toast.error(err.message || "Failed to regenerate task breakdown");
+      setIsDecomposing(false);
+    }
+  };
+
+  const handleSaveManualEdit = async (updatedExtraction: TaskExtraction) => {
+    try {
+      // PATCH /use-cases/{id} to update s3_inputs.task_extraction
+      await apiPatch(`/api/v1/use-cases/${ucId}`, {
+        s3_inputs: {
+          ...useCase?.s3_inputs,
+          task_extraction: updatedExtraction
+        }
+      });
+
+      setTaskExtraction(updatedExtraction);
+      toast.success("Task breakdown updated successfully");
+
+      // Refresh use case data
+      const updated = await apiGet<UseCase>(`/api/v1/use-cases/${ucId}`);
+      setUseCase(updated);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save changes");
     }
   };
 
@@ -919,6 +961,40 @@ export default function Stage3Page() {
                   Task Breakdown
                 </SectionLabel>
 
+                {/* Verification Details */}
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  marginBottom: "16px",
+                  padding: "12px",
+                  background: "var(--muted)",
+                  borderRadius: "8px"
+                }}>
+                  {/* Hour Sum Verification */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {taskExtraction.verification_passed ? (
+                      <CheckCircle size={16} style={{ color: "var(--c-green)" }} />
+                    ) : (
+                      <AlertCircle size={16} style={{ color: "var(--c-red)" }} />
+                    )}
+                    <span style={{ fontSize: "14px" }}>
+                      Total hours: {taskExtraction.total_net_hours}h
+                      {taskExtraction.verification_passed
+                        ? " (matches effort budget)"
+                        : " (validation failed - manual review needed)"}
+                    </span>
+                  </div>
+
+                  {/* Source Indicator */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Icon name={taskExtraction.source === "document" ? "doc" : "list"} size={16} />
+                    <span style={{ fontSize: "14px", color: "var(--muted-fg)" }}>
+                      Source: {taskExtraction.source === "document" ? "Process Document" : "S2 Summary"}
+                    </span>
+                  </div>
+                </div>
+
                 {/* Status Banner */}
                 <div style={{
                   display: "flex",
@@ -1005,6 +1081,27 @@ export default function Stage3Page() {
                     {taskExtraction.total_net_hours}h
                   </span>
                 </div>
+
+                {/* Action Buttons - show only if verification failed */}
+                {!taskExtraction.verification_passed && (
+                  <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+                    <Button
+                      variant="outline"
+                      onClick={handleRegenerateTaskBreakdown}
+                      disabled={isDecomposing}
+                    >
+                      <Icon name="refresh" size={14} style={{ marginRight: "6px" }} />
+                      Regenerate with Higher Temperature
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setShowManualEditModal(true)}
+                    >
+                      <Icon name="edit" size={14} style={{ marginRight: "6px" }} />
+                      Edit Manually
+                    </Button>
+                  </div>
+                )}
 
                 {/* Continue to S4 Button */}
                 {taskExtraction.verification_passed && (
@@ -1143,6 +1240,17 @@ export default function Stage3Page() {
           </>
         )}
       </div>
+
+      {/* Manual Edit Modal */}
+      {showManualEditModal && taskExtraction && (
+        <TaskEditModal
+          open={showManualEditModal}
+          onClose={() => setShowManualEditModal(false)}
+          taskExtraction={taskExtraction}
+          onSave={handleSaveManualEdit}
+          targetHours={effortWeeks * 40}
+        />
+      )}
     </div>
   );
 }

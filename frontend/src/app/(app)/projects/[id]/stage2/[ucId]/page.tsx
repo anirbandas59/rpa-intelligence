@@ -245,7 +245,9 @@ export default function Stage2Page() {
         stageId="s2"
         ucId={ucId}
         useCase={useCase}
-        useCases={[...projectUseCases].sort((a, b) => a.name.localeCompare(b.name))}
+        useCases={[...projectUseCases].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        )}
         runs={runs}
         currentRunId={useCase?.s2_latest_run_id}
         isComplete={!!latestResult}
@@ -263,8 +265,10 @@ export default function Stage2Page() {
                   fontSize: 11.5,
                   fontWeight: 600,
                   color: "var(--c-green)",
-                  background: "color-mix(in oklab, var(--c-green) 12%, transparent)",
-                  border: "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
+                  background:
+                    "color-mix(in oklab, var(--c-green) 12%, transparent)",
+                  border:
+                    "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
                 }}
               >
                 <Icon name="check" size={12} /> Complete · run #{runs.length}
@@ -985,20 +989,27 @@ export default function Stage2Page() {
                           gap: 6,
                         }}
                       >
-                        <span
-                          style={{
-                            fontFamily: "var(--mono)",
-                            fontSize: 22,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {displayScore.effort_min_weeks}
-                        </span>
-                        <span
-                          style={{ fontSize: 14, color: "var(--muted-fg)" }}
-                        >
-                          –
-                        </span>
+                        {displayScore.effort_min_weeks !==
+                        displayScore.effort_max_weeks ? (
+                          <>
+                            <span
+                              style={{
+                                fontFamily: "var(--mono)",
+                                fontSize: 22,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {displayScore.effort_min_weeks}
+                            </span>
+                            <span
+                              style={{ fontSize: 14, color: "var(--muted-fg)" }}
+                            >
+                              –
+                            </span>
+                          </>
+                        ) : (
+                          ""
+                        )}
                         <span
                           style={{
                             fontFamily: "var(--mono)",
@@ -1060,7 +1071,11 @@ export default function Stage2Page() {
                         gap: 10,
                       }}
                     >
-                      <Icon name="layers" size={16} style={{ color: "var(--primary)" }} />
+                      <Icon
+                        name="layers"
+                        size={16}
+                        style={{ color: "var(--primary)" }}
+                      />
                       <div
                         style={{
                           fontSize: 12.5,

@@ -210,7 +210,7 @@ export function StageHeader({
             </div>
           )}
 
-          {isComplete && !selectedRunId && (
+          {isComplete && (!selectedRunId || selectedRunId === currentRunId) && (
             <span
               style={{
                 display: "inline-flex",
@@ -222,7 +222,8 @@ export function StageHeader({
                 fontSize: 11.5,
                 fontWeight: 600,
                 color: "var(--c-green)",
-                background: "color-mix(in oklab, var(--c-green) 12%, transparent)",
+                background:
+                  "color-mix(in oklab, var(--c-green) 12%, transparent)",
                 border:
                   "1px solid color-mix(in oklab, var(--c-green) 28%, transparent)",
               }}
@@ -231,12 +232,14 @@ export function StageHeader({
             </span>
           )}
 
-          {selectedRunId && selectedRunId !== currentRunId && onSetCurrentRun && (
-            <Button size="sm" variant="outline" onClick={onSetCurrentRun}>
-              <Icon name="check" size={13} style={{ marginRight: 6 }} />
-              Set as Current
-            </Button>
-          )}
+          {selectedRunId &&
+            selectedRunId !== currentRunId &&
+            onSetCurrentRun && (
+              <Button size="sm" variant="outline" onClick={onSetCurrentRun}>
+                <Icon name="check" size={13} style={{ marginRight: 6 }} />
+                Set as Current
+              </Button>
+            )}
 
           {runs.length > 0 && (
             <RunHistoryDrawer

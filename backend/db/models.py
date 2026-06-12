@@ -20,7 +20,7 @@ All IDs are UUIDs, all timestamps use UTC, all deletions cascade appropriately.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.sqlite import JSON
@@ -32,6 +32,11 @@ from db.session import Base
 def new_uuid() -> str:
     """Generate a new UUID string for use as primary key."""
     return str(uuid.uuid4())
+
+
+def utc_now() -> datetime:
+    """Generate a timezone-aware UTC datetime for use as default timestamp."""
+    return datetime.now(UTC)
 
 
 class User(Base):
@@ -51,7 +56,7 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)  # bcrypt hash
     role: Mapped[str] = mapped_column(String, default="user")  # user | superuser
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # soft delete flag
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class Project(Base):
@@ -69,8 +74,8 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)  # e.g., "Q1 2026 Migration"
     description: Mapped[str | None] = mapped_column(Text)  # Project goals, scope, timeline
     created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Relationships
     use_cases: Mapped[list["UseCase"]] = relationship(back_populates="project")
@@ -114,8 +119,8 @@ class UseCase(Base):
     s4_inputs: Mapped[dict] = mapped_column(JSON, default=dict)
     s4_latest_run_id: Mapped[str | None] = mapped_column(String)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Relationships
     project: Mapped["Project"] = relationship(back_populates="use_cases")
@@ -145,7 +150,7 @@ class StageRun(Base):
     weight_config_snapshot: Mapped[dict | None] = mapped_column(JSON)  # Weight matrix at exec
     prompt_variant_snapshot: Mapped[str | None] = mapped_column(String)  # Prompt version used
     triggered_by: Mapped[str | None] = mapped_column(String)  # User ID or "system"
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     status: Mapped[str] = mapped_column(
         String, default="complete"
     )  # "running" | "complete" | "failed"
@@ -182,7 +187,7 @@ class WeightConfig(Base):
     config: Mapped[dict] = mapped_column(JSON)  # Full 5×5 weight matrix override
     yes_threshold: Mapped[int] = mapped_column(Integer, default=50)  # S1 priority cutoff
     created_by: Mapped[str | None] = mapped_column(String)  # User ID
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class PhaseConfig(Base):
@@ -201,7 +206,7 @@ class PhaseConfig(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     config: Mapped[dict] = mapped_column(JSON)  # Phase percentages and allocations
     sprint_length_weeks: Mapped[int] = mapped_column(Integer, default=2)  # Agile sprint length
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class LLMConfig(Base):
@@ -224,7 +229,7 @@ class LLMConfig(Base):
     max_tokens: Mapped[int] = mapped_column(Integer, default=1000)  # Output limit
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_by: Mapped[str | None] = mapped_column(String)  # User ID
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class PromptVariant(Base):
@@ -244,7 +249,7 @@ class PromptVariant(Base):
     content: Mapped[dict] = mapped_column(JSON)  # {system, user, examples}
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str | None] = mapped_column(String)  # User ID
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class UploadedFile(Base):
@@ -266,7 +271,7 @@ class UploadedFile(Base):
     file_type: Mapped[str] = mapped_column(String)  # e.g., "application/pdf"
     size_bytes: Mapped[int | None] = mapped_column(Integer)
     uploaded_by: Mapped[str | None] = mapped_column(String)  # User ID
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class AgentMemory(Base):
@@ -290,7 +295,7 @@ class AgentMemory(Base):
     stage: Mapped[str] = mapped_column(String)  # s1 | s2 | s3 | s4
     content: Mapped[dict] = mapped_column(JSON)  # Structured memory content
     keywords: Mapped[str] = mapped_column(String, default="")  # Space-separated for search
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class AgentSession(Base):
@@ -317,8 +322,8 @@ class AgentSession(Base):
     pending_clarification: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )  # Question for user
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class UploadSession(Base):
@@ -354,7 +359,7 @@ class UploadSession(Base):
         JSON, default=dict
     )  # Created use case IDs as JSON array
     error: Mapped[str | None] = mapped_column(Text, nullable=True)  # Error message if failed
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime
+        DateTime(timezone=True)
     )  # Auto-delete after 24h (set in service)

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { StalenessIndicator } from "@/components/shared/StalenessIndicator"
 import { AsyncRunProgress } from "@/components/shared/AsyncRunProgress"
 import { StageHeader } from "@/components/shared/StageHeader"
@@ -16,7 +17,7 @@ import { Loader2, CheckCircle, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 import { spacing } from "@/lib/design-tokens"
 import { apiGet, apiGetRuns, apiPost, apiPatch, isAuthenticated } from "@/lib/api"
-import type { UseCase, StageRun, S4Result, SequencedRow, ReadinessResponse } from "@/lib/types"
+import type { UseCase, StageRun, S4Result, SequencedRow, ReadinessResponse, TaskExtraction } from "@/lib/types"
 
 /* FeatureCard */
 interface FeatureCardProps {
@@ -86,6 +87,11 @@ export default function Stage4Page() {
   const [isAutoRunning, setIsAutoRunning] = useState(false)
   const [autoRunError, setAutoRunError] = useState<string | null>(null)
 
+  // S3 task extraction status
+  const [s3TaskExtractionReady, setS3TaskExtractionReady] = useState(false)
+  const [s3TaskExtraction, setS3TaskExtraction] = useState<TaskExtraction | null>(null)
+  const [showPrerequisiteAlert, setShowPrerequisiteAlert] = useState(false)
+
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/auth/login"); return }
 
@@ -104,6 +110,16 @@ export default function Stage4Page() {
         setReadiness(readinessData)
         setRuns(runsData)
         setProjectUseCases(useCasesData)
+
+        // Check S3 task extraction status
+        const taskExtraction = ucData.s3_inputs?.task_extraction as TaskExtraction | undefined
+        const isReady = taskExtraction &&
+                        taskExtraction.extraction_status === 'complete' &&
+                        taskExtraction.verification_passed
+
+        setS3TaskExtractionReady(!!isReady)
+        setS3TaskExtraction(taskExtraction || null)
+        setShowPrerequisiteAlert(!isReady)
 
         if (ucData.s4_inputs?.sprint_count)        setSprintCount(ucData.s4_inputs.sprint_count as number)
         if (ucData.s4_inputs?.sprint_length_weeks) setSprintLength(ucData.s4_inputs.sprint_length_weeks as number)
@@ -148,6 +164,12 @@ export default function Stage4Page() {
   useEffect(() => {
     if (!s3DataLoaded || !shouldAutoRun || s4RunTriggered || isAutoRunning) return
 
+    // NEW: Ensure sprint count is set before auto-running
+    if (sprintCount <= 0) {
+      console.log('[Auto-run] Waiting for sprint configuration...')
+      return
+    }
+
     async function autoTriggerS4Run() {
       try {
         console.log('[S4] Auto-triggering S4 run...')
@@ -168,7 +190,7 @@ export default function Stage4Page() {
     }
 
     autoTriggerS4Run()
-  }, [s3DataLoaded, shouldAutoRun, s4RunTriggered, isAutoRunning, ucId])
+  }, [s3DataLoaded, shouldAutoRun, s4RunTriggered, isAutoRunning, sprintCount, ucId])
 
   const handleLoadFromS2 = async () => {
     try {
@@ -181,8 +203,23 @@ export default function Stage4Page() {
 
   const handleLoadFromS3 = async () => {
     try {
-      await apiPost(`/api/v1/use-cases/${ucId}/s4/load-from-s3`, {})
-      window.location.reload()
+      // Backend calculates sprint_count from timeline weeks
+      const loadResponse = await apiPost<any>(`/api/v1/use-cases/${ucId}/s4/load-from-s3`, {})
+
+      // Extract sprint configuration from response metadata
+      if (loadResponse.sprint_count) {
+        setSprintCount(loadResponse.sprint_count)
+      }
+      if (loadResponse.sprint_length_weeks) {
+        setSprintLength(loadResponse.sprint_length_weeks)
+      }
+
+      setS3DataLoaded(true)
+      toast.success("Task breakdown loaded from S3")
+
+      // Refetch use case data to get updated s4_inputs
+      const updatedUseCase = await apiGet<UseCase>(`/api/v1/use-cases/${ucId}`)
+      setUseCase(updatedUseCase)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load from S3")
     }
@@ -290,8 +327,16 @@ export default function Stage4Page() {
                 </Btn>
               </>
             )}
-            <Btn size="sm" onClick={handleRunStage} disabled={!canRun || isRunning} icon="play">
-              {isRunning ? "Running…" : "Decompose & Assign"}
+            <Btn
+              size="sm"
+              onClick={handleRunStage}
+              disabled={!canRun || isRunning || !s3TaskExtractionReady || !s3DataLoaded}
+              icon="play"
+            >
+              {isRunning ? "Running…" :
+               !s3TaskExtractionReady ? "Task Breakdown Required" :
+               !s3DataLoaded ? "Load Task Breakdown First" :
+               "Group Tasks & Assign Sprints"}
             </Btn>
           </div>
         }
@@ -300,6 +345,96 @@ export default function Stage4Page() {
       <div style={{ height: "calc(100vh - 56px)", overflow: "hidden", padding: "24px 28px", display: "flex", flexDirection: "column", gap: spacing.gapDefault }}>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         {isStale && <StalenessIndicator isStale stageName="Stage 4" />}
+
+        {/* Prerequisite Check Alert */}
+        {showPrerequisiteAlert && !s3TaskExtractionReady && (
+          <Alert style={{ marginBottom: spacing.gapDefault }}>
+            <AlertCircle style={{ height: "16px", width: "16px" }} />
+            <AlertTitle>Task Breakdown Required</AlertTitle>
+            <AlertDescription>
+              <p style={{ marginBottom: "12px" }}>
+                Stage 4 requires task decomposition from Stage 3 to be complete.
+                Please complete Stage 3 task breakdown before proceeding.
+              </p>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/projects/${projectId}/stage3/${ucId}`)}
+                >
+                  Go to Stage 3
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPrerequisiteAlert(false)}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Load Task Breakdown from S3 */}
+        {s3TaskExtractionReady && s3TaskExtraction && (
+          <Card style={{ marginBottom: spacing.gapDefault }}>
+            <SectionLabel style={{ marginBottom: 14 }}>Task Breakdown from S3</SectionLabel>
+
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              marginBottom: "16px",
+              padding: "16px",
+              background: "var(--muted)",
+              borderRadius: "8px"
+            }}>
+              <CheckCircle size={16} style={{ color: "var(--c-green)" }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: "14px", fontWeight: 600 }}>
+                  Task breakdown ready
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--muted-fg)", marginTop: "4px" }}>
+                  {s3TaskExtraction.activities.length} activities · {s3TaskExtraction.total_net_hours}h total
+                </div>
+              </div>
+              <Badge style={{ background: "var(--c-green)", color: "white" }}>
+                Verified ✓
+              </Badge>
+            </div>
+
+            <p style={{ fontSize: "13px", color: "var(--muted-fg)", marginBottom: "12px" }}>
+              This task breakdown will be used for WBS grouping and sprint assignment.
+            </p>
+
+            {!s3DataLoaded && (
+              <Button
+                onClick={handleLoadFromS3}
+                style={{ width: "100%" }}
+              >
+                <Icon name="download" size={14} style={{ marginRight: "6px" }} />
+                Load Task Breakdown from S3
+              </Button>
+            )}
+
+            {s3DataLoaded && (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "12px",
+                background: "var(--c-green-bg)",
+                borderRadius: "8px"
+              }}>
+                <CheckCircle size={16} style={{ color: "var(--c-green)" }} />
+                <span style={{ fontSize: "14px", fontWeight: 500 }}>
+                  Task breakdown loaded successfully
+                </span>
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Auto-run Loading State */}
         {shouldAutoRun && isAutoRunning && (
@@ -362,7 +497,57 @@ export default function Stage4Page() {
         )}
 
         {isRunning && (
-          <AsyncRunProgress useCaseId={ucId} stage="s4" onComplete={handleRunComplete} onError={(e) => setError(e)} />
+          <>
+            <AsyncRunProgress useCaseId={ucId} stage="s4" onComplete={handleRunComplete} onError={(e) => setError(e)} />
+
+            {/* WBS Grouping Progress Indicator */}
+            <Card style={{ marginTop: spacing.gapDefault }}>
+              <div style={{ display: "flex", alignItems: "start", gap: "16px" }}>
+                <Loader2 className="animate-spin" style={{ color: "var(--primary)" }} size={20} />
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ fontWeight: 600, marginBottom: "12px" }}>
+                    Grouping Tasks into WBS...
+                  </h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <CheckCircle size={14} style={{ color: "var(--c-green)" }} />
+                      <span style={{ fontSize: "13px" }}>
+                        Loaded {s3TaskExtraction?.activities.length || 0} activities from S3
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Loader2 size={14} className="animate-spin" style={{ color: "var(--c-amber)" }} />
+                      <span style={{ fontSize: "13px" }}>
+                        Analyzing task dependencies and grouping...
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", opacity: 0.5 }}>
+                      <div style={{
+                        width: "14px",
+                        height: "14px",
+                        border: "2px solid var(--border)",
+                        borderRadius: "50%"
+                      }} />
+                      <span style={{ fontSize: "13px", color: "var(--muted-fg)" }}>
+                        Validating hour sum integrity
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", opacity: 0.5 }}>
+                      <div style={{
+                        width: "14px",
+                        height: "14px",
+                        border: "2px solid var(--border)",
+                        borderRadius: "50%"
+                      }} />
+                      <span style={{ fontSize: "13px", color: "var(--muted-fg)" }}>
+                        Assigning to {sprintCount} sprints
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </>
         )}
 
         {/* ── Config card ── */}
@@ -379,8 +564,16 @@ export default function Stage4Page() {
             </div>
           </div>
           <div style={{ display: "flex", gap: spacing.gapTight }}>
-            <Btn onClick={handleRunStage} disabled={!canRun || isRunning} icon="play" style={{ flex: 1 }}>
-              {isRunning ? "Running…" : "Decompose & Assign"}
+            <Btn
+              onClick={handleRunStage}
+              disabled={!canRun || isRunning || !s3TaskExtractionReady || !s3DataLoaded}
+              icon="play"
+              style={{ flex: 1 }}
+            >
+              {isRunning ? "Running…" :
+               !s3TaskExtractionReady ? "Task Breakdown Required" :
+               !s3DataLoaded ? "Load Task Breakdown First" :
+               "Group Tasks & Assign Sprints"}
             </Btn>
             <Btn variant="outline" onClick={handleLoadFromS2} disabled={isRunning} icon="link" style={{ flex: 1 }}>
               Load from S2
@@ -434,6 +627,51 @@ export default function Stage4Page() {
                 )}
               </div>
             </div>
+
+            {/* Hour Sum Verification Badge */}
+            {(() => {
+              const s3TaskExtraction = useCase?.s3_inputs?.task_extraction as TaskExtraction | undefined
+              const s3TotalHours = s3TaskExtraction?.total_net_hours || 0
+              const s4TotalHours = latestResult?.metadata?.total_hours || 0
+              const hourSumMatches = Math.abs(s4TotalHours - s3TotalHours) < 1.0
+
+              if (!s3TaskExtraction) return null
+
+              return (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "16px",
+                  background: hourSumMatches ? "var(--c-green-bg)" : "var(--c-amber-bg)",
+                  borderRadius: "8px",
+                  marginBottom: spacing.gapDefault,
+                  border: `1px solid ${hourSumMatches ? 'var(--c-green)' : 'var(--c-amber)'}`
+                }}>
+                  {hourSumMatches ? (
+                    <CheckCircle size={20} style={{ color: "var(--c-green)" }} />
+                  ) : (
+                    <AlertCircle size={20} style={{ color: "var(--c-amber)" }} />
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "4px" }}>
+                      {hourSumMatches ? "Hour Sum Verified ✓" : "Hour Sum Mismatch"}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "var(--muted-fg)" }}>
+                      S3 Task Breakdown: {s3TotalHours}h → S4 WBS Total: {s4TotalHours}h
+                      {hourSumMatches
+                        ? " (exact match)"
+                        : ` (difference: ${Math.abs(s4TotalHours - s3TotalHours).toFixed(1)}h)`}
+                    </div>
+                  </div>
+                  {!hourSumMatches && (
+                    <Badge variant="outline" style={{ color: "var(--c-amber)" }}>
+                      Review Required
+                    </Badge>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Sprint swimlanes */}
             {activeTab === "board" && (

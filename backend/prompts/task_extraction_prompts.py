@@ -52,9 +52,18 @@ HOUR ASSIGNMENT PROCESS (MANDATORY):
 5. **REASONABLENESS CHECK**: For each step, ask: "Can a developer complete this in the allocated hours?"
    - Hours must be REALISTIC — not too short to be rushed, not too inflated to be rejected
    - If a step seems under-budgeted, increase it; if over-budgeted, reduce it
-6. Verify sum: Σ(weight_hours where reusability != "full") should equal {total_effort_hours}
-7. **TOLERANCE**: Acceptable range is {total_effort_hours} ± {hour_tolerance}h ({hour_tolerance_min}h to {hour_tolerance_max}h)
-8. If sum is outside tolerance, rebalance steps proportionally until within range
+6. **CALCULATE THE SUM MANUALLY** (CRITICAL):
+   - Go through each step and calculate: net_hours = weight_hours (if reusability="none") OR weight_hours × 0.5 (if reusability="partial") OR 0 (if reusability="full")
+   - Add up all net_hours: total_sum = sum of all net_hours
+7. **VERIFY AGAINST TARGET**:
+   - Tolerance: Acceptable range is {hour_tolerance_min}h to {hour_tolerance_max}h
+   - Check: Is total_sum within this range?
+   - If NO: Adjust step hours proportionally until total_sum falls within range
+   - If YES: Proceed to output
+8. **SET FIELDS CORRECTLY**:
+   - Set total_net_hours = your actual calculated total_sum (not the target value!)
+   - Set verification_passed = true if within tolerance, false otherwise
+   - DO NOT lie about the sum - set it to your actual calculation
 
 VERIFICATION:
 Include these fields in your JSON response:
@@ -97,15 +106,46 @@ Required JSON structure:
   "verification_notes": "Adjusted hours to ensure realistic developer estimates"
 }}
 
-EXAMPLE 1 (Budget: 160h, tolerance: ±48h, acceptable range: 112-208h):
-If you have 10 steps with reusability "none", average is 160/10 = 16h per step.
-Adjusted distribution:
-- Simple steps (×3): 10h, 12h, 10h = 32h
-- Medium steps (×5): 16h, 18h, 15h, 17h, 16h = 82h
-- Complex steps (×2): 24h, 22h = 46h
-Total: 32 + 82 + 46 = 160h ✓ (within tolerance)
+EXAMPLE WITH STEP-BY-STEP VERIFICATION:
 
-EXAMPLE 2 (Budget: 200h, tolerance: ±60h, 15 steps mixed reusability):
-5 "full" reusability (0h counted) + 10 "none" (200h total)
-Average: 200/10 = 20h per step (only for "none" steps)
-Adjusted distribution ensures total within 140-260h range"""
+Target: 160h, tolerance: ±48h, acceptable range: 112-208h
+
+Initial allocation (10 steps, all "none"):
+- Step 1: 15h → net: 15h × 1.0 = 15.0h
+- Step 2: 20h → net: 20h × 1.0 = 20.0h
+- Step 3: 18h → net: 18h × 1.0 = 18.0h
+- Step 4: 12h → net: 12h × 1.0 = 12.0h
+- Step 5: 25h → net: 25h × 1.0 = 25.0h
+- Step 6: 16h → net: 16h × 1.0 = 16.0h
+- Step 7: 14h → net: 14h × 1.0 = 14.0h
+- Step 8: 22h → net: 22h × 1.0 = 22.0h
+- Step 9: 10h → net: 10h × 1.0 = 10.0h
+- Step 10: 8h → net: 8h × 1.0 = 8.0h
+
+CALCULATE SUM: 15 + 20 + 18 + 12 + 25 + 16 + 14 + 22 + 10 + 8 = 160.0h
+
+CHECK: Is 160.0h within 112-208h range? YES ✓
+
+Result:
+{{
+  "total_net_hours": 160.0,
+  "verification_passed": true
+}}
+
+EXAMPLE WITH MIXED REUSABILITY:
+
+Target: 200h, tolerance: ±60h, range: 140-260h
+
+Steps with mixed reusability:
+- Step A: 16h, reusability="none" → net: 16.0h
+- Step B: 20h, reusability="partial" → net: 20.0 × 0.5 = 10.0h
+- Step C: 24h, reusability="none" → net: 24.0h
+- Step D: 12h, reusability="full" → net: 0.0h (not counted!)
+- Step E: 30h, reusability="none" → net: 30.0h
+... (continue for all steps)
+
+CALCULATE SUM: 16.0 + 10.0 + 24.0 + 0.0 + 30.0 + ... = X hours
+
+CHECK: Is X within 140-260h? Adjust if needed.
+
+Set total_net_hours = X (your actual sum, not 200!)"""
